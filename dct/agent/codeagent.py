@@ -48,7 +48,7 @@ import re
 from typing import Callable, Optional, TYPE_CHECKING
 
 from dct.tools.executor import dispatch, ExecResult
-from dct.tools.files import read_file, write_file, patch_file, list_dir, tree
+from dct.tools.files import read_file, write_file, patch_file, list_dir, tree, run_grep
 from dct.tools.web import fetch_url, search_ddg
 
 if TYPE_CHECKING:
@@ -69,6 +69,7 @@ AVAILABLE TOOLS:
   <tool>patch_file</tool><path>...</path><old>...</old><new>...</new>  — find+replace in file
   <tool>list_dir</tool><path>...</path>          — list directory
   <tool>tree</tool><path>...</path>              — directory tree
+  <tool>grep</tool><pattern>...</pattern><path>...</path><glob>...</glob><output_mode>content|files_with_matches</output_mode><context>2</context>  — fast regex search using ripgrep
   <tool>fetch_url</tool><url>...</url>           — fetch a URL
   <tool>ask_user</tool><question>...</question>  — Ask the user a question to clarify what to do
   <tool>get_cwd</tool>                           — Get current working directory
@@ -113,8 +114,15 @@ def _parse_tool_call(text: str) -> Optional[dict]:
         "query": _extract_tag(text, "query"),
         "old": _extract_tag(text, "old"),
 
+
         "new": _extract_tag(text, "new"),
         "question": _extract_tag(text, "question"),
+        "pattern": _extract_tag(text, "pattern"),
+        "glob": _extract_tag(text, "glob"),
+        "output_mode": _extract_tag(text, "output_mode"),
+        "context": _extract_tag(text, "context"),
+        "head_limit": _extract_tag(text, "head_limit"),
+
 
     }
 
@@ -186,6 +194,27 @@ def _execute_tool(call: dict) -> str:
         if not r.ok:
             return f"[TOOL ERROR] {r.message}"
         return f"[patched: {r.path}]\n{r.diff[:1200]}"
+
+
+    elif tool == "grep":
+        pattern = call.get("pattern")
+        if not pattern:
+            return "[TOOL ERROR] <pattern> is required for grep tool."
+        
+        path = call.get("path") or "."
+        glob_pattern = call.get("glob")
+        output_mode = call.get("output_mode") or "files_with_matches"
+        
+        context_str = call.get("context")
+        context = int(context_str) if context_str and context_str.isdigit() else None
+        
+        head_limit_str = call.get("head_limit")
+        head_limit = int(head_limit_str) if head_limit_str and head_limit_str.isdigit() else 250
+        
+        r = run_grep(pattern, path, glob_pattern, output_mode, context, head_limit)
+        if not r.ok:
+            return f"[TOOL ERROR] {r.message}"
+        return f"[grep: {pattern!r} in {r.path}]\n{r.content}"
 
     elif tool == "list_dir":
         path = call.get("path") or "."
