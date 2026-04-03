@@ -210,7 +210,7 @@ class CodeAgent:
 
         if tool in ("run_python", "run_bash", "run_shell", "python", "bash", "shell"):
             if mode == "plan":
-                return f"[TOOL ERROR] Execution is blocked in PLAN mode. You must use <tool>exit_plan_mode</tool> first."
+                return "[TOOL ERROR] Execution is blocked in PLAN mode. You must use <tool>exit_plan_mode</tool> first."
 
             lang = (
                 "python" if "python" in tool else "bash" if "bash" in tool else "shell"
@@ -229,7 +229,9 @@ class CodeAgent:
             if not r.ok:
                 return f"[TOOL ERROR] {r.message}"
             lines = r.content.splitlines()
-            numbered = "\n".join(f"{i + 1:4d}  {l}" for i, l in enumerate(lines))
+            numbered = "\n".join(
+                f"{i + 1:4d}  {line_text}" for i, line_text in enumerate(lines)
+            )
             return f"[file: {r.path}  {len(lines)} lines]\n{numbered}"
 
         elif tool == "write_file":
@@ -387,7 +389,7 @@ class CodeAgent:
                 return "[TOOL ERROR] <path> and <index> are required."
             try:
                 idx = int(index)
-            except:
+            except ValueError:
                 return "[TOOL ERROR] <index> must be an integer."
 
             r = edit_notebook_cell(path, idx, source, mode)

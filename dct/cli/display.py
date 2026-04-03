@@ -95,7 +95,9 @@ def show_all_models(registry: "ServerRegistry"):
         stc = (
             C["ok"]
             if s.status == "online"
-            else C["err"] if s.status == "offline" else C["dim"]
+            else C["err"]
+            if s.status == "offline"
+            else C["dim"]
         )
         if not s.models:
             t.add_row(

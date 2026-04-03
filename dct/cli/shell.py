@@ -9,8 +9,6 @@ from __future__ import annotations
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
-from prompt_toolkit.completion import WordCompleter
-from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.styles import Style
 import os
 import threading
@@ -76,11 +74,9 @@ class Shell:
             f"  [{stc}]●[/{stc}]"
             f"  [{C['dim']}]{self.active.host}:{self.active.port}[/{C['dim']}]"
             f"  [{C['fg']}]› {self.model}[/{C['fg']}]"
-            f"  [{
-                C['dim']}]{
-                self.session.user_turns}t · ~{
-                self.session.token_estimate}tok[/{
-                C['dim']}]"
+            f"  [{C['dim']}]{self.session.user_turns}t · ~{
+                self.session.token_estimate
+            }tok[/{C['dim']}]"
             f"{ag}"
         )
 
@@ -139,7 +135,7 @@ class Shell:
                 con.print()
                 con.print(self._status_bar())
                 con.print(f"  [{C['dim']}]{'─' * 66}[/{C['dim']}]")
-                raw = session.prompt("  › ", multiline=False)
+                raw = session.prompt("  › ", multiline=False, style=style)
                 raw = raw.strip()
 
             except (KeyboardInterrupt, EOFError):
@@ -222,8 +218,7 @@ class Shell:
                         ok(f"auto-selected as active server  ·  model: {self.model}")
                 else:
                     con.print(f"[{C['err']}]offline[/{C['err']}]")
-                    warn(f"added as {
-                            srv.alias} but unreachable — saved for later")
+                    warn(f"added as {srv.alias} but unreachable — saved for later")
 
             # ── remove ───────────────────────────────────────────────────
             elif lo.startswith("/remove "):
@@ -271,8 +266,11 @@ class Shell:
                     and self.active.models
                     and new_model not in self.active.models
                 ):
-                    warn(f"{new_model} not in {
-                            self.active.alias} model list — sending anyway")
+                    warn(
+                        f"{new_model} not in {
+                            self.active.alias
+                        } model list — sending anyway"
+                    )
                 self.model = new_model
                 ok(f"model → {self.model}")
 
@@ -383,9 +381,11 @@ class Shell:
 
             # ── history ──────────────────────────────────────────────────
             elif lo == "/history":
-                info(f"{
-                        self.session.user_turns} user turns · ~{
-                        self.session.token_estimate} tokens estimated")
+                info(
+                    f"{self.session.user_turns} user turns · ~{
+                        self.session.token_estimate
+                    } tokens estimated"
+                )
 
             # ── system ───────────────────────────────────────────────────
             elif lo.startswith("/system "):
@@ -584,17 +584,17 @@ class Shell:
                         self.model = self.active.best_model(self.model)
                         warn(f"Failing over to {self.active.alias} · {self.model}...")
                         con.print(
-                            f"\n  [{C["dim"]}]{chr(9472) * 66}[/{C["dim"]}]\n  ", end=""
+                            f"\n  [{C['dim']}]{chr(9472) * 66}[/{C['dim']}]\n  ", end=""
                         )
                         continue  # Retry with new server
                     else:
                         err("All servers offline. Cannot complete request.")
                         break
                 else:
-                    con.print(f"\n  [{C["err"]}]{str(e)}[/{C["err"]}]")
+                    con.print(f"\n  [{C['err']}]{str(e)}[/{C['err']}]")
                     break
             except KeyboardInterrupt:
-                con.print(f"\n  [{C["dim"]}]cancelled[/{C["dim"]}]")
+                con.print(f"\n  [{C['dim']}]cancelled[/{C['dim']}]")
                 break
 
         con.print()
@@ -711,12 +711,11 @@ class Shell:
 
     # ── Pull with progress ───────────────────────────────────────────────────
     def _pull(self, srv: Server, model_name: str):
-        con.print(f"\n  [{
-                C['accent']}]pull[/{
-                C['accent']}] [{
-                C['fg']}]{model_name}[/{
-                    C['fg']}] → {
-                        server_tag(srv)}\n")
+        con.print(
+            f"\n  [{C['accent']}]pull[/{C['accent']}] [{C['fg']}]{model_name}[/{
+                C['fg']
+            }] → {server_tag(srv)}\n"
+        )
         try:
             last_status = ""
             for chunk in pull_stream(srv, model_name):
