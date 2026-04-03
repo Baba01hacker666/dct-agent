@@ -66,9 +66,7 @@ def _run(
         return "", str(e), -1, False
 
 
-def run_python(
-    code: str, timeout: int = 30, cwd: str | None = None
-) -> ExecResult:
+def run_python(code: str, timeout: int = 30, cwd: str | None = None) -> ExecResult:
     """Execute Python code in a temporary file."""
     code = textwrap.dedent(code)
     with tempfile.NamedTemporaryFile(
@@ -97,9 +95,7 @@ def run_python(
     )
 
 
-def run_bash(
-    code: str, timeout: int = 30, cwd: str | None = None
-) -> ExecResult:
+def run_bash(code: str, timeout: int = 30, cwd: str | None = None) -> ExecResult:
     """Execute bash script."""
     code = textwrap.dedent(code)
     with tempfile.NamedTemporaryFile(
