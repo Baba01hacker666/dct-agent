@@ -32,7 +32,7 @@ from dct.core.theme import (
 )
 from dct.core.registry import ServerRegistry, Server
 from dct.core.probe import probe_server, probe_all, probe_endpoints_detail
-from dct.core.ollama import (
+from dct.core.client import (
     chat_stream,
     list_models,
     pull_stream,
@@ -69,16 +69,8 @@ class Shell:
         if not self.active:
             return f"  [{C['warn']}]no active server · /add <host> <port> [alias][/{C['warn']}]"
         st = self.active.status
-        stc = (
-            C["ok"]
-            if st == "online"
-            else C["err"] if st == "offline" else C["dim"]
-        )
-        ag = (
-            f"  [{C['purple']}][AGENT][/{C['purple']}]"
-            if self.agent_mode
-            else ""
-        )
+        stc = C["ok"] if st == "online" else C["err"] if st == "offline" else C["dim"]
+        ag = f"  [{C['purple']}][AGENT][/{C['purple']}]" if self.agent_mode else ""
         return (
             f"  [{C['accent']}]{self.active.alias}[/{C['accent']}]"
             f"  [{stc}]●[/{stc}]"
@@ -129,16 +121,20 @@ class Shell:
     # ── Main REPL ────────────────────────────────────────────────────────────
 
     def run(self):
-        history_file = os.path.join(os.path.expanduser("~"), ".config", "dct", "history")
+        history_file = os.path.join(
+            os.path.expanduser("~"), ".config", "dct", "history"
+        )
         os.makedirs(os.path.dirname(history_file), exist_ok=True)
         session = PromptSession(
             history=FileHistory(history_file),
             auto_suggest=AutoSuggestFromHistory(),
         )
 
-        style = Style.from_dict({
-            'bottom-toolbar': '#333333 bg:#ffeb3b',
-        })
+        style = Style.from_dict(
+            {
+                "bottom-toolbar": "#333333 bg:#ffeb3b",
+            }
+        )
 
         while True:
             try:
@@ -191,17 +187,13 @@ class Shell:
                 if not s:
                     err(f"server not found: {target}")
                     continue
-                con.print(
-                    f"\n  [{C['dim']}]probing {server_tag(s)}…[/{C['dim']}]"
-                )
+                con.print(f"\n  [{C['dim']}]probing {server_tag(s)}…[/{C['dim']}]")
                 rows = probe_endpoints_detail(s)
                 show_probe_detail(rows)
                 probe_server(s)
                 self.registry.save()
                 if s.status == "online":
-                    ok(
-                        f"online  ·  {len(s.models)} model(s)  ·  {s.latency_ms}ms"
-                    )
+                    ok(f"online  ·  {len(s.models)} model(s)  ·  {s.latency_ms}ms")
                 else:
                     err("offline")
 
@@ -220,22 +212,16 @@ class Shell:
                 alias = toks[2] if len(toks) > 2 else ""
                 note = " ".join(toks[3:]) if len(toks) > 3 else ""
                 srv = self.registry.add(host, port, alias, note)
-                con.print(
-                    f"  [{C['dim']}]probing {srv.alias}…[/{C['dim']}]", end=" "
-                )
+                con.print(f"  [{C['dim']}]probing {srv.alias}…[/{C['dim']}]", end=" ")
                 res = probe_server(srv)
                 self.registry.save()
                 if res["ok"]:
                     con.print(f"[{C['ok']}]online[/{C['ok']}]")
-                    ok(
-                        f"added: {server_tag(srv)}  ·  {len(srv.models)} model(s)"
-                    )
+                    ok(f"added: {server_tag(srv)}  ·  {len(srv.models)} model(s)")
                     if not self.active:
                         self.active = srv
                         self.model = srv.best_model()
-                        ok(
-                            f"auto-selected as active server  ·  model: {self.model}"
-                        )
+                        ok(f"auto-selected as active server  ·  model: {self.model}")
                 else:
                     con.print(f"[{C['err']}]offline[/{C['err']}]")
                     warn(f"added as {
@@ -257,9 +243,7 @@ class Shell:
                     self.active = self.registry.first_online()
                     if self.active:
                         self.model = self.active.best_model(self.model)
-                        info(
-                            f"auto-switched to {self.active.alias} · {self.model}"
-                        )
+                        info(f"auto-switched to {self.active.alias} · {self.model}")
 
             # ── use ──────────────────────────────────────────────────────
             elif lo.startswith("/use "):
@@ -377,9 +361,7 @@ class Shell:
                     target_srv = self.registry.resolve(toks[0])
                     model_name = toks[1]
                 else:
-                    warn(
-                        "usage: /delete <model>  or  /delete <alias|#> <model>"
-                    )
+                    warn("usage: /delete <model>  or  /delete <alias|#> <model>")
                     continue
                 if not target_srv:
                     err("server not found")
@@ -411,9 +393,7 @@ class Shell:
             elif lo.startswith("/system "):
                 prompt = raw[8:].strip()
                 self.session.set_system(prompt)
-                ok(
-                    f"system prompt set ({len(prompt)} chars) · history cleared"
-                )
+                ok(f"system prompt set ({len(prompt)} chars) · history cleared")
 
             # ── save ─────────────────────────────────────────────────────
             elif lo.startswith("/save "):
@@ -443,9 +423,7 @@ class Shell:
                 )
                 ok(f"agent mode {state}")
                 if self.agent_mode:
-                    hint(
-                        "model can now run code, read/write files, search the web"
-                    )
+                    hint("model can now run code, read/write files, search the web")
                     hint("type /help agent for details")
 
             elif lo == "/agent status":
@@ -578,7 +556,6 @@ class Shell:
         else:
             self._stream_reply(messages)
 
-
     def _stream_reply(self, messages: list[dict]):
         """Stream a normal chat reply, append to session. Auto failover on network error."""
         con.print(
@@ -588,15 +565,16 @@ class Shell:
         con.print(f"  [{C['dim']}]{'─' * 66}[/{C['dim']}]")
         con.print("  ", end="")
         full = ""
-        
+
         while True:
             try:
                 for chunk in chat_stream(self.active, self.model, messages):
                     con.print(f"[{C['fg']}]{chunk}[/{C['fg']}]", end="")
                     full += chunk
-                break # Success!
+                break  # Success!
             except Exception as e:
                 import requests
+
                 if isinstance(e, requests.exceptions.RequestException):
                     warn(f"\nConnection to {self.active.alias} lost mid-stream.")
                     # Re-probe and find a fallback
@@ -607,8 +585,10 @@ class Shell:
                         self.active = fallback
                         self.model = self.active.best_model(self.model)
                         warn(f"Failing over to {self.active.alias} · {self.model}...")
-                        con.print(f"\n  [{C["dim"]}]{chr(9472) * 66}[/{C["dim"]}]\n  ", end="")
-                        continue # Retry with new server
+                        con.print(
+                            f"\n  [{C["dim"]}]{chr(9472) * 66}[/{C["dim"]}]\n  ", end=""
+                        )
+                        continue  # Retry with new server
                     else:
                         err("All servers offline. Cannot complete request.")
                         break
@@ -618,23 +598,21 @@ class Shell:
             except KeyboardInterrupt:
                 con.print(f"\n  [{C["dim"]}]cancelled[/{C["dim"]}]")
                 break
-        
+
         con.print()
         if full:
             self.session.add("assistant", full)
 
-
-
     def _run_agent(self, messages: list[dict], user_text: str):
         """Run the agentic loop."""
         from dct.agent.codeagent import get_system_prompt
-        
+
         # Always re-inject dynamic system prompt unless user set a custom one
         if not self.session.system_prompt:
             dynamic_prompt = get_system_prompt(self.session)
             # Find and replace the system prompt in the messages list, or prepend it
             system_msg = {"role": "system", "content": dynamic_prompt}
-            
+
             # messages list is a copy of session.messages, but let's be careful
             if messages and messages[0]["role"] == "system":
                 agent_msgs = [system_msg] + messages[1:]
@@ -643,14 +621,18 @@ class Shell:
         else:
             agent_msgs = messages
 
-        con.print(f"\n  [{C['purple']}][AGENT MODE][/{C['purple']}]  [{C['dim']}]{self.active.alias} · {self.model} · {self.session.mode.upper()} MODE[/{C['dim']}]")
+        con.print(
+            f"\n  [{C['purple']}][AGENT MODE][/{C['purple']}]  [{C['dim']}]{self.active.alias} · {self.model} · {self.session.mode.upper()} MODE[/{C['dim']}]"
+        )
 
         def _on_text(chunk: str):
             con.print(f"[{C['fg']}]{chunk}[/{C['fg']}]", end="")
 
         def _on_tool(tool_name: str, _: str):
             con.print()
-            con.print(f"\n  [{C['yellow']}]⚡ tool:[/{C['yellow']}] [{C['fg']}]{tool_name}[/{C['fg']}]")
+            con.print(
+                f"\n  [{C['yellow']}]⚡ tool:[/{C['yellow']}] [{C['fg']}]{tool_name}[/{C['fg']}]"
+            )
 
         def _on_result(tool_name: str, result: str):
             section(f"result: {tool_name}")
@@ -697,9 +679,7 @@ class Shell:
 
         def _send(s: Server):
             m = s.best_model(self.model)
-            msgs = self.session.as_messages() + [
-                {"role": "user", "content": msg_text}
-            ]
+            msgs = self.session.as_messages() + [{"role": "user", "content": msg_text}]
             full = ""
             con.print(
                 f"\n  [{C['accent']}]{s.alias}[/{C['accent']}]"
@@ -719,8 +699,7 @@ class Shell:
                 replies[s.alias] = full
 
         threads = [
-            threading.Thread(target=_send, args=(s,), daemon=True)
-            for s in targets
+            threading.Thread(target=_send, args=(s,), daemon=True) for s in targets
         ]
         for t in threads:
             t.start()

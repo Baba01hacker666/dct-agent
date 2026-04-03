@@ -10,9 +10,7 @@ import json
 import threading
 from typing import Optional
 
-REGISTRY_FILE = os.path.join(
-    os.path.expanduser("~"), ".config", "dct", "servers.json"
-)
+REGISTRY_FILE = os.path.join(os.path.expanduser("~"), ".config", "dct", "servers.json")
 
 
 class Server:
@@ -27,6 +25,8 @@ class Server:
         "status",
         "version",
         "latency_ms",
+        "provider",
+        "api_key",
     )
 
     def __init__(
@@ -39,6 +39,8 @@ class Server:
         status: str = "unknown",
         version: str = "",
         latency_ms: int = -1,
+        provider: str = "ollama",
+        api_key: str = "",
     ):
         self.alias = alias
         self.host = host
@@ -48,8 +50,12 @@ class Server:
         self.status = status  # "online" | "offline" | "unknown"
         self.version = version
         self.latency_ms = latency_ms
+        self.provider = provider
+        self.api_key = api_key
 
     def base_url(self) -> str:
+        if self.provider == "openrouter":
+            return "https://openrouter.ai"
         return f"http://{self.host}:{self.port}"
 
     def to_dict(self) -> dict:
@@ -62,6 +68,8 @@ class Server:
             "status": self.status,
             "version": self.version,
             "latency_ms": self.latency_ms,
+            "provider": self.provider,
+            "api_key": self.api_key,
         }
 
     @classmethod
@@ -75,12 +83,12 @@ class Server:
             status=d.get("status", "unknown"),
             version=d.get("version", ""),
             latency_ms=d.get("latency_ms", -1),
+            provider=d.get("provider", "ollama"),
+            api_key=d.get("api_key", ""),
         )
 
     def has_model(self, model: str) -> bool:
-        return any(
-            m == model or m.startswith(model + ":") for m in self.models
-        )
+        return any(m == model or m.startswith(model + ":") for m in self.models)
 
     def best_model(self, preferred: str = "") -> str:
         if preferred and self.has_model(preferred):
@@ -124,17 +132,31 @@ class ServerRegistry:
 
     # ── CRUD ─────────────────────────────────────────────────────────────────
     def add(
-        self, host: str, port: int, alias: str = "", note: str = ""
+        self,
+        host: str,
+        port: int,
+        alias: str = "",
+        note: str = "",
+        provider: str = "ollama",
+        api_key: str = "",
     ) -> Server:
         alias = alias or f"{host}:{port}"
         # Deduplicate by host+port
         for s in self.servers:
-            if s.host == host and s.port == port:
+            if s.host == host and s.port == port and s.provider == provider:
                 s.alias = alias
                 s.note = note or s.note
+                s.api_key = api_key or s.api_key
                 self.save()
                 return s
-        srv = Server(alias=alias, host=host, port=port, note=note)
+        srv = Server(
+            alias=alias,
+            host=host,
+            port=port,
+            note=note,
+            provider=provider,
+            api_key=api_key,
+        )
         with self._lock:
             self.servers.append(srv)
         self.save()
@@ -187,9 +209,7 @@ class ServerRegistry:
         if not candidates:
             return None
         # Sort by latency (lower = better), unknowns last
-        candidates.sort(
-            key=lambda s: s.latency_ms if s.latency_ms >= 0 else 99999
-        )
+        candidates.sort(key=lambda s: s.latency_ms if s.latency_ms >= 0 else 99999)
         return candidates[0]
 
     def route(
