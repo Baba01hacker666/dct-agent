@@ -5,6 +5,14 @@ agent mode toggling, broadcast, and status display.
 """
 
 from __future__ import annotations
+
+from prompt_toolkit import PromptSession
+from prompt_toolkit.history import FileHistory
+from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
+from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit.formatted_text import HTML
+from prompt_toolkit.styles import Style
+import os
 import threading
 from typing import Optional
 
@@ -119,13 +127,27 @@ class Shell:
             hint("  /add 192.168.1.10 11434 home")
 
     # ── Main REPL ────────────────────────────────────────────────────────────
+
     def run(self):
+        history_file = os.path.join(os.path.expanduser("~"), ".config", "dct", "history")
+        os.makedirs(os.path.dirname(history_file), exist_ok=True)
+        session = PromptSession(
+            history=FileHistory(history_file),
+            auto_suggest=AutoSuggestFromHistory(),
+        )
+
+        style = Style.from_dict({
+            'bottom-toolbar': '#333333 bg:#ffeb3b',
+        })
+
         while True:
             try:
                 con.print()
                 con.print(self._status_bar())
                 con.print(f"  [{C['dim']}]{'─' * 66}[/{C['dim']}]")
-                raw = con.input(f"  [{C['warn']}]›[/{C['warn']}] ").strip()
+                raw = session.prompt("  › ", multiline=False)
+                raw = raw.strip()
+
             except (KeyboardInterrupt, EOFError):
                 con.print(f"\n  [{C['dim']}]goodbye[/{C['dim']}]")
                 self.registry.save()
@@ -556,8 +578,9 @@ class Shell:
         else:
             self._stream_reply(messages)
 
+
     def _stream_reply(self, messages: list[dict]):
-        """Stream a normal chat reply, append to session."""
+        """Stream a normal chat reply, append to session. Auto failover on network error."""
         con.print(
             f"\n  [{C['accent']}]DCT-AI[/{C['accent']}]"
             f"  [{C['dim']}]{self.active.alias} · {self.model} · {ts()}[/{C['dim']}]"
@@ -565,27 +588,41 @@ class Shell:
         con.print(f"  [{C['dim']}]{'─' * 66}[/{C['dim']}]")
         con.print("  ", end="")
         full = ""
-        try:
-            for chunk in chat_stream(self.active, self.model, messages):
-                con.print(f"[{C['fg']}]{chunk}[/{C['fg']}]", end="")
-                full += chunk
-        except KeyboardInterrupt:
-            con.print(f"\n  [{C['warn']}]interrupted[/{C['warn']}]")
-        except Exception as e:
-            err(str(e))
-            # Try failover
-            probe_server(self.active)
-            self.registry.save()
-            if self.active.status == "offline":
-                fb = self.registry.first_online()
-                if fb:
-                    warn(f"failover → {fb.alias}")
-                    self.active = fb
-                    self.model = self.active.best_model(self.model)
-            return
+        
+        while True:
+            try:
+                for chunk in chat_stream(self.active, self.model, messages):
+                    con.print(f"[{C['fg']}]{chunk}[/{C['fg']}]", end="")
+                    full += chunk
+                break # Success!
+            except Exception as e:
+                import requests
+                if isinstance(e, requests.exceptions.RequestException):
+                    warn(f"\nConnection to {self.active.alias} lost mid-stream.")
+                    # Re-probe and find a fallback
+                    probe_server(self.active)
+                    self.registry.save()
+                    fallback = self.registry.first_online()
+                    if fallback and fallback != self.active:
+                        self.active = fallback
+                        self.model = self.active.best_model(self.model)
+                        warn(f"Failing over to {self.active.alias} · {self.model}...")
+                        con.print(f"\n  [{C["dim"]}]{chr(9472) * 66}[/{C["dim"]}]\n  ", end="")
+                        continue # Retry with new server
+                    else:
+                        err("All servers offline. Cannot complete request.")
+                        break
+                else:
+                    con.print(f"\n  [{C["err"]}]{str(e)}[/{C["err"]}]")
+                    break
+            except KeyboardInterrupt:
+                con.print(f"\n  [{C["dim"]}]cancelled[/{C["dim"]}]")
+                break
+        
         con.print()
         if full:
             self.session.add("assistant", full)
+
 
     def _run_agent(self, messages: list[dict], user_text: str):
         """Run the agentic loop."""

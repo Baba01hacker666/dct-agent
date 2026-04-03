@@ -87,13 +87,14 @@ RULES:
 """
 
 
+
 def _extract_tag(text: str, tag: str) -> Optional[str]:
-    m = re.search(rf"<{tag}>(.*?)</{tag}>", text, re.DOTALL)
+    m = re.search(rf"<{tag}>(.*?)</{tag}>", text, re.DOTALL | re.IGNORECASE)
     return m.group(1).strip() if m else None
 
-
 def _has_tool_call(text: str) -> bool:
-    return bool(re.search(r"<tool>(.+?)</tool>", text, re.DOTALL))
+    return bool(re.search(r"<tool>(.+?)</tool>", text, re.DOTALL | re.IGNORECASE))
+
 
 
 def _parse_tool_call(text: str) -> Optional[dict]:
