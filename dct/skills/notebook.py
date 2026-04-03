@@ -31,7 +31,8 @@ def edit_notebook_cell(
         if edit_mode == "replace":
             if cell_index < 0 or cell_index >= len(cells):
                 return NotebookResult(
-                    False, f"Cell index {cell_index} out of bounds (0-{len(cells)-1})."
+                    False,
+                    f"Cell index {cell_index} out of bounds (0-{len(cells) - 1}).",
                 )
             cells[cell_index]["source"] = [
                 line + "\n" for line in new_source.split("\n")
