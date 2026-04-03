@@ -40,7 +40,7 @@ from dct.core.ollama import (
     show_model,
 )
 from dct.agent.session import Session
-from dct.agent.codeagent import CodeAgent, AGENT_SYSTEM_PROMPT
+from dct.agent.codeagent import CodeAgent
 from dct.tools.executor import dispatch
 from dct.tools.files import read_file, write_file
 from dct.tools.web import fetch_url, search_ddg
@@ -624,32 +624,33 @@ class Shell:
             self.session.add("assistant", full)
 
 
+
     def _run_agent(self, messages: list[dict], user_text: str):
         """Run the agentic loop."""
-        # Prepend agent system prompt if not already set
+        from dct.agent.codeagent import get_system_prompt
+        
+        # Always re-inject dynamic system prompt unless user set a custom one
         if not self.session.system_prompt:
-            agent_msgs = [
-                {"role": "system", "content": AGENT_SYSTEM_PROMPT}
-            ] + messages
+            dynamic_prompt = get_system_prompt(self.session)
+            # Find and replace the system prompt in the messages list, or prepend it
+            system_msg = {"role": "system", "content": dynamic_prompt}
+            
+            # messages list is a copy of session.messages, but let's be careful
+            if messages and messages[0]["role"] == "system":
+                agent_msgs = [system_msg] + messages[1:]
+            else:
+                agent_msgs = [system_msg] + messages
         else:
             agent_msgs = messages
 
-        con.print(f"\n  [{
-                C['purple']}][AGENT MODE][/{
-                C['purple']}]  [{
-                C['dim']}]{
-                    self.active.alias} · {
-                        self.model}[/{
-                            C['dim']}]")
+        con.print(f"\n  [{C['purple']}][AGENT MODE][/{C['purple']}]  [{C['dim']}]{self.active.alias} · {self.model} · {self.session.mode.upper()} MODE[/{C['dim']}]")
 
         def _on_text(chunk: str):
             con.print(f"[{C['fg']}]{chunk}[/{C['fg']}]", end="")
 
         def _on_tool(tool_name: str, _: str):
             con.print()
-            con.print(
-                f"\n  [{C['yellow']}]⚡ tool:[/{C['yellow']}] [{C['fg']}]{tool_name}[/{C['fg']}]"
-            )
+            con.print(f"\n  [{C['yellow']}]⚡ tool:[/{C['yellow']}] [{C['fg']}]{tool_name}[/{C['fg']}]")
 
         def _on_result(tool_name: str, result: str):
             section(f"result: {tool_name}")
@@ -665,6 +666,7 @@ class Shell:
         agent = CodeAgent(
             server=self.active,
             model=self.model,
+            session=self.session,
             stream_fn=chat_stream,
             on_text=_on_text,
             on_tool=_on_tool,

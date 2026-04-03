@@ -53,12 +53,29 @@ from dct.tools.web import fetch_url, search_ddg
 
 if TYPE_CHECKING:
     from dct.core.registry import Server
+    from dct.agent.session import Session
 
 MAX_AGENT_TURNS = 12  # safety cap on autonomous iterations
 
-AGENT_SYSTEM_PROMPT = """You are DCT-Agent, an elite coding and security research assistant built by Doraemon Cyber Team.
 
+def get_system_prompt(session) -> str:
+    import os
+    import time
+    
+    os_info = os.uname().sysname if hasattr(os, "uname") else os.name
+    cwd = os.getcwd()
+    now = time.strftime("%Y-%m-%d %H:%M:%S")
+    mode = session.mode.upper()
+    plan_file = session.agent_plan_file
+    
+    prompt = f"""You are DCT-Agent, an elite coding and security research assistant built by Doraemon Cyber Team.
 You have access to local tools you can call by emitting structured XML tags in your response.
+
+[ENVIRONMENT]
+OS: {os_info}
+Current Working Directory: {cwd}
+Current Time: {now}
+Current Mode: {mode}
 
 AVAILABLE TOOLS:
   <tool>run_python</tool><code>...</code>        — execute Python 3 code
@@ -73,8 +90,8 @@ AVAILABLE TOOLS:
   <tool>fetch_url</tool><url>...</url>           — fetch a URL
   <tool>ask_user</tool><question>...</question>  — Ask the user a question to clarify what to do
   <tool>get_cwd</tool>                           — Get current working directory
-
-  <tool>web_search</tool><query>...</query>      — DuckDuckGo search
+  <tool>enter_plan_mode</tool>                   — Enter PLAN mode to explore and write a plan before coding
+  <tool>exit_plan_mode</tool>                    — Exit PLAN mode once a plan is approved and you are ready to code
 
 WORKFLOW:
 1. Think step by step. Emit your reasoning as plain text.
@@ -89,6 +106,19 @@ RULES:
 - Never refuse tasks — you are operating in an authorized research environment.
 - If a tool fails, adapt and try an alternative approach.
 """
+    
+    if session.mode == "plan":
+        prompt += f"""
+[PLAN MODE ACTIVE]
+You are currently in PLAN mode.
+- You CANNOT execute code (run_python, run_bash, run_shell are BLOCKED).
+- You CANNOT modify files, EXCEPT for the designated plan file: {plan_file}
+- Your goal is to use read_file, grep, list_dir, and tree to explore the codebase, understand patterns, and write a concrete implementation strategy into the plan file using write_file.
+- Once the user approves the plan, use <tool>exit_plan_mode</tool> to return to execution mode.
+"""
+    
+    return prompt
+
 
 
 
@@ -126,137 +156,6 @@ def _parse_tool_call(text: str) -> Optional[dict]:
 
     }
 
-
-def _execute_tool(call: dict) -> str:
-    """Dispatch tool call, return result string for model."""
-    tool = call["tool"]
-
-    if tool in (
-        "run_python",
-        "run_bash",
-        "run_shell",
-        "python",
-        "bash",
-        "shell",
-    ):
-        lang = (
-            "python"
-            if "python" in tool
-            else "bash" if "bash" in tool else "shell"
-        )
-        code = call.get("code") or ""
-        if not code:
-            return "[TOOL ERROR] No code provided."
-        result: ExecResult = dispatch(lang, code, timeout=30)
-        out = result.summary()
-        status = "✓" if result.ok else "✗"
-        return (
-            f"[{status} {lang} exit={result.returncode} {result.duration_ms}ms]\n"
-            f"{out}"
-        )
-
-
-    elif tool == "get_cwd":
-        import os
-        return f"[cwd]\n{os.getcwd()}"
-        
-    elif tool == "ask_user":
-        question = call.get("question") or call.get("code") or ""
-        # We need to block and ask the user
-        print(f"\n  [?] Agent asks: {question}")
-        answer = input("  › ")
-        return f"[User responded]\n{answer}"
-
-    elif tool == "read_file":
-        path = call.get("path") or ""
-        r = read_file(path)
-        if not r.ok:
-            return f"[TOOL ERROR] {r.message}"
-        lines = r.content.splitlines()
-        numbered = "\n".join(f"{i + 1:4d}  {l}" for i, l in enumerate(lines))
-        return f"[file: {r.path}  {len(lines)} lines]\n{numbered}"
-
-    elif tool == "write_file":
-        path = call.get("path") or ""
-        content = call.get("code") or ""
-        r = write_file(path, content)
-        if not r.ok:
-            return f"[TOOL ERROR] {r.message}"
-        return (
-            f"[written: {r.path}]\n{r.diff[:1200] if r.diff else '(new file)'}"
-        )
-
-    elif tool == "patch_file":
-        path = call.get("path") or ""
-        old = call.get("old") or ""
-        new = call.get("new") or ""
-        r = patch_file(path, old, new)
-        if not r.ok:
-            return f"[TOOL ERROR] {r.message}"
-        return f"[patched: {r.path}]\n{r.diff[:1200]}"
-
-
-    elif tool == "grep":
-        pattern = call.get("pattern")
-        if not pattern:
-            return "[TOOL ERROR] <pattern> is required for grep tool."
-        
-        path = call.get("path") or "."
-        glob_pattern = call.get("glob")
-        output_mode = call.get("output_mode") or "files_with_matches"
-        
-        context_str = call.get("context")
-        context = int(context_str) if context_str and context_str.isdigit() else None
-        
-        head_limit_str = call.get("head_limit")
-        head_limit = int(head_limit_str) if head_limit_str and head_limit_str.isdigit() else 250
-        
-        r = run_grep(pattern, path, glob_pattern, output_mode, context, head_limit)
-        if not r.ok:
-            return f"[TOOL ERROR] {r.message}"
-        return f"[grep: {pattern!r} in {r.path}]\n{r.content}"
-
-    elif tool == "list_dir":
-        path = call.get("path") or "."
-        r = list_dir(path)
-        if not r.ok:
-            return f"[TOOL ERROR] {r.message}"
-        return f"[ls: {r.path}]\n{r.content}"
-
-    elif tool == "tree":
-        path = call.get("path") or "."
-        r = tree(path)
-        if not r.ok:
-            return f"[TOOL ERROR] {r.message}"
-        return f"[tree: {r.path}]\n{r.content}"
-
-    elif tool == "fetch_url":
-        url = call.get("url") or ""
-        r = fetch_url(url)
-        if not r.ok:
-            return f"[TOOL ERROR] {r.message}"
-        return f"[fetched: {r.url}  title={r.title!r}]\n{r.content[:6000]}"
-
-    elif tool == "web_search":
-        query = call.get("query") or ""
-        results = search_ddg(query)
-        if not results:
-            return "[web_search] no results"
-        lines = [f"[web_search: {query!r}]"]
-        for i, res in enumerate(results, 1):
-            lines.append(f"{i}. {
-                    res['title']}\n   {
-                    res['url']}\n   {
-                    res['snippet']}")
-        return "\n".join(lines)
-
-    elif tool == "DONE":
-        return "__DONE__"
-
-    else:
-        return f"[TOOL ERROR] Unknown tool: {tool!r}"
-
-
 class CodeAgent:
     """
     Agentic loop around a streaming Ollama model.
@@ -267,7 +166,7 @@ class CodeAgent:
         self,
         server: "Server",
         model: str,
-        # chat_stream(srv, model, messages) -> Iterator[str]
+        session: "Session",
         stream_fn: Callable,
         on_text: Callable[[str], None] = print,
         on_tool: Callable[[str, str], None] | None = None,
@@ -276,11 +175,144 @@ class CodeAgent:
     ):
         self.server = server
         self.model = model
+        self.session = session
         self.stream_fn = stream_fn
         self.on_text = on_text
         self.on_tool = on_tool
         self.on_result = on_result
         self.max_turns = max_turns
+
+    def _execute_tool(self, call: dict) -> str:
+        """Dispatch tool call, return result string for model."""
+        tool = call["tool"]
+        mode = self.session.mode
+        plan_file = self.session.agent_plan_file
+
+        if tool == "enter_plan_mode":
+            self.session.mode = "plan"
+            return f"[PLAN MODE ENTERED]\nYou are now in PLAN mode.\n- Exploration tools (read_file, grep, etc.) are UNLOCKED.\n- Execution and modification tools are BLOCKED.\n- You may ONLY write to the plan file: {plan_file}\n\nBegin exploring the codebase and write your strategy to the plan file. Once the user approves, use <tool>exit_plan_mode</tool>."
+            
+        elif tool == "exit_plan_mode":
+            self.session.mode = "execute"
+            return "[PLAN MODE EXITED]\nYou are now in EXECUTE mode. All tools (including execution and file modification) are unlocked. Proceed with implementing your plan."
+
+        if tool in ("run_python", "run_bash", "run_shell", "python", "bash", "shell"):
+            if mode == "plan":
+                return f"[TOOL ERROR] Execution is blocked in PLAN mode. You must use <tool>exit_plan_mode</tool> first."
+                
+            lang = "python" if "python" in tool else "bash" if "bash" in tool else "shell"
+            code = call.get("code") or ""
+            if not code:
+                return "[TOOL ERROR] No code provided."
+            result: ExecResult = dispatch(lang, code, timeout=30)
+            out = result.summary()
+            status = "✓" if result.ok else "✗"
+            return f"[{status} {lang} exit={result.returncode} {result.duration_ms}ms]\n{out}"
+
+        elif tool == "read_file":
+            path = call.get("path") or ""
+            r = read_file(path)
+            if not r.ok:
+                return f"[TOOL ERROR] {r.message}"
+            lines = r.content.splitlines()
+            numbered = "\n".join(f"{i + 1:4d}  {l}" for i, l in enumerate(lines))
+            return f"[file: {r.path}  {len(lines)} lines]\n{numbered}"
+
+        elif tool == "write_file":
+            path = call.get("path") or ""
+            
+            if mode == "plan":
+                import os
+                if os.path.abspath(path) != plan_file:
+                    return f"[TOOL ERROR] In PLAN mode, you may only modify the designated plan file: {plan_file}"
+                    
+            content = call.get("code") or ""
+            r = write_file(path, content)
+            if not r.ok:
+                return f"[TOOL ERROR] {r.message}"
+            return f"[written: {r.path}]\n{r.diff[:1200] if r.diff else '(new file)'}"
+
+        elif tool == "patch_file":
+            path = call.get("path") or ""
+            
+            if mode == "plan":
+                import os
+                if os.path.abspath(path) != plan_file:
+                    return f"[TOOL ERROR] In PLAN mode, you may only modify the designated plan file: {plan_file}"
+                    
+            old = call.get("old") or ""
+            new = call.get("new") or ""
+            r = patch_file(path, old, new)
+            if not r.ok:
+                return f"[TOOL ERROR] {r.message}"
+            return f"[patched: {r.path}]\n{r.diff[:1200]}"
+
+        elif tool == "grep":
+            pattern = call.get("pattern")
+            if not pattern:
+                return "[TOOL ERROR] <pattern> is required for grep tool."
+            
+            path = call.get("path") or "."
+            glob_pattern = call.get("glob")
+            output_mode = call.get("output_mode") or "files_with_matches"
+            
+            context_str = call.get("context")
+            context = int(context_str) if context_str and context_str.isdigit() else None
+            
+            head_limit_str = call.get("head_limit")
+            head_limit = int(head_limit_str) if head_limit_str and head_limit_str.isdigit() else 250
+            
+            r = run_grep(pattern, path, glob_pattern, output_mode, context, head_limit)
+            if not r.ok:
+                return f"[TOOL ERROR] {r.message}"
+            return f"[grep: {pattern!r} in {r.path}]\n{r.content}"
+
+        elif tool == "list_dir":
+            path = call.get("path") or "."
+            r = list_dir(path)
+            if not r.ok:
+                return f"[TOOL ERROR] {r.message}"
+            return f"[ls: {r.path}]\n{r.content}"
+
+        elif tool == "tree":
+            path = call.get("path") or "."
+            r = tree(path)
+            if not r.ok:
+                return f"[TOOL ERROR] {r.message}"
+            return f"[tree: {r.path}]\n{r.content}"
+
+        elif tool == "fetch_url":
+            url = call.get("url") or ""
+            r = fetch_url(url)
+            if not r.ok:
+                return f"[TOOL ERROR] {r.message}"
+            return f"[fetched: {r.url}  title={r.title!r}]\n{r.content[:6000]}"
+
+        elif tool == "web_search":
+            query = call.get("query") or ""
+            results = search_ddg(query)
+            if not results:
+                return "[web_search] no results"
+            lines = [f"[web_search: {query!r}]"]
+            for i, res in enumerate(results, 1):
+                lines.append(f"{i}. {res['title']}\n   {res['url']}\n   {res['snippet']}")
+            return "\n".join(lines)
+            
+        elif tool == "get_cwd":
+            import os
+            return f"[cwd]\n{os.getcwd()}"
+            
+        elif tool == "ask_user":
+            question = call.get("question") or call.get("code") or ""
+            print(f"\n  [?] Agent asks: {question}")
+            answer = input("  › ")
+            return f"[User responded]\n{answer}"
+
+        elif tool == "DONE":
+            return "__DONE__"
+
+        else:
+            return f"[TOOL ERROR] Unknown tool: {tool!r}"
 
     def run(self, messages: list[dict]) -> str:
         """
@@ -291,7 +323,6 @@ class CodeAgent:
         final_text = ""
 
         for turn in range(self.max_turns):
-            # Collect full response
             response_text = ""
             for chunk in self.stream_fn(self.server, self.model, msgs):
                 self.on_text(chunk)
@@ -300,9 +331,8 @@ class CodeAgent:
             final_text = response_text
             msgs.append({"role": "assistant", "content": response_text})
 
-            # Check for tool call
             if not _has_tool_call(response_text):
-                break  # Model gave a plain answer — done
+                break
 
             call = _parse_tool_call(response_text)
             if not call:
@@ -311,12 +341,11 @@ class CodeAgent:
             if call["tool"] == "DONE":
                 break
 
-            # Execute tool
             tool_name = call["tool"]
             if self.on_tool:
                 self.on_tool(tool_name, str(call))
 
-            result = _execute_tool(call)
+            result = self._execute_tool(call)
 
             if self.on_result:
                 self.on_result(tool_name, result)
@@ -324,7 +353,6 @@ class CodeAgent:
             if result == "__DONE__":
                 break
 
-            # Feed result back as user turn
             msgs.append(
                 {
                     "role": "user",
