@@ -23,9 +23,7 @@ def show_servers(registry: "ServerRegistry"):
         info("add one: /add <host> <port> [alias] [note]")
         return
 
-    t = Table(
-        box=box.SIMPLE, show_header=True, header_style=C["dim"], pad_edge=False
-    )
+    t = Table(box=box.SIMPLE, show_header=True, header_style=C["dim"], pad_edge=False)
     t.add_column("#", style=C["dim"], justify="right", min_width=3)
     t.add_column("alias", style=C["accent"], min_width=14)
     t.add_column("host", style=C["fg"], min_width=16)
@@ -38,11 +36,7 @@ def show_servers(registry: "ServerRegistry"):
 
     for i, s in enumerate(registry.servers, 1):
         st = s.status
-        stc = (
-            C["ok"]
-            if st == "online"
-            else C["err"] if st == "offline" else C["dim"]
-        )
+        stc = C["ok"] if st == "online" else C["err"] if st == "offline" else C["dim"]
         ms = str(s.latency_ms) + "ms" if s.latency_ms >= 0 else "—"
         t.add_row(
             str(i),
@@ -64,9 +58,7 @@ def show_models(models: list[dict], server_alias: str):
         warn("no models found — pull one first")
         return
 
-    t = Table(
-        box=box.SIMPLE, show_header=True, header_style=C["dim"], pad_edge=False
-    )
+    t = Table(box=box.SIMPLE, show_header=True, header_style=C["dim"], pad_edge=False)
     t.add_column("#", style=C["dim"], justify="right", min_width=3)
     t.add_column("name", style=C["accent"], min_width=26)
     t.add_column("size", style=C["fg"], justify="right", min_width=10)
@@ -94,9 +86,7 @@ def show_models(models: list[dict], server_alias: str):
 
 def show_all_models(registry: "ServerRegistry"):
     section("all models across all servers")
-    t = Table(
-        box=box.SIMPLE, show_header=True, header_style=C["dim"], pad_edge=False
-    )
+    t = Table(box=box.SIMPLE, show_header=True, header_style=C["dim"], pad_edge=False)
     t.add_column("server", style=C["accent"], min_width=14)
     t.add_column("status", justify="center", min_width=10)
     t.add_column("model", style=C["fg"], min_width=26)
@@ -124,20 +114,14 @@ def show_all_models(registry: "ServerRegistry"):
 
 
 def show_probe_detail(rows: list[dict]):
-    t = Table(
-        box=box.SIMPLE, show_header=True, header_style=C["dim"], pad_edge=False
-    )
+    t = Table(box=box.SIMPLE, show_header=True, header_style=C["dim"], pad_edge=False)
     t.add_column("endpoint", style=C["fg"], min_width=16)
     t.add_column("status", justify="center", min_width=8)
     t.add_column("latency", style=C["dim"], justify="right", min_width=8)
     t.add_column("response", style=C["muted"], min_width=30)
 
     for row in rows:
-        color = (
-            C["ok"]
-            if row["ok"]
-            else C["err"] if row["status"] == 0 else C["warn"]
-        )
+        color = C["ok"] if row["ok"] else C["err"] if row["status"] == 0 else C["warn"]
         status_str = f"[{color}]{row['status'] or 'ERR'}[/{color}]"
         lat = f"{row['latency']}ms" if row["latency"] >= 0 else "—"
         t.add_row(row["path"], status_str, lat, row["snippet"])

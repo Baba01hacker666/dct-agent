@@ -31,9 +31,7 @@ def _post_stream(url: str, payload: dict, timeout: int) -> Iterator[dict]:
 
 
 # ── Chat ─────────────────────────────────────────────────────────────────────
-def chat_stream(
-    srv: "Server", model: str, messages: list[dict]
-) -> Iterator[str]:
+def chat_stream(srv: "Server", model: str, messages: list[dict]) -> Iterator[str]:
     """
     Yield text chunks from /api/chat (streaming).
     Raises on HTTP error.
