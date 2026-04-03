@@ -7,6 +7,7 @@ Used by the coding agent to inspect and modify files.
 from __future__ import annotations
 import os
 import shutil
+import subprocess
 import difflib
 from pathlib import Path
 from dataclasses import dataclass
@@ -137,6 +138,59 @@ def tree(path: str, max_depth: int = 3, max_entries: int = 300) -> FileResult:
     except Exception as e:
         return FileResult(ok=False, path=path, message=str(e))
 
+
+
+
+def run_grep(
+    pattern: str,
+    path: str = ".",
+    glob_pattern: str | None = None,
+    output_mode: str = "files_with_matches",
+    context: int | None = None,
+    head_limit: int = 250
+) -> FileResult:
+    """Run ripgrep (rg) to search file contents."""
+    cmd = ["rg"]
+    
+    # Map output_mode to rg flags
+    if output_mode == "files_with_matches":
+        cmd.append("-l")
+    elif output_mode == "count":
+        cmd.append("-c")
+    elif output_mode == "content":
+        cmd.append("-n")  # Include line numbers
+        if context is not None:
+            cmd.extend(["-C", str(context)])
+            
+    # Apply glob filtering if provided
+    if glob_pattern:
+        cmd.extend(["--glob", glob_pattern])
+        
+    cmd.extend(["--", pattern, path])
+    
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        
+        # rg returns 0 for match, 1 for no match, 2 for error
+        if proc.returncode not in (0, 1):
+            return FileResult(ok=False, path=path, message=f"grep error: {proc.stderr.strip() or 'unknown error'}")
+            
+        out = proc.stdout.strip()
+        if not out:
+            return FileResult(ok=True, path=path, content="(no matches found)")
+            
+        # Enforce head_limit
+        lines = out.splitlines()
+        if len(lines) > head_limit:
+            lines = lines[:head_limit]
+            lines.append(f"... (output truncated to {head_limit} lines)")
+            
+        return FileResult(ok=True, path=path, content="\n".join(lines))
+        
+    except FileNotFoundError:
+        return FileResult(ok=False, path=path, message="rg (ripgrep) binary not found on the system. Please install it.")
+    except Exception as e:
+        return FileResult(ok=False, path=path, message=str(e))
 
 def _make_diff(old: str, new: str, fname: str) -> str:
     diff = difflib.unified_diff(
