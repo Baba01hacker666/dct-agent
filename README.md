@@ -1,5 +1,5 @@
 # DCT Agent — Doraemon Cyber Team
-**Multi-server Ollama agent · v3.0**
+**Multi-server Ollama agent · v3.1**
 
 ## Install
 
