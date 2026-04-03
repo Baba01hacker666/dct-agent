@@ -70,6 +70,9 @@ AVAILABLE TOOLS:
   <tool>list_dir</tool><path>...</path>          — list directory
   <tool>tree</tool><path>...</path>              — directory tree
   <tool>fetch_url</tool><url>...</url>           — fetch a URL
+  <tool>ask_user</tool><question>...</question>  — Ask the user a question to clarify what to do
+  <tool>get_cwd</tool>                           — Get current working directory
+
   <tool>web_search</tool><query>...</query>      — DuckDuckGo search
 
 WORKFLOW:
@@ -109,7 +112,10 @@ def _parse_tool_call(text: str) -> Optional[dict]:
         "url": _extract_tag(text, "url"),
         "query": _extract_tag(text, "query"),
         "old": _extract_tag(text, "old"),
+
         "new": _extract_tag(text, "new"),
+        "question": _extract_tag(text, "question"),
+
     }
 
 
@@ -140,6 +146,18 @@ def _execute_tool(call: dict) -> str:
             f"[{status} {lang} exit={result.returncode} {result.duration_ms}ms]\n"
             f"{out}"
         )
+
+
+    elif tool == "get_cwd":
+        import os
+        return f"[cwd]\n{os.getcwd()}"
+        
+    elif tool == "ask_user":
+        question = call.get("question") or call.get("code") or ""
+        # We need to block and ask the user
+        print(f"\n  [?] Agent asks: {question}")
+        answer = input("  › ")
+        return f"[User responded]\n{answer}"
 
     elif tool == "read_file":
         path = call.get("path") or ""
