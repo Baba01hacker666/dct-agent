@@ -1,0 +1,5 @@
+#!/bin/bash
+cat << 'CFG' > .flake8
+[flake8]
+ignore = E501,E128,E126,W503,W504,F841
+CFG
