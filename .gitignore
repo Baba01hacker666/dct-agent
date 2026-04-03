@@ -68,3 +68,4 @@ venv.bak/
 # Claude / Custom
 .claude/
 project_context.txt
+.dct_internal_notes.md
