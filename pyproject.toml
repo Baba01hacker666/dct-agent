@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "dct-agent"
+version = "3.0.0"
+description = "Doraemon Cyber Team — Multi-server Ollama agent"
+authors = [{ name = "baba01hacker", email = "dct@doraemon.team" }]
+requires-python = ">=3.11"
+dependencies = [
+    "rich>=13.0",
+    "requests>=2.31",
+]
+
+[project.scripts]
+dct = "dct.cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["dct*"]

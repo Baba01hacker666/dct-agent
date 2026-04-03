@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flake8:*)",
+      "Bash(pylint dct/)",
+      "Bash(pytest dct/)",
+      "Bash(pip install:*)"
+    ]
+  }
+}
