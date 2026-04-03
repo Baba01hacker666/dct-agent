@@ -76,11 +76,7 @@ class Shell:
             f"  [{stc}]●[/{stc}]"
             f"  [{C['dim']}]{self.active.host}:{self.active.port}[/{C['dim']}]"
             f"  [{C['fg']}]› {self.model}[/{C['fg']}]"
-            f"  [{
-                C['dim']}]{
-                self.session.user_turns}t · ~{
-                self.session.token_estimate}tok[/{
-                C['dim']}]"
+            f"  [{C['dim']}]{self.session.user_turns}t · ~{self.session.token_estimate}tok[/{C['dim']}]"
             f"{ag}"
         )
 
