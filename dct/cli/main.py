@@ -260,9 +260,7 @@ def main():
     # ── Interactive shell ───────────────────────────────────────────────────
     init_alias = ""
     if args.host:
-        srv = registry.add(args.host, args.port, args.alias or f"{
-                args.host}:{
-                args.port}")
+        srv = registry.add(args.host, args.port, args.alias or f"{args.host}:{args.port}")
         con.print(f"  [{C['dim']}]probing {srv.alias}…[/{C['dim']}]", end=" ")
         res = probe_server(srv)
         registry.save()
