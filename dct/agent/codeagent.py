@@ -69,7 +69,7 @@ if TYPE_CHECKING:
 MAX_AGENT_TURNS = 12  # safety cap on autonomous iterations
 
 
-def get_system_prompt(session) -> str:
+def get_system_prompt(session, user_system_prompt: str = "") -> str:
     import os
     import time
 
@@ -147,6 +147,13 @@ You are currently in PLAN mode.
 - You CANNOT modify files, EXCEPT for the designated plan file: {plan_file}
 - Your goal is to use read_file, grep, list_dir, and tree to explore the codebase, understand patterns, and write a concrete implementation strategy into the plan file using write_file.
 - Once the user approves the plan, use <tool>exit_plan_mode</tool> to return to execution mode.
+"""
+
+    if user_system_prompt.strip():
+        prompt += f"""
+[USER SYSTEM PREFERENCES]
+Apply the following additional instructions while still obeying all tool and safety rules above:
+{user_system_prompt.strip()}
 """
 
     return prompt
