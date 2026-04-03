@@ -10,7 +10,6 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 
-
 @dataclass
 class Session:
     system_prompt: Optional[str] = None
@@ -18,12 +17,14 @@ class Session:
     created_at: float = field(default_factory=time.time)
     name: str = ""
     mode: str = "execute"  # 'execute' or 'plan'
-    
+
     @property
     def agent_plan_file(self) -> str:
         import os
-        return os.path.abspath(os.path.join(os.getcwd(), ".dct", "plans", "current_plan.md"))
 
+        return os.path.abspath(
+            os.path.join(os.getcwd(), ".dct", "plans", "current_plan.md")
+        )
 
     # ── Messages ─────────────────────────────────────────────────────────────
     def add(self, role: str, content: str):
@@ -32,9 +33,7 @@ class Session:
     def clear(self, keep_system: bool = True):
         self.messages = []
         if keep_system and self.system_prompt:
-            self.messages.append(
-                {"role": "system", "content": self.system_prompt}
-            )
+            self.messages.append({"role": "system", "content": self.system_prompt})
 
     def set_system(self, prompt: str):
         self.system_prompt = prompt
