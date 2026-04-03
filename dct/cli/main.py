@@ -28,19 +28,19 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 One-shot commands (non-interactive):
-  dct add <host> <port> [alias] [note]    register a server
-  dct add-openrouter <key> [alias]        register OpenRouter
-  dct remove <alias|#>                    remove a server
-  dct servers                             list all servers
-  dct probe [alias|#]                     probe servers
-  dct models [alias|#]                    list models
-  dct pull <alias|#> <model>             pull a model
-  dct delete <alias|#> <model>           delete a model
+  python -m dct add <host> <port> [alias] [note]    register a server
+  python -m dct add-openrouter <key> [alias]        register OpenRouter
+  python -m dct remove <alias|#>                    remove a server
+  python -m dct servers                             list all servers
+  python -m dct probe [alias|#]                     probe servers
+  python -m dct models [alias|#]                    list models
+  python -m dct pull <alias|#> <model>             pull a model
+  python -m dct delete <alias|#> <model>           delete a model
 
 Interactive mode (default):
-  dct                                     launch shell (loads saved servers)
-  dct -H 192.168.1.10 -p 11434           start with a specific server active
-  dct -H 10.0.0.5 -a vps1 -m mistral    set alias and initial model
+  python -m dct                                     launch shell (loads saved servers)
+  python -m dct -H 192.168.1.10 -p 11434           start with a specific server active
+  python -m dct -H 10.0.0.5 -a vps1 -m mistral    set alias and initial model
 
 Inside the shell type /help for all commands.
         """,
