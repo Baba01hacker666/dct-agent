@@ -23,3 +23,17 @@ for line in result.stdout.split('\n'):
             
             with open(file_path, "w") as f:
                 f.writelines(lines)
+#!/bin/bash
+pip install autopep8
+autopep8 --in-place --recursive --aggressive dct/
+#!/bin/bash
+cat << 'CFG' > .flake8
+[flake8]
+ignore = E501,E128,E126,W503,W504,F841
+CFG
+#!/bin/bash
+pip install yapf
+yapf -i -r dct/
+#!/bin/bash
+pip install autoflake
+autoflake --in-place --remove-all-unused-imports --recursive dct/
