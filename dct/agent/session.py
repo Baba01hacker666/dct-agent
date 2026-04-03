@@ -46,6 +46,19 @@ class Session:
         """Full message list ready to send to Ollama."""
         return list(self.messages)
 
+    def transcript(self, include_system: bool = False) -> str:
+        """Render chat history as readable plain text."""
+        lines: list[str] = []
+        for msg in self.messages:
+            role = msg.get("role", "unknown")
+            if role == "system" and not include_system:
+                continue
+            content = msg.get("content", "")
+            lines.append(f"{role.upper()}:")
+            lines.append(content)
+            lines.append("")
+        return "\n".join(lines).strip()
+
     # ── Stats ───────────────────────────────────────────────────────────────
     @property
     def user_turns(self) -> int:
