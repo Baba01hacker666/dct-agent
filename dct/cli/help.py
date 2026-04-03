@@ -79,6 +79,15 @@ HELP_SECTIONS = {
       [{C["dim"]}]Set a system prompt. Clears history.
       Example: /system You are a CTF solver specializing in binary exploitation.[/{C["dim"]}]
 
+  [{C["fg"]}]/prompts[/{C["fg"]}]
+      [{C["dim"]}]List built-in system prompt presets.[/{C["dim"]}]
+
+  [{C["fg"]}]/prompt <name>[/{C["fg"]}]
+      [{C["dim"]}]Apply a built-in prompt preset as system prompt.[/{C["dim"]}]
+
+  [{C["fg"]}]/copy[/{C["fg"]}]
+      [{C["dim"]}]Copy the current transcript to clipboard (or print fallback).[/{C["dim"]}]
+
   [{C["fg"]}]/save <file>[/{C["fg"]}]
       [{C["dim"]}]Save conversation to JSON.
       Example: /save session_2024.json[/{C["dim"]}]
@@ -172,6 +181,7 @@ HELP_OVERVIEW = f"""
   [{C["yellow"]}]/add 192.168.1.10 11434 home[/{C["yellow"]}]     [{C["dim"]}]register your first server[/{C["dim"]}]
   [{C["yellow"]}]/probe[/{C["yellow"]}]                           [{C["dim"]}]check all servers[/{C["dim"]}]
   [{C["yellow"]}]/models[/{C["yellow"]}]                          [{C["dim"]}]see available models[/{C["dim"]}]
+  [{C["yellow"]}]/prompts[/{C["yellow"]}]                         [{C["dim"]}]choose a built-in system prompt[/{C["dim"]}]
   [{C["yellow"]}]just type your message[/{C["yellow"]}]           [{C["dim"]}]start chatting[/{C["dim"]}]
 
 [{C["fg"]}]Help sections:[/{C["fg"]}]
