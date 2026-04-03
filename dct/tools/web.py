@@ -95,9 +95,7 @@ def search_ddg(query: str, max_results: int = 8) -> list[dict]:
 
 def _strip_html(html: str) -> str:
     """Remove HTML tags and decode common entities."""
-    text = re.sub(
-        r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.I
-    )
+    text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.I)
     text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.I)
     text = re.sub(r"<[^>]+>", " ", text)
     text = re.sub(r"&amp;", "&", text)
