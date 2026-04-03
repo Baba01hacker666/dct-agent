@@ -10,7 +10,7 @@ import argparse
 from dct.core.theme import con, C, BANNER, ok, err, info, warn
 from dct.core.registry import ServerRegistry
 from dct.core.probe import probe_server, probe_all, probe_endpoints_detail
-from dct.core.ollama import list_models, pull_stream, delete_model
+from dct.core.client import list_models, pull_stream, delete_model
 from dct.cli.display import (
     show_servers,
     show_models,
@@ -29,6 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
         epilog="""
 One-shot commands (non-interactive):
   dct add <host> <port> [alias] [note]    register a server
+  dct add-openrouter <key> [alias]        register OpenRouter
   dct remove <alias|#>                    remove a server
   dct servers                             list all servers
   dct probe [alias|#]                     probe servers
@@ -44,9 +45,7 @@ Interactive mode (default):
 Inside the shell type /help for all commands.
         """,
     )
-    p.add_argument(
-        "-H", "--host", default="", help="initial/primary server host"
-    )
+    p.add_argument("-H", "--host", default="", help="initial/primary server host")
     p.add_argument(
         "-p",
         "--port",
@@ -61,9 +60,7 @@ Inside the shell type /help for all commands.
         action="store_true",
         help="skip initial parallel probe on startup",
     )
-    p.add_argument(
-        "--version", action="store_true", help="print version and exit"
-    )
+    p.add_argument("--version", action="store_true", help="print version and exit")
 
     sub = p.add_subparsers(dest="cmd")
 
@@ -73,6 +70,11 @@ Inside the shell type /help for all commands.
     pa.add_argument("port", type=int)
     pa.add_argument("alias", nargs="?", default="")
     pa.add_argument("note", nargs="?", default="")
+
+    # add-openrouter
+    po = sub.add_parser("add-openrouter", help="register OpenRouter")
+    po.add_argument("key", help="OpenRouter API Key")
+    po.add_argument("alias", nargs="?", default="openrouter")
 
     # remove
     pr = sub.add_parser("remove", help="unregister a server")
@@ -129,6 +131,26 @@ def main():
         else:
             con.print(f"[{C['err']}]offline[/{C['err']}]")
             warn(f"added as {srv.alias} but currently unreachable")
+        return
+
+    if args.cmd == "add-openrouter":
+        srv = registry.add(
+            "openrouter.ai",
+            443,
+            args.alias,
+            "OpenRouter API",
+            provider="openrouter",
+            api_key=args.key,
+        )
+        con.print(f"  [{C['dim']}]probing…[/{C['dim']}]", end=" ")
+        res = probe_server(srv)
+        registry.save()
+        if res["ok"]:
+            con.print(f"[{C['ok']}]online[/{C['ok']}]")
+            ok(f"added: {srv.alias}  ({len(srv.models)} models available)")
+        else:
+            con.print(f"[{C['err']}]offline[/{C['err']}]")
+            warn(f"added {srv.alias} but API key might be invalid")
         return
 
     if args.cmd == "remove":
@@ -190,9 +212,7 @@ def main():
         if not s:
             err(f"server not found: {args.target}")
             sys.exit(1)
-        con.print(
-            f"\n  [{C['accent']}]pull[/{C['accent']}] {args.model} → {s.alias}\n"
-        )
+        con.print(f"\n  [{C['accent']}]pull[/{C['accent']}] {args.model} → {s.alias}\n")
         try:
             last = ""
             for chunk in pull_stream(s, args.model):
@@ -257,9 +277,7 @@ def main():
         )
         results = probe_all(registry)
         online = len(registry.online())
-        con.print(
-            f"  [{C['ok']}]{online}[/{C['ok']}] [{C['dim']}]online[/{C['dim']}]"
-        )
+        con.print(f"  [{C['ok']}]{online}[/{C['ok']}] [{C['dim']}]online[/{C['dim']}]")
 
     shell = Shell(registry)
     shell.init(init_alias=init_alias, init_model=args.model)

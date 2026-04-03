@@ -1,0 +1,40 @@
+{
+  "servers": [
+    {
+      "alias": "local",
+      "host": "localhost",
+      "port": 11434,
+      "note": "",
+      "models": [],
+      "status": "unknown",
+      "version": "",
+      "latency_ms": -1,
+      "provider": "ollama",
+      "api_key": ""
+    },
+    {
+      "alias": "vps1",
+      "host": "10.0.0.5",
+      "port": 11434,
+      "note": "VPS notes",
+      "models": [],
+      "status": "unknown",
+      "version": "",
+      "latency_ms": -1,
+      "provider": "ollama",
+      "api_key": ""
+    },
+    {
+      "alias": "or1",
+      "host": "openrouter.ai",
+      "port": 443,
+      "note": "",
+      "models": [],
+      "status": "unknown",
+      "version": "",
+      "latency_ms": -1,
+      "provider": "openrouter",
+      "api_key": "test_key"
+    }
+  ]
+}
