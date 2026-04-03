@@ -654,19 +654,14 @@ class Shell:
         """Run the agentic loop."""
         from dct.agent.codeagent import CodeAgent, get_system_prompt
 
-        # Always re-inject dynamic system prompt unless user set a custom one
-        if not self.session.system_prompt:
-            dynamic_prompt = get_system_prompt(self.session)
-            # Find and replace the system prompt in the messages list, or prepend it
-            system_msg = {"role": "system", "content": dynamic_prompt}
-
-            # messages list is a copy of session.messages, but let's be careful
-            if messages and messages[0]["role"] == "system":
-                agent_msgs = [system_msg] + messages[1:]
-            else:
-                agent_msgs = [system_msg] + messages
-        else:
-            agent_msgs = messages
+        # Always inject the dynamic tool prompt; merge user system prompt as
+        # additional preferences so models always receive tool instructions.
+        dynamic_prompt = get_system_prompt(
+            self.session, user_system_prompt=self.session.system_prompt or ""
+        )
+        system_msg = {"role": "system", "content": dynamic_prompt}
+        non_system_msgs = [m for m in messages if m.get("role") != "system"]
+        agent_msgs = [system_msg] + non_system_msgs
 
         con.print(
             f"\n  [{C['purple']}][AGENT MODE][/{C['purple']}]  [{C['dim']}]{self.active.alias} · {self.model} · {self.session.mode.upper()} MODE[/{C['dim']}]"
