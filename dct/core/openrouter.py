@@ -17,6 +17,28 @@ CHAT_TIMEOUT = 180
 DEFAULT_TIMEOUT = 6
 
 
+def _extract_stream_text(delta: dict) -> str:
+    """
+    Normalize streaming delta content from providers that may return:
+    - plain string content
+    - list parts (e.g. [{type: "text", text: "..."}])
+    """
+    content = delta.get("content", "")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        out: list[str] = []
+        for part in content:
+            if isinstance(part, str):
+                out.append(part)
+            elif isinstance(part, dict):
+                txt = part.get("text") or part.get("content")
+                if isinstance(txt, str):
+                    out.append(txt)
+        return "".join(out)
+    return ""
+
+
 def _post_stream(
     url: str, headers: dict, payload: dict, timeout: int
 ) -> Iterator[dict]:
@@ -55,7 +77,7 @@ def chat_stream(srv: "Server", model: str, messages: list[dict]) -> Iterator[str
     for chunk in _post_stream(url, headers, payload, CHAT_TIMEOUT):
         if "choices" in chunk and len(chunk["choices"]) > 0:
             delta = chunk["choices"][0].get("delta", {})
-            content = delta.get("content", "")
+            content = _extract_stream_text(delta)
             if content:
                 yield content
 

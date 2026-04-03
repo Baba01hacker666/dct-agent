@@ -1,6 +1,7 @@
 from unittest.mock import patch, MagicMock
 from dct.core.registry import Server
 from dct.core import client
+from dct.core.openrouter import _extract_stream_text
 
 
 def test_chat_once_openrouter():
@@ -24,3 +25,13 @@ def test_chat_once_openrouter():
         assert args[0] == "https://openrouter.ai/api/v1/chat/completions"
         assert kwargs["headers"]["Authorization"] == "Bearer test_key"
         assert kwargs["json"]["model"] == "openai/gpt-4o"
+
+
+def test_extract_stream_text_openrouter_parts():
+    delta = {
+        "content": [
+            {"type": "text", "text": "Hello"},
+            {"type": "text", "text": " world"},
+        ]
+    }
+    assert _extract_stream_text(delta) == "Hello world"
