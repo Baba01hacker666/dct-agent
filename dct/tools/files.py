@@ -209,3 +209,26 @@ def _fmt_size(n: int) -> str:
     if n < 1024**2:
         return f"{n / 1024:.1f}KB"
     return f"{n / 1024**2:.1f}MB"
+
+
+def run_glob(
+    pattern: str,
+    path: str = ".",
+) -> FileResult:
+    """Fast file pattern matching using ripgrep --files."""
+    cmd = ["rg", "--files", "--glob", pattern, path]
+    
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        
+        # rg returns 0 for match, 1 for no match, 2 for error
+        if proc.returncode not in (0, 1):
+            return FileResult(ok=False, path=path, message=f"glob error: {proc.stderr.strip() or 'unknown error'}")
+            
+        out = proc.stdout.strip()
+        if not out:
+            return FileResult(ok=True, path=path, content="(no matching files found)")
+            
+        return FileResult(ok=True, path=path, content=out)
+    except Exception as e:
+        return FileResult(ok=False, path=path, message=str(e))

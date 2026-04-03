@@ -48,8 +48,11 @@ import re
 from typing import Callable, Optional, TYPE_CHECKING
 
 from dct.tools.executor import dispatch, ExecResult
-from dct.tools.files import read_file, write_file, patch_file, list_dir, tree, run_grep
+from dct.tools.files import read_file, write_file, patch_file, list_dir, tree, run_grep, run_glob
 from dct.tools.web import fetch_url, search_ddg
+from dct.tools.tasks import get_tracker
+from dct.skills.notebook import edit_notebook_cell
+from dct.skills.web import fetch_and_extract
 
 if TYPE_CHECKING:
     from dct.core.registry import Server
@@ -86,9 +89,15 @@ AVAILABLE TOOLS:
   <tool>patch_file</tool><path>...</path><old>...</old><new>...</new>  — find+replace in file
   <tool>list_dir</tool><path>...</path>          — list directory
   <tool>tree</tool><path>...</path>              — directory tree
+  <tool>glob</tool><pattern>...</pattern><path>...</path>      — fast file discovery using ripgrep
+  <tool>task_create</tool><subject>...</subject><description>...</description> — Create tracking tasks
+  <tool>task_update</tool><id>...</id><status>...</status>       — Update task (pending|in_progress|completed)
+  <tool>task_list</tool>                                         — List all tasks
+  <tool>notebook_edit</tool><path>...</path><index>...</index><mode>replace|insert|delete</mode><source>...</source> — Edit jupyter notebooks
+  <tool>web_extract</tool><url>...</url><selector>...</selector> — Fetch webpage and optionally extract via CSS selector
   <tool>grep</tool><pattern>...</pattern><path>...</path><glob>...</glob><output_mode>content|files_with_matches</output_mode><context>2</context>  — fast regex search using ripgrep
   <tool>fetch_url</tool><url>...</url>           — fetch a URL
-  <tool>ask_user</tool><question>...</question>  — Ask the user a question to clarify what to do
+  <tool>ask_user</tool><question>...</question><choices>a,b,c</choices>  — Ask the user a question (choices optional)
   <tool>get_cwd</tool>                           — Get current working directory
   <tool>enter_plan_mode</tool>                   — Enter PLAN mode to explore and write a plan before coding
   <tool>exit_plan_mode</tool>                    — Exit PLAN mode once a plan is approved and you are ready to code
@@ -267,6 +276,16 @@ class CodeAgent:
                 return f"[TOOL ERROR] {r.message}"
             return f"[grep: {pattern!r} in {r.path}]\n{r.content}"
 
+
+        elif tool == "glob":
+            pattern = _extract_tag(str(call), "pattern")
+            path = _extract_tag(str(call), "path") or "."
+            if not pattern:
+                return "[TOOL ERROR] <pattern> is required for glob tool."
+            r = run_glob(pattern, path)
+            if not r.ok:
+                return f"[TOOL ERROR] {r.message}"
+            return r.content
         elif tool == "list_dir":
             path = call.get("path") or "."
             r = list_dir(path)
@@ -288,6 +307,17 @@ class CodeAgent:
                 return f"[TOOL ERROR] {r.message}"
             return f"[fetched: {r.url}  title={r.title!r}]\n{r.content[:6000]}"
 
+
+        elif tool == "web_extract":
+            url = _extract_tag(str(call), "url")
+            selector = _extract_tag(str(call), "selector")
+            if not url:
+                return "[TOOL ERROR] <url> is required."
+                
+            r = fetch_and_extract(url, selector)
+            if not r.ok:
+                return f"[TOOL ERROR] {r.message}"
+            return r.content
         elif tool == "web_search":
             query = call.get("query") or ""
             results = search_ddg(query)
@@ -303,11 +333,69 @@ class CodeAgent:
             return f"[cwd]\n{os.getcwd()}"
             
         elif tool == "ask_user":
-            question = call.get("question") or call.get("code") or ""
+            question = _extract_tag(str(call), "question") or call.get("question") or call.get("code") or ""
+            choices_str = _extract_tag(str(call), "choices")
+            
+            if choices_str:
+                from prompt_toolkit.shortcuts import radiolist_dialog
+                choices = [c.strip() for c in choices_str.split(",") if c.strip()]
+                if choices:
+                    try:
+                        result = radiolist_dialog(
+                            title="Agent Question",
+                            text=question,
+                            values=[(c, c) for c in choices]
+                        ).run()
+                        if result:
+                            return f"[User responded]\n{result}"
+                    except Exception:
+                        pass
+                        
             print(f"\n  [?] Agent asks: {question}")
+            if choices_str:
+                print(f"  [Choices: {choices_str}]")
             answer = input("  › ")
             return f"[User responded]\n{answer}"
 
+
+
+        elif tool == "notebook_edit":
+            path = _extract_tag(str(call), "path")
+            index = _extract_tag(str(call), "index")
+            mode = _extract_tag(str(call), "mode") or "replace"
+            source = _extract_tag(str(call), "source") or ""
+            
+            if not path or not index:
+                return "[TOOL ERROR] <path> and <index> are required."
+            try:
+                idx = int(index)
+            except:
+                return "[TOOL ERROR] <index> must be an integer."
+                
+            r = edit_notebook_cell(path, idx, source, mode)
+            if not r.ok:
+                return f"[TOOL ERROR] {r.message}"
+            return "[SUCCESS] Notebook updated."
+        elif tool == "task_create":
+            subject = _extract_tag(str(call), "subject")
+            desc = _extract_tag(str(call), "description")
+            if not subject or not desc:
+                return "[TOOL ERROR] <subject> and <description> are required."
+            t = get_tracker().create(subject, desc)
+            return f"Task created: ID {t.id} - {t.subject}"
+        elif tool == "task_update":
+            tid = _extract_tag(str(call), "id")
+            status = _extract_tag(str(call), "status")
+            if not tid or not status:
+                return "[TOOL ERROR] <id> and <status> are required."
+            if status not in ["pending", "in_progress", "completed"]:
+                return f"[TOOL ERROR] Invalid status: {status}"
+            t = get_tracker().update(tid, status=status)
+            if not t:
+                return f"[TOOL ERROR] Task ID {tid} not found."
+            return f"Task {t.id} updated to {t.status}."
+        elif tool == "task_list":
+            return get_tracker().summary()
         elif tool == "DONE":
             return "__DONE__"
 
