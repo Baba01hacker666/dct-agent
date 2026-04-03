@@ -38,7 +38,6 @@ from dct.core.client import (
     show_model,
 )
 from dct.agent.session import Session
-from dct.agent.codeagent import CodeAgent
 from dct.tools.executor import dispatch
 from dct.tools.files import read_file, write_file
 from dct.tools.web import fetch_url, search_ddg
@@ -52,6 +51,23 @@ from dct.cli.display import (
     show_exec_result,
 )
 from dct.cli.help import show_help
+from dct.cli.clipboard import copy_text
+
+
+PROMPT_PRESETS: dict[str, str] = {
+    "coder": (
+        "You are a senior software engineer. Be precise, propose minimal safe changes, "
+        "and include short test steps."
+    ),
+    "security": (
+        "You are a security analyst. Focus on threat modeling, abuse paths, detection, "
+        "and practical mitigations."
+    ),
+    "teacher": (
+        "You are a patient technical tutor. Explain clearly with examples and a concise summary."
+    ),
+    "concise": "Answer briefly, with direct actionable output.",
+}
 
 
 class Shell:
@@ -126,7 +142,7 @@ class Shell:
 
         style = Style.from_dict(
             {
-                "bottom-toolbar": "#333333 bg:#ffeb3b",
+                "bottom-toolbar": "bg:#1f2937 #f9fafb",
             }
         )
 
@@ -387,11 +403,44 @@ class Shell:
                     } tokens estimated"
                 )
 
+            # ── copy ─────────────────────────────────────────────────────
+            elif lo == "/copy":
+                content = self.session.transcript(include_system=False)
+                if not content:
+                    warn("nothing to copy yet")
+                    continue
+                if copy_text(content):
+                    ok(
+                        f"copied {len(content)} chars to clipboard (session transcript)"
+                    )
+                else:
+                    warn("clipboard unavailable — printing transcript instead")
+                    con.print(content)
+
             # ── system ───────────────────────────────────────────────────
             elif lo.startswith("/system "):
                 prompt = raw[8:].strip()
                 self.session.set_system(prompt)
                 ok(f"system prompt set ({len(prompt)} chars) · history cleared")
+
+            # ── prompt presets ───────────────────────────────────────────
+            elif lo == "/prompts":
+                section("prompt presets")
+                for key, value in PROMPT_PRESETS.items():
+                    con.print(
+                        f"  [{C['accent']}]{key}[/{C['accent']}]  [{C['dim']}]{value}[/{C['dim']}]"
+                    )
+                hint("use: /prompt <name>")
+
+            elif lo.startswith("/prompt "):
+                preset = raw[8:].strip().lower()
+                prompt = PROMPT_PRESETS.get(preset)
+                if not prompt:
+                    warn(f"unknown preset: {preset}")
+                    hint(f"available: {', '.join(PROMPT_PRESETS.keys())}")
+                    continue
+                self.session.set_system(prompt)
+                ok(f"applied system prompt preset: {preset}")
 
             # ── save ─────────────────────────────────────────────────────
             elif lo.startswith("/save "):
@@ -603,7 +652,7 @@ class Shell:
 
     def _run_agent(self, messages: list[dict], user_text: str):
         """Run the agentic loop."""
-        from dct.agent.codeagent import get_system_prompt
+        from dct.agent.codeagent import CodeAgent, get_system_prompt
 
         # Always re-inject dynamic system prompt unless user set a custom one
         if not self.session.system_prompt:
