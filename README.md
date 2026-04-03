@@ -5,26 +5,26 @@
 
 ```bash
 pip install -e .
-# or without installing:
-python -m dct.cli.main
+# module entrypoint (no console script required):
+python -m dct
 ```
 
 ## Quick Start
 
 ```bash
 # Register servers
-dct add localhost 11434 local
-dct add 192.168.1.10 11434 home "home lab box"
-dct add 10.0.0.5 11434 vps1 "DigitalOcean"
+python -m dct add localhost 11434 local
+python -m dct add 192.168.1.10 11434 home "home lab box"
+python -m dct add 10.0.0.5 11434 vps1 "DigitalOcean"
 
 # Probe all
-dct probe
+python -m dct probe
 
 # List all models across servers
-dct models
+python -m dct models
 
 # Launch interactive shell
-dct
+python -m dct
 ```
 
 ## Shell Commands
@@ -57,6 +57,9 @@ dct
 | `/clear` | Clear history |
 | `/history` | Turn count + token estimate |
 | `/system <prompt>` | Set system prompt |
+| `/prompts` | List built-in system prompt presets |
+| `/prompt <name>` | Apply a built-in system prompt preset |
+| `/copy` | Copy transcript to clipboard (fallback prints text) |
 | `/save <file>` | Save conversation JSON |
 | `/load <file>` | Resume saved conversation |
 | `/status` | Full server table |
