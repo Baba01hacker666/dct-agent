@@ -100,9 +100,7 @@ def list_dir(path: str, max_entries: int = 200) -> FileResult:
                     pass
             entries.append(f"[{tag}] {entry.name}{size}")
             if len(entries) >= max_entries:
-                entries.append(
-                    f"… (+{len(list(p.iterdir())) - max_entries} more)"
-                )
+                entries.append(f"… (+{len(list(p.iterdir())) - max_entries} more)")
                 break
         return FileResult(ok=True, path=str(p), content="\n".join(entries))
     except Exception as e:
@@ -139,19 +137,17 @@ def tree(path: str, max_depth: int = 3, max_entries: int = 300) -> FileResult:
         return FileResult(ok=False, path=path, message=str(e))
 
 
-
-
 def run_grep(
     pattern: str,
     path: str = ".",
     glob_pattern: str | None = None,
     output_mode: str = "files_with_matches",
     context: int | None = None,
-    head_limit: int = 250
+    head_limit: int = 250,
 ) -> FileResult:
     """Run ripgrep (rg) to search file contents."""
     cmd = ["rg"]
-    
+
     # Map output_mode to rg flags
     if output_mode == "files_with_matches":
         cmd.append("-l")
@@ -161,36 +157,45 @@ def run_grep(
         cmd.append("-n")  # Include line numbers
         if context is not None:
             cmd.extend(["-C", str(context)])
-            
+
     # Apply glob filtering if provided
     if glob_pattern:
         cmd.extend(["--glob", glob_pattern])
-        
+
     cmd.extend(["--", pattern, path])
-    
+
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True)
-        
+
         # rg returns 0 for match, 1 for no match, 2 for error
         if proc.returncode not in (0, 1):
-            return FileResult(ok=False, path=path, message=f"grep error: {proc.stderr.strip() or 'unknown error'}")
-            
+            return FileResult(
+                ok=False,
+                path=path,
+                message=f"grep error: {proc.stderr.strip() or 'unknown error'}",
+            )
+
         out = proc.stdout.strip()
         if not out:
             return FileResult(ok=True, path=path, content="(no matches found)")
-            
+
         # Enforce head_limit
         lines = out.splitlines()
         if len(lines) > head_limit:
             lines = lines[:head_limit]
             lines.append(f"... (output truncated to {head_limit} lines)")
-            
+
         return FileResult(ok=True, path=path, content="\n".join(lines))
-        
+
     except FileNotFoundError:
-        return FileResult(ok=False, path=path, message="rg (ripgrep) binary not found on the system. Please install it.")
+        return FileResult(
+            ok=False,
+            path=path,
+            message="rg (ripgrep) binary not found on the system. Please install it.",
+        )
     except Exception as e:
         return FileResult(ok=False, path=path, message=str(e))
+
 
 def _make_diff(old: str, new: str, fname: str) -> str:
     diff = difflib.unified_diff(
@@ -217,18 +222,22 @@ def run_glob(
 ) -> FileResult:
     """Fast file pattern matching using ripgrep --files."""
     cmd = ["rg", "--files", "--glob", pattern, path]
-    
+
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True)
-        
+
         # rg returns 0 for match, 1 for no match, 2 for error
         if proc.returncode not in (0, 1):
-            return FileResult(ok=False, path=path, message=f"glob error: {proc.stderr.strip() or 'unknown error'}")
-            
+            return FileResult(
+                ok=False,
+                path=path,
+                message=f"glob error: {proc.stderr.strip() or 'unknown error'}",
+            )
+
         out = proc.stdout.strip()
         if not out:
             return FileResult(ok=True, path=path, content="(no matching files found)")
-            
+
         return FileResult(ok=True, path=path, content=out)
     except Exception as e:
         return FileResult(ok=False, path=path, message=str(e))
