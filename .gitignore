@@ -69,6 +69,7 @@ venv.bak/
 .claude/
 project_context.txt
 .dct_internal_notes.md
+
 # Stop pushing temporary fix scripts to Github
 patch_main.py
 patch_probe.py
