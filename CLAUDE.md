@@ -21,13 +21,14 @@ DCT Agent (Doraemon Cyber Team) is a multi-server Ollama agent with automatic fa
   - `probe.py`: Parallel health checking of registered Ollama endpoints.
 
 - **`dct/cli/` (Interactive REPL)**: 
-  - `shell.py`: The main interactive loop processing slash commands (e.g., `/servers`, `/use`, `/agent`) and standard chat. Controls auto-failover during chat.
+  - `shell.py`: The main interactive loop built with `prompt_toolkit`. Processes slash commands (e.g., `/servers`, `/use`, `/agent`) and handles auto-failover switching transparently during active chat streams.
   - `display.py` / `theme.py`: Uses `rich` for tables, status indicators, and formatted terminal output.
 
 - **`dct/agent/` (Autonomous Loop)**: 
-  - `codeagent.py`: Houses the agent loop. It prompts the model to emit actions using specific XML tags (e.g., `<tool>run_python</tool><code>...</code>`). Parses the output, executes tools, and feeds results back until `<tool>DONE</tool>` is received.
+  - `codeagent.py`: Houses the agent loop. It injects dynamic environment context (OS, cwd, plan mode states) via `get_system_prompt` and parses the output XML tools.
+  - `session.py`: Maintains session history, tokens estimates, and current execution `mode` (`execute` vs `plan`).
 
 - **`dct/tools/` (Agent Execution Layer)**: 
-  - `executor.py`: Uses `subprocess` to run Python and Bash code locally. Handles timeouts and output capturing.
-  - `files.py`: Wraps standard file system operations (`read_file`, `patch_file`, `tree`).
+  - `executor.py`: Uses `subprocess` to run Python and Bash locally. Includes auto-install handlers via pip when intercepting `ModuleNotFoundError`.
+  - `files.py`: File system operations (`read_file`, `write_file`, `patch_file`, `tree`) including a robust `ripgrep` Python wrapper.
   - `web.py`: Basic HTTP fetching and DuckDuckGo search integration.
