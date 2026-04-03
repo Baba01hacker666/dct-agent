@@ -76,7 +76,11 @@ class Shell:
             f"  [{stc}]●[/{stc}]"
             f"  [{C['dim']}]{self.active.host}:{self.active.port}[/{C['dim']}]"
             f"  [{C['fg']}]› {self.model}[/{C['fg']}]"
-            f"  [{C['dim']}]{self.session.user_turns}t · ~{self.session.token_estimate}tok[/{C['dim']}]"
+            f"  [{
+                C['dim']}]{
+                self.session.user_turns}t · ~{
+                self.session.token_estimate}tok[/{
+                C['dim']}]"
             f"{ag}"
         )
 
@@ -99,9 +103,7 @@ class Shell:
             Panel(
                 f"[{C['accent']}]servers:[/{C['accent']}]  [{C['fg']}]{total} registered · {online} online[/{C['fg']}]\n"
                 f"[{C['accent']}]models:[/{C['accent']}]   [{C['fg']}]{model_count} total across all servers[/{C['fg']}]\n"
-                f"[{C['accent']}]active:[/{C['accent']}]   [{C['fg']}]{self.active.alias +
-                                                                   ' · ' +
-                                                                   self.model if self.active else 'none — /add a server first'}[/{C['fg']}]\n"
+                f"[{C['accent']}]active:[/{C['accent']}]   [{C['fg']}]{self.active.alias + ' · ' + self.model if self.active else 'none — /add a server first'}[/{C['fg']}]\n"
                 f"[{C['dim']}]type /help for all commands · just type to chat[/{C['dim']}]",
                 border_style=C["dim"],
                 title=f"[{C['accent']}]dct-agent  ·  doraemon cyber team[/{C['accent']}]",
