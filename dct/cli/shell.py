@@ -605,6 +605,9 @@ class Shell:
 
     def _stream_reply(self, messages: list[dict]):
         """Stream a normal chat reply, append to session. Auto failover on network error."""
+        if not self.active:
+            err("No active server.")
+            return
         con.print(
             f"\n  [{C['accent']}]DCT-AI[/{C['accent']}]"
             f"  [{C['dim']}]{self.active.alias} · {self.model} · {ts()}[/{C['dim']}]"
@@ -653,6 +656,10 @@ class Shell:
     def _run_agent(self, messages: list[dict], user_text: str):
         """Run the agentic loop."""
         from dct.agent.codeagent import CodeAgent, get_system_prompt
+
+        if not self.active:
+            err("No active server.")
+            return
 
         # Always inject the dynamic tool prompt; merge user system prompt as
         # additional preferences so models always receive tool instructions.

@@ -338,10 +338,10 @@ class CodeAgent:
 
         elif tool == "fetch_url":
             url = call.get("url") or ""
-            r = fetch_url(url)
-            if not r.ok:
-                return f"[TOOL ERROR] {r.message}"
-            return f"[fetched: {r.url}  title={r.title!r}]\n{r.content[:6000]}"
+            r_web = fetch_url(url)
+            if not r_web.ok:
+                return f"[TOOL ERROR] {r_web.message}"
+            return f"[fetched: {r_web.url}  title={r_web.title!r}]\n{r_web.content[:6000]}"
 
         elif tool == "web_extract":
             url = _extract_tag(str(call), "url")
@@ -349,10 +349,10 @@ class CodeAgent:
             if not url:
                 return "[TOOL ERROR] <url> is required."
 
-            r = fetch_and_extract(url, selector)
-            if not r.ok:
-                return f"[TOOL ERROR] {r.message}"
-            return r.content
+            r_ext = fetch_and_extract(url, selector)
+            if not r_ext.ok:
+                return f"[TOOL ERROR] {r_ext.message}"
+            return r_ext.content
         elif tool == "web_search":
             query = call.get("query") or ""
             results = search_ddg(query)
@@ -414,9 +414,9 @@ class CodeAgent:
             except ValueError:
                 return "[TOOL ERROR] <index> must be an integer."
 
-            r = edit_notebook_cell(path, idx, source, mode)
-            if not r.ok:
-                return f"[TOOL ERROR] {r.message}"
+            r_nb = edit_notebook_cell(path, idx, source, mode)
+            if not r_nb.ok:
+                return f"[TOOL ERROR] {r_nb.message}"
             return "[SUCCESS] Notebook updated."
         elif tool == "task_create":
             subject = _extract_tag(str(call), "subject")
@@ -427,15 +427,15 @@ class CodeAgent:
             return f"Task created: ID {t.id} - {t.subject}"
         elif tool == "task_update":
             tid = _extract_tag(str(call), "id")
-            status = _extract_tag(str(call), "status")
-            if not tid or not status:
+            new_status: str | None = _extract_tag(str(call), "status")
+            if not tid or not new_status:
                 return "[TOOL ERROR] <id> and <status> are required."
-            if status not in ["pending", "in_progress", "completed"]:
-                return f"[TOOL ERROR] Invalid status: {status}"
-            t = get_tracker().update(tid, status=status)
-            if not t:
+            if new_status not in ["pending", "in_progress", "completed"]:
+                return f"[TOOL ERROR] Invalid status: {new_status}"
+            t_updated = get_tracker().update(tid, status=new_status)
+            if not t_updated:
                 return f"[TOOL ERROR] Task ID {tid} not found."
-            return f"Task {t.id} updated to {t.status}."
+            return f"Task {t_updated.id} updated to {t_updated.status}."
         elif tool == "task_list":
             return get_tracker().summary()
         elif tool == "DONE":

@@ -17,7 +17,7 @@ class WebResult:
     message: str = ""
 
 
-def fetch_and_extract(url: str, selector: str = None) -> WebResult:
+def fetch_and_extract(url: str, selector: str | None = None) -> WebResult:
     """Fetch URL and extract main content or specific CSS selector."""
     try:
         headers = {

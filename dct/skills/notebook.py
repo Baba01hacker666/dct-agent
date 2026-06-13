@@ -7,6 +7,7 @@ Read and edit .ipynb files.
 from __future__ import annotations
 import json
 import os
+from typing import Any
 from dataclasses import dataclass
 
 
@@ -42,7 +43,7 @@ def edit_notebook_cell(
             )  # fixing last newline
 
         elif edit_mode == "insert":
-            new_cell = {
+            new_cell: dict[str, Any] = {
                 "cell_type": "code",
                 "execution_count": None,
                 "metadata": {},
@@ -64,7 +65,7 @@ def edit_notebook_cell(
         else:
             return NotebookResult(False, f"Invalid edit mode: {edit_mode}")
 
-        nb["cells"] = cells
+        nb["cells"] = list(cells)
         with open(notebook_path, "w", encoding="utf-8") as f:
             json.dump(nb, f, indent=1)
 
