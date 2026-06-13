@@ -4,9 +4,30 @@ made by baba01hacker
 
 ## Install
 
+### Stable Release (PyPI)
+Install the stable version from PyPI using `pip` or `pipx`:
 ```bash
-pip install -e .
-# module entrypoint (no console script required):
+# Using pip
+pip install dct-agent
+
+# Using pipx (recommended for CLI apps)
+pipx install dct-agent
+```
+
+### Latest Development Version (GitHub)
+Install the latest version directly from GitHub:
+```bash
+# Using pipx (recommended)
+pipx install git+https://github.com/Baba01hacker666/dct-agent.git
+
+# Using pip
+pip install git+https://github.com/Baba01hacker666/dct-agent.git
+```
+
+Once installed, launch the interactive CLI:
+```bash
+dct
+# or as a module:
 python -m dct
 ```
 
