@@ -60,7 +60,10 @@ def probe_server(srv: "Server") -> dict:
         srv.latency_ms = -1
         return {"ok": False, "endpoint": None, "data": {}, "latency_ms": -1}
 
+    tried_tags = False
     for path in PROBE_ORDER:
+        if path == "/api/tags":
+            tried_tags = True
         try:
             t0 = time.time()
             r = requests.get(f"{base}{path}", timeout=PROBE_TIMEOUT)
@@ -79,15 +82,16 @@ def probe_server(srv: "Server") -> dict:
                     srv.models = [m["name"] for m in data["models"]]
                 else:
                     # Fetch tags separately if we hit a different endpoint
-                    # first
-                    try:
-                        tr = requests.get(f"{base}/api/tags", timeout=PROBE_TIMEOUT)
-                        if tr.ok:
-                            srv.models = [
-                                m["name"] for m in tr.json().get("models", [])
-                            ]
-                    except Exception:
-                        pass
+                    # first and haven't tried/failed on tags yet
+                    if not tried_tags:
+                        try:
+                            tr = requests.get(f"{base}/api/tags", timeout=PROBE_TIMEOUT)
+                            if tr.ok:
+                                srv.models = [
+                                    m["name"] for m in tr.json().get("models", [])
+                                ]
+                        except Exception:
+                            pass
 
                 # Harvest version
                 try:

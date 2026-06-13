@@ -178,7 +178,7 @@ class Shell:
 
             # ── rewind ───────────────────────────────────────────────────
             elif lo in ("/rewind", "/back", "/undo"):
-                if session.rewind():
+                if self.session.rewind():
                     ok("rewound conversation by 1 turn")
                 else:
                     warn("nothing to rewind")

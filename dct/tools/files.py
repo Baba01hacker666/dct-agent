@@ -106,8 +106,9 @@ def list_dir(path: str, max_entries: int = 200) -> FileResult:
         p = Path(path).expanduser().resolve()
         if not p.exists():
             return FileResult(ok=False, path=str(p), message="path not found")
+        all_entries = sorted(p.iterdir())
         entries = []
-        for entry in sorted(p.iterdir()):
+        for entry in all_entries[:max_entries]:
             tag = "d" if entry.is_dir() else "f"
             size = ""
             if entry.is_file():
@@ -117,9 +118,8 @@ def list_dir(path: str, max_entries: int = 200) -> FileResult:
                 except Exception:
                     pass
             entries.append(f"[{tag}] {entry.name}{size}")
-            if len(entries) >= max_entries:
-                entries.append(f"… (+{len(list(p.iterdir())) - max_entries} more)")
-                break
+        if len(all_entries) > max_entries:
+            entries.append(f"… (+{len(all_entries) - max_entries} more)")
         return FileResult(ok=True, path=str(p), content="\n".join(entries))
     except Exception as e:
         return FileResult(ok=False, path=path, message=str(e))
