@@ -475,6 +475,28 @@ class CodeAgent:
         else:
             return f"[TOOL ERROR] Unknown tool: {tool!r}"
 
+    def _summarize_dropped(self, dropped: list[dict]) -> str:
+        from dct.core.client import chat_once
+
+        text = ""
+        for m in dropped:
+            text += f"{m.get('role', 'unknown').upper()}:\n{m.get('content', '')}\n\n"
+
+        if len(text) > 60000:
+            text = text[-60000:]
+
+        prompt = (
+            "Summarize the following interaction history concisely. "
+            "Focus on high-level actions taken, important file paths, "
+            "and current state. Omit verbose tool outputs. This summary will serve as "
+            "memory for an agent continuing the task.\n\n"
+            f"{text}"
+        )
+        try:
+            return chat_once(self.server, self.model, [{"role": "user", "content": prompt}])
+        except Exception as e:
+            return f"(Summary failed: {e})"
+
     def run(self, messages: list[dict]) -> str:
         """
         Run agentic loop. `messages` should already include system prompt + user message.
@@ -488,13 +510,20 @@ class CodeAgent:
             # Prevent context window exhaustion during long agentic loops
             total_chars = sum(len(m.get("content", "")) for m in msgs)
             if total_chars > 120000:  # Roughly 30k tokens
-                # Target reducing it to ~80k chars (20k tokens)
+                dropped = []
                 while total_chars > 80000 and len(msgs) > 3:
                     for i, m in enumerate(msgs):
                         if m.get("role") != "system":
                             removed = msgs.pop(i)
+                            dropped.append(removed)
                             total_chars -= len(removed.get("content", ""))
                             break
+
+                if dropped:
+                    self.on_text("\n\n[System] Context limit reached. Summarizing older interactions...\n")
+                    summary = self._summarize_dropped(dropped)
+                    insert_idx = 1 if msgs and msgs[0].get("role") == "system" else 0
+                    msgs.insert(insert_idx, {"role": "system", "content": f"[PREVIOUS CONTEXT SUMMARY]\n{summary}"})
 
             response_text = ""
             for chunk in self.stream_fn(self.server, self.model, msgs):
