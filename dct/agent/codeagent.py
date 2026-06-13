@@ -176,6 +176,7 @@ def _parse_tool_call(text: str) -> Optional[dict]:
     if not tool:
         return None
     return {
+        "raw_text": text,
         "tool": tool.strip(),
         "code": _extract_tag(text, "code"),
         "path": _extract_tag(text, "path"),
@@ -345,8 +346,8 @@ class CodeAgent:
             return f"[grep: {pattern!r} in {r.path}]\n{r.content}"
 
         elif tool == "glob":
-            pattern = _extract_tag(str(call), "pattern")
-            path = _extract_tag(str(call), "path") or "."
+            pattern = _extract_tag(call["raw_text"], "pattern")
+            path = _extract_tag(call["raw_text"], "path") or "."
             if not pattern:
                 return "[TOOL ERROR] <pattern> is required for glob tool."
             r = run_glob(pattern, path)
@@ -375,8 +376,8 @@ class CodeAgent:
             return f"[fetched: {r_web.url}  title={r_web.title!r}]\n{r_web.content[:6000]}"
 
         elif tool == "web_extract":
-            url = _extract_tag(str(call), "url")
-            selector = _extract_tag(str(call), "selector")
+            url = _extract_tag(call["raw_text"], "url")
+            selector = _extract_tag(call["raw_text"], "selector")
             if not url:
                 return "[TOOL ERROR] <url> is required."
 
@@ -403,12 +404,12 @@ class CodeAgent:
 
         elif tool == "ask_user":
             question = (
-                _extract_tag(str(call), "question")
+                _extract_tag(call["raw_text"], "question")
                 or call.get("question")
                 or call.get("code")
                 or ""
             )
-            choices_str = _extract_tag(str(call), "choices")
+            choices_str = _extract_tag(call["raw_text"], "choices")
 
             if choices_str:
                 from prompt_toolkit.shortcuts import radiolist_dialog
@@ -433,10 +434,10 @@ class CodeAgent:
             return f"[User responded]\n{answer}"
 
         elif tool == "notebook_edit":
-            path = _extract_tag(str(call), "path")
-            index = _extract_tag(str(call), "index")
-            mode = _extract_tag(str(call), "mode") or "replace"
-            source = _extract_tag(str(call), "source") or ""
+            path = _extract_tag(call["raw_text"], "path")
+            index = _extract_tag(call["raw_text"], "index")
+            mode = _extract_tag(call["raw_text"], "mode") or "replace"
+            source = _extract_tag(call["raw_text"], "source") or ""
 
             if not path or not index:
                 return "[TOOL ERROR] <path> and <index> are required."
@@ -450,15 +451,15 @@ class CodeAgent:
                 return f"[TOOL ERROR] {r_nb.message}"
             return "[SUCCESS] Notebook updated."
         elif tool == "task_create":
-            subject = _extract_tag(str(call), "subject")
-            desc = _extract_tag(str(call), "description")
+            subject = _extract_tag(call["raw_text"], "subject")
+            desc = _extract_tag(call["raw_text"], "description")
             if not subject or not desc:
                 return "[TOOL ERROR] <subject> and <description> are required."
             t = get_tracker().create(subject, desc)
             return f"Task created: ID {t.id} - {t.subject}"
         elif tool == "task_update":
-            tid = _extract_tag(str(call), "id")
-            new_status: str | None = _extract_tag(str(call), "status")
+            tid = _extract_tag(call["raw_text"], "id")
+            new_status: str | None = _extract_tag(call["raw_text"], "status")
             if not tid or not new_status:
                 return "[TOOL ERROR] <id> and <status> are required."
             if new_status not in ["pending", "in_progress", "completed"]:
