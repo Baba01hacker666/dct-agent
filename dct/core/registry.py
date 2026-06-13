@@ -55,7 +55,7 @@ class Server:
 
     def base_url(self) -> str:
         if self.provider == "openrouter":
-            return "https://openrouter.ai"
+            return os.getenv("OPENROUTER_API_BASE") or "https://openrouter.ai"
         return f"http://{self.host}:{self.port}"
 
     def to_dict(self) -> dict:

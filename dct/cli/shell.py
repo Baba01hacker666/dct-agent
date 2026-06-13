@@ -76,7 +76,7 @@ class Shell:
         self.session = Session()
         self.active: Optional[Server] = None
         self.model: str = ""
-        self.agent_mode: bool = False
+        self.agent_mode: bool = True
 
     # ── Status bar ──────────────────────────────────────────────────────────
     def _status_bar(self) -> str:
@@ -228,7 +228,6 @@ class Shell:
 
             # ── commit ───────────────────────────────────────────────────
             elif lo == "/commit":
-                import os
                 import subprocess
                 if not os.path.exists(".git"):
                     warn("not a git repository")
@@ -567,6 +566,14 @@ class Shell:
                 state = "ON" if self.agent_mode else "OFF"
                 info(f"agent mode: {state}")
 
+            # ── goal mode ────────────────────────────────────────────────
+            elif lo.startswith("/goal ") or lo == "/goal":
+                goal_text = raw[5:].strip()
+                if not goal_text:
+                    warn("usage: /goal <goal description>")
+                    continue
+                self._run_goal_mode(goal_text)
+
             # ── direct run ───────────────────────────────────────────────
             elif lo.startswith("/run "):
                 toks = parts[1:]
@@ -654,6 +661,14 @@ class Shell:
                     warn("usage: /broadcast <message>")
                     continue
                 self._broadcast(msg_txt)
+
+            # ── btw ──────────────────────────────────────────────────────
+            elif lo.startswith("/btw "):
+                msg_txt = raw[5:].strip()
+                if not msg_txt:
+                    warn("usage: /btw <question>")
+                    continue
+                self._btw(msg_txt)
 
             # ── unknown command ───────────────────────────────────────────
             elif raw.startswith("/"):
@@ -804,6 +819,152 @@ class Shell:
         except Exception as e:
             con.print()
             err(str(e))
+
+    def _run_goal_mode(self, goal_text: str):
+        """Run agent continuously until it is finished."""
+        if not self.active:
+            err("No active server.")
+            return
+
+        from dct.agent.codeagent import CodeAgent, get_system_prompt
+        from dct.core.theme import con, C, ok, warn
+
+        con.print(
+            Panel(
+                f"[{C['purple']}]Goal:[/{C['purple']}] [{C['fg']}]{goal_text}[/{C['fg']}]\n"
+                f"[{C['dim']}]Running autonomously until <tool>DONE</tool> is emitted. Press Ctrl+C to cancel.[/{C['dim']}]",
+                border_style=C["purple"],
+                title=f"[{C['purple']}]GOAL MODE ACTIVE[/{C['purple']}]",
+                title_align="left",
+            )
+        )
+
+        self.agent_mode = True
+        self.session.add("user", goal_text)
+
+        iteration = 1
+        max_iterations = 10
+
+        while iteration <= max_iterations:
+            messages = self.session.as_messages()
+            dynamic_prompt = get_system_prompt(
+                self.session, user_system_prompt=self.session.system_prompt or ""
+            )
+            system_msg = {"role": "system", "content": dynamic_prompt}
+            non_system_msgs = [m for m in messages if m.get("role") != "system"]
+            agent_msgs = [system_msg] + non_system_msgs
+
+            con.print(
+                f"\n  [{C['purple']}][GOAL MODE ITERATION {iteration}][/{C['purple']}]  [{C['dim']}]{self.active.alias} · {self.model} · {self.session.mode.upper()} MODE[/{C['dim']}]"
+            )
+
+            def _on_text(chunk: str):
+                con.print(f"[{C['fg']}]{chunk}[/{C['fg']}]", end="")
+
+            def _on_tool(tool_name: str, _: str):
+                con.print()
+                con.print(
+                    f"\n  [{C['yellow']}]⚡ tool:[/{C['yellow']}] [{C['fg']}]{tool_name}[/{C['fg']}]"
+                )
+
+            def _on_result(tool_name: str, result: str):
+                section(f"result: {tool_name}")
+                if len(result) > 2000:
+                    con.print(f"[{C['code']}]{result[:2000]}[/{C['code']}]")
+                    info(f"… ({len(result)} chars total)")
+                else:
+                    con.print(f"[{C['code']}]{result}[/{C['code']}]")
+                con.print()
+                con.print(f"  [{C['dim']}]continuing…[/{C['dim']}]")
+                con.print("  ", end="")
+
+            agent = CodeAgent(
+                server=self.active,
+                model=self.model,
+                session=self.session,
+                stream_fn=chat_stream,
+                on_text=_on_text,
+                on_tool=_on_tool,
+                on_result=_on_result,
+            )
+
+            con.print("  ", end="")
+            try:
+                final = agent.run(agent_msgs)
+                con.print()
+                if final:
+                    self.session.add("assistant", final)
+
+                # Check if the agent called DONE
+                if "<tool>DONE</tool>" in final:
+                    ok("Goal achieved successfully!")
+                    break
+
+                # If not done, auto-inject continue prompt and increment iteration
+                iteration += 1
+                if iteration <= max_iterations:
+                    self.session.add(
+                        "user",
+                        "[GOAL MODE CONTINUE] You have not yet called <tool>DONE</tool>. "
+                        "Please continue working on the goal until it is fully finished."
+                    )
+                else:
+                    warn("Reached maximum goal iterations safety limit. Stopping.")
+            except KeyboardInterrupt:
+                con.print(f"\n  [{C['dim']}]Goal cancelled by user.[/{C['dim']}]")
+                break
+            except Exception as e:
+                con.print(f"\n  [{C['err']}][GOAL ERROR]: {str(e)}[/{C['err']}]")
+                break
+
+    def _btw(self, msg_txt: str):
+        """Ask a side question using current context without modifying session history."""
+        if not self.active:
+            err("No active server.")
+            return
+
+        # Build message history with the side question appended
+        messages = self.session.as_messages() + [{"role": "user", "content": msg_txt}]
+
+        con.print(
+            f"\n  [{C['purple']}][BTW MODE][/{C['purple']}]  [{C['dim']}]{self.active.alias} · {self.model} · {ts()}[/{C['dim']}]"
+        )
+        con.print(f"  [{C['dim']}]{'─' * 66}[/{C['dim']}]")
+        con.print("  ", end="")
+
+        full = ""
+        while True:
+            try:
+                for chunk in chat_stream(self.active, self.model, messages):
+                    con.print(f"[{C['fg']}]{chunk}[/{C['fg']}]", end="")
+                    full += chunk
+                break  # Success!
+            except Exception as e:
+                import requests
+                if isinstance(e, requests.exceptions.RequestException):
+                    warn(f"\nConnection to {self.active.alias} lost mid-stream.")
+                    # Re-probe and find a fallback
+                    probe_server(self.active)
+                    self.registry.save()
+                    fallback = self.registry.first_online()
+                    if fallback and fallback != self.active:
+                        self.active = fallback
+                        self.model = self.active.best_model(self.model)
+                        warn(f"Failing over to {self.active.alias} · {self.model}...")
+                        con.print(
+                            f"\n  [{C['dim']}]{chr(9472) * 66}[/{C['dim']}]\n  ", end=""
+                        )
+                        continue  # Retry with new server
+                    else:
+                        err("All servers offline. Cannot complete request.")
+                        break
+                else:
+                    con.print(f"\n  [{C['err']}]{str(e)}[/{C['err']}]")
+                    break
+            except KeyboardInterrupt:
+                con.print(f"\n  [{C['dim']}]cancelled[/{C['dim']}]")
+                break
+        con.print()
 
     # ── Broadcast ────────────────────────────────────────────────────────────
     def _broadcast(self, msg_text: str):

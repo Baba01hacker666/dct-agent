@@ -94,6 +94,10 @@ HELP_SECTIONS = {
 
   [{C["fg"]}]/load <file>[/{C["fg"]}]
       [{C["dim"]}]Load and resume a saved conversation.[/{C["dim"]}]
+
+  [{C["fg"]}]/btw <question>[/{C["fg"]}]
+      [{C["dim"]}]Ask the AI a side question utilizing the current context,
+      without appending either the question or answer to the session history.[/{C["dim"]}]
 """,
     "broadcast": f"""
 [{C["accent"]}]── Broadcast ────────────────────────────────────────────────────[/{C["accent"]}]
@@ -108,13 +112,18 @@ HELP_SECTIONS = {
 [{C["accent"]}]── Agent Mode ───────────────────────────────────────────────────[/{C["accent"]}]
 
   [{C["fg"]}]/agent[/{C["fg"]}]
-      [{C["dim"]}]Toggle agent mode ON/OFF.
+      [{C["dim"]}]Toggle agent mode ON/OFF (ON by default on startup).
       When ON: the model can use tools autonomously — running code,
-      reading/writing files, fetching URLs, searching the web.
+      reading/writing files, fetching URLs, searching the web, and spawning sub-agents.
       The model loops until it emits <tool>DONE</tool>.[/{C["dim"]}]
 
   [{C["fg"]}]/agent status[/{C["fg"]}]
       [{C["dim"]}]Show whether agent mode is currently on or off.[/{C["dim"]}]
+
+  [{C["fg"]}]/goal <description>[/{C["fg"]}]
+      [{C["dim"]}]Run the agent in Goal Mode. The agent will execute autonomously
+      and continue to run across multiple iterations until it completes the goal
+      and emits <tool>DONE</tool> or is manually cancelled with Ctrl+C.[/{C["dim"]}]
 
   [{C["fg"]}]Agent tool calls (model emits these automatically):[/{C["fg"]}]
       [{C["dim"]}]run_python   — execute Python code
@@ -126,7 +135,8 @@ HELP_SECTIONS = {
       list_dir     — list directory
       tree         — directory tree
       fetch_url    — fetch a URL
-      web_search   — DuckDuckGo search[/{C["dim"]}]
+      web_search   — DuckDuckGo search
+      run_subagent — spawn a sub-agent to delegate a sub-task[/{C["dim"]}]
 """,
     "tools": f"""
 [{C["accent"]}]── Direct Tool Commands ─────────────────────────────────────────[/{C["accent"]}]
