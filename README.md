@@ -64,6 +64,14 @@ python -m dct
 | `/load <file>` | Resume saved conversation |
 | `/status` | Full server table |
 
+### Advanced Agent Control
+| Command | Description |
+|---|---|
+| `/rewind` or `/back` | Rewind conversation by 1 turn (drop last user prompt and AI response) |
+| `/retry` | Rewind conversation and immediately resend the last user prompt |
+| `/editai` | Open the last AI response in an interactive editor to manually steer the agent |
+| `/commit` | Generate a conventional Git commit message for staged files using the AI model |
+
 ### Agent Mode
 | Command | Description |
 |---|---|
@@ -74,9 +82,9 @@ When agent mode is ON, the model autonomously calls tools:
 - `run_python` — execute Python
 - `run_bash` — execute bash
 - `run_shell` — shell command
-- `read_file` — read file
-- `write_file` — write/create file
-- `patch_file` — find+replace in file
+- `read_file` — read file (supports `<start_line>`, `<end_line>`, and `<tail>` slicing to save context)
+- `write_file` — write/create file (includes **Python syntax validation** via `ast`)
+- `patch_file` — find+replace in file (includes **Python syntax validation** via `ast`)
 - `list_dir` — list directory
 - `tree` — directory tree
 - `fetch_url` — fetch a URL
@@ -106,6 +114,12 @@ The router picks the best server automatically:
 3. Any online server (uses its first model)
 
 Failover is automatic — if the active server dies mid-chat, the agent reprobes and jumps to the next available server.
+
+## Reliability & Resilience
+
+Built for long-running autonomous tasks, DCT Agent implements professional-grade resilience:
+- **Context Pruning & Summarization**: A sliding window monitors the context token size. When it gets too large (~30k tokens), the agent drops older tool executions and autonomously makes a secondary API call to **summarize** the dropped interactions. This summary is injected as a persistent memory, preventing token exhaustion while maintaining high-level task awareness.
+- **Network Retry Backoff**: All requests use a robust HTTP session that automatically intercepts transient API errors (`429 Too Many Requests`, `502 Bad Gateway`, `503 Service Unavailable`) and retries with an exponential backoff.
 
 ## Server Registry
 
