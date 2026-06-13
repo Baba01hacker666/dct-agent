@@ -6,14 +6,27 @@ build-backend = "setuptools.build_meta"
 name = "dct-agent"
 version = "3.0.0"
 description = "Doraemon Cyber Team — Multi-server Ollama agent"
+readme = "README.md"
+license = { text = "MIT" }
 authors = [{ name = "baba01hacker", email = "dct@doraemon.team" }]
 requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Build Tools",
+]
 dependencies = [
     "rich>=13.0",
     "requests>=2.31",
     "prompt_toolkit>=3.0.36",
     "beautifulsoup4>=4.12.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Baba01hacker666/dct-agent"
+Issues = "https://github.com/Baba01hacker666/dct-agent/issues"
 
 [project.scripts]
 dct = "dct.cli.main:main"
