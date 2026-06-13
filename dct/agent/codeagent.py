@@ -160,12 +160,12 @@ Apply the following additional instructions while still obeying all tool and saf
 
 
 def _extract_tag(text: str, tag: str) -> Optional[str]:
-    m = re.search(rf"<{tag}>(.*?)</{tag}>", text, re.DOTALL | re.IGNORECASE)
+    m = re.search(rf"<{tag}(?:\s+[^>]*)?>(.*?)</{tag}>", text, re.DOTALL | re.IGNORECASE)
     return m.group(1).strip() if m else None
 
 
 def _has_tool_call(text: str) -> bool:
-    return bool(re.search(r"<tool>(.+?)</tool>", text, re.DOTALL | re.IGNORECASE))
+    return bool(re.search(r"<tool(?:\s+[^>]*)?>(.+?)</tool>", text, re.DOTALL | re.IGNORECASE))
 
 
 def _parse_tool_call(text: str) -> Optional[dict]:
@@ -251,9 +251,16 @@ class CodeAgent:
             if not r.ok:
                 return f"[TOOL ERROR] {r.message}"
             lines = r.content.splitlines()
+            line_limit = 2000
+            truncated = False
+            if len(lines) > line_limit:
+                lines = lines[:line_limit]
+                truncated = True
             numbered = "\n".join(
                 f"{i + 1:4d}  {line_text}" for i, line_text in enumerate(lines)
             )
+            if truncated:
+                numbered += "\n...[TRUNCATED]..."
             return f"[file: {r.path}  {len(lines)} lines]\n{numbered}"
 
         elif tool == "write_file":

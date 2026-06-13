@@ -33,6 +33,11 @@ class ExecResult:
     def summary(self) -> str:
         out = self.stdout.strip()
         err = self.stderr.strip()
+        limit = 20000
+        if len(out) > limit:
+            out = out[:limit] + f"\n...[TRUNCATED {len(out) - limit} chars]..."
+        if len(err) > limit:
+            err = err[:limit] + f"\n...[TRUNCATED {len(err) - limit} chars]..."
         parts = []
         if out:
             parts.append(out)
