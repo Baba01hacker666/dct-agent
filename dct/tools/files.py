@@ -42,6 +42,15 @@ def read_file(path: str, max_bytes: int = 512_000) -> FileResult:
 def write_file(path: str, content: str, backup: bool = True) -> FileResult:
     try:
         p = Path(path).expanduser().resolve()
+
+        # Auto-Linter: prevent writing broken python syntax
+        if p.suffix == ".py":
+            import ast
+            try:
+                ast.parse(content)
+            except SyntaxError as e:
+                return FileResult(ok=False, path=str(p), message=f"SyntaxError: {e.msg} at line {e.lineno}")
+
         old_content = ""
         if p.exists():
             old_content = p.read_text(errors="replace")
@@ -69,6 +78,15 @@ def patch_file(path: str, old: str, new: str) -> FileResult:
                 ok=False, path=str(p), message="patch target not found in file"
             )
         new_content = content.replace(old, new, 1)
+
+        # Auto-Linter: prevent writing broken python syntax
+        if p.suffix == ".py":
+            import ast
+            try:
+                ast.parse(new_content)
+            except SyntaxError as e:
+                return FileResult(ok=False, path=str(p), message=f"SyntaxError after patch: {e.msg} at line {e.lineno}")
+
         shutil.copy2(p, str(p) + ".dct.bak")
         p.write_text(new_content)
         diff = _make_diff(content, new_content, str(p))

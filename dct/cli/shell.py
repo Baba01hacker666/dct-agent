@@ -209,6 +209,66 @@ class Shell:
                     warn("edit cancelled")
                 continue
 
+            # ── retry ────────────────────────────────────────────────────
+            elif lo == "/retry":
+                last_user = ""
+                for i in range(len(self.session.messages) - 1, -1, -1):
+                    if self.session.messages[i].get("role") == "user":
+                        last_user = self.session.messages[i].get("content", "")
+                        break
+                if not last_user:
+                    warn("no user prompt found to retry")
+                    continue
+
+                self.session.rewind()
+                raw = last_user
+                con.print(f"  [{C['dim']}]retrying: {raw[:50]}...[/{C['dim']}]")
+                # Break out of command if/elif block to process `raw` below
+                pass
+
+            # ── commit ───────────────────────────────────────────────────
+            elif lo == "/commit":
+                import os
+                import subprocess
+                if not os.path.exists(".git"):
+                    warn("not a git repository")
+                    continue
+                diff = subprocess.run(["git", "diff", "--cached"], capture_output=True, text=True).stdout
+                if not diff:
+                    warn("no staged changes. staging all modified tracked files...")
+                    subprocess.run(["git", "add", "-u"])
+                    diff = subprocess.run(["git", "diff", "--cached"], capture_output=True, text=True).stdout
+                if not diff:
+                    warn("no changes to commit")
+                    continue
+                if len(diff) > 40000:
+                    diff = diff[:40000] + "\n...[DIFF TRUNCATED]"
+
+                prompt = (
+                    "Generate a concise, conventional git commit message for the following diff.\n"
+                    "Do not include any explanations or markdown blocks. Just the message itself.\n"
+                    f"DIFF:\n{diff}"
+                )
+                con.print(f"  [{C['dim']}]generating commit message...[/{C['dim']}]")
+                try:
+                    from dct.core.client import chat_once
+                    msg = chat_once(self.active, self.model, [{"role": "user", "content": prompt}]).strip()
+                    if msg.startswith("```"):
+                        msg = "\n".join(msg.split("\n")[1:-1]).strip()
+                    con.print(f"\n[{C['accent']}]Generated Message:[/{C['accent']}]\n{msg}\n")
+                    confirm = session.prompt("Commit with this message? [Y/n/e(dit)]> ").strip().lower()
+                    if confirm == 'e':
+                        msg = session.prompt("edit> ", default=msg, multiline=True).strip()
+                        confirm = 'y'
+                    if confirm in ('y', '', 'yes'):
+                        subprocess.run(["git", "commit", "-m", msg])
+                        ok("committed successfully")
+                    else:
+                        warn("commit aborted")
+                except Exception as e:
+                    err(f"failed: {e}")
+                continue
+
             # ── servers ──────────────────────────────────────────────────
             elif lo == "/servers":
                 show_servers(self.registry)
