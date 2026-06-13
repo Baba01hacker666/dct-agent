@@ -92,7 +92,7 @@ AVAILABLE TOOLS:
   <tool>run_python</tool><code>...</code>        — execute Python 3 code
   <tool>run_bash</tool><code>...</code>          — execute bash script
   <tool>run_shell</tool><code>...</code>         — run a shell command
-  <tool>read_file</tool><path>...</path>         — read a file
+  <tool>read_file</tool><path>...</path><start_line>...</start_line><end_line>...</end_line><tail>...</tail> — read a file (lines are optional)
   <tool>write_file</tool><path>...</path><code>...</code>  — write/create a file
   <tool>patch_file</tool><path>...</path><old>...</old><new>...</new>  — find+replace in file
   <tool>list_dir</tool><path>...</path>          — list directory
@@ -118,6 +118,8 @@ TOOL CALL FORMAT:
 - For file reads:
   <tool>read_file</tool>
   <path>README.md</path>
+  <start_line>1</start_line>
+  <end_line>50</end_line>
 - For web:
   <tool>web_extract</tool>
   <url>https://example.com</url>
@@ -187,6 +189,9 @@ def _parse_tool_call(text: str) -> Optional[dict]:
         "output_mode": _extract_tag(text, "output_mode"),
         "context": _extract_tag(text, "context"),
         "head_limit": _extract_tag(text, "head_limit"),
+        "start_line": _extract_tag(text, "start_line"),
+        "end_line": _extract_tag(text, "end_line"),
+        "tail": _extract_tag(text, "tail"),
     }
 
 
@@ -251,17 +256,36 @@ class CodeAgent:
             if not r.ok:
                 return f"[TOOL ERROR] {r.message}"
             lines = r.content.splitlines()
+            total_lines = len(lines)
+
+            start_str = call.get("start_line")
+            end_str = call.get("end_line")
+            tail_str = call.get("tail")
+
+            try:
+                if tail_str:
+                    tail_idx = int(tail_str)
+                    start_idx = max(0, total_lines - tail_idx)
+                    lines_to_show = lines[start_idx:]
+                else:
+                    start_idx = max(0, int(start_str) - 1) if start_str else 0
+                    end_idx = min(total_lines, int(end_str)) if end_str else total_lines
+                    lines_to_show = lines[start_idx:end_idx]
+            except ValueError:
+                return "[TOOL ERROR] start_line, end_line, and tail must be integers."
+
             line_limit = 2000
             truncated = False
-            if len(lines) > line_limit:
-                lines = lines[:line_limit]
+            if len(lines_to_show) > line_limit:
+                lines_to_show = lines_to_show[:line_limit]
                 truncated = True
+
             numbered = "\n".join(
-                f"{i + 1:4d}  {line_text}" for i, line_text in enumerate(lines)
+                f"{i + start_idx + 1:4d}  {line_text}" for i, line_text in enumerate(lines_to_show)
             )
             if truncated:
                 numbered += "\n...[TRUNCATED]..."
-            return f"[file: {r.path}  {len(lines)} lines]\n{numbered}"
+            return f"[file: {r.path}  showing lines {start_idx + 1}-{start_idx + len(lines_to_show)} of {total_lines}]\n{numbered}"
 
         elif tool == "write_file":
             path = call.get("path") or ""
