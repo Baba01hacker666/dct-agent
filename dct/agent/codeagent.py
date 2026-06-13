@@ -45,6 +45,7 @@ Tool call format the model is instructed to use:
 
 from __future__ import annotations
 import re
+import threading
 from typing import Callable, Optional, TYPE_CHECKING
 
 from dct.tools.executor import dispatch, ExecResult
@@ -68,6 +69,14 @@ if TYPE_CHECKING:
 
 MAX_AGENT_TURNS = 12  # safety cap on autonomous iterations
 
+BACKGROUND_TASKS: dict[str, dict] = {}
+BACKGROUND_TASKS_LOCK = threading.Lock()
+next_task_id = 1
+
+BACKGROUND_SUBAGENTS: dict[str, dict] = {}
+BACKGROUND_SUBAGENTS_LOCK = threading.Lock()
+next_bg_id = 1
+
 
 def get_system_prompt(session, user_system_prompt: str = "") -> str:
     import os
@@ -89,9 +98,9 @@ Current Time: {now}
 Current Mode: {mode}
 
 AVAILABLE TOOLS:
-  <tool>run_python</tool><code>...</code>        — execute Python 3 code
-  <tool>run_bash</tool><code>...</code>          — execute bash script
-  <tool>run_shell</tool><code>...</code>         — run a shell command
+  <tool>run_python</tool><code>...</code><background>true|false</background>  — execute Python 3 code (background optional)
+  <tool>run_bash</tool><code>...</code><background>true|false</background>    — execute bash script (background optional)
+  <tool>run_shell</tool><code>...</code><background>true|false</background>   — run a shell command (background optional)
   <tool>read_file</tool><path>...</path><start_line>...</start_line><end_line>...</end_line><tail>...</tail> — read a file (lines are optional)
   <tool>write_file</tool><path>...</path><code>...</code>  — write/create a file
   <tool>patch_file</tool><path>...</path><old>...</old><new>...</new>  — find+replace in file
@@ -107,6 +116,8 @@ AVAILABLE TOOLS:
   <tool>fetch_url</tool><url>...</url>           — fetch a URL
   <tool>ask_user</tool><question>...</question><choices>a,b,c</choices>  — Ask the user a question (choices optional)
   <tool>get_cwd</tool>                           — Get current working directory
+  <tool>run_subagent</tool><instruction>...</instruction><model>...</model><system_prompt>...</system_prompt><background>true|false</background> — spawn a sub-agent to perform a sub-task (background, model, and system_prompt are optional)
+  <tool>bg_status</tool><id>...</id>             — check status and logs of background tasks/sub-agents (id optional)
   <tool>enter_plan_mode</tool>                   — Enter PLAN mode to explore and write a plan before coding
   <tool>exit_plan_mode</tool>                    — Exit PLAN mode once a plan is approved and you are ready to code
 
@@ -193,6 +204,11 @@ def _parse_tool_call(text: str) -> Optional[dict]:
         "start_line": _extract_tag(text, "start_line"),
         "end_line": _extract_tag(text, "end_line"),
         "tail": _extract_tag(text, "tail"),
+        "instruction": _extract_tag(text, "instruction"),
+        "system_prompt": _extract_tag(text, "system_prompt"),
+        "model": _extract_tag(text, "model"),
+        "background": _extract_tag(text, "background"),
+        "id": _extract_tag(text, "id"),
     }
 
 
@@ -236,6 +252,151 @@ class CodeAgent:
             self.session.mode = "execute"
             return "[PLAN MODE EXITED]\nYou are now in EXECUTE mode. All tools (including execution and file modification) are unlocked. Proceed with implementing your plan."
 
+        elif tool == "run_subagent":
+            instruction = call.get("instruction") or call.get("prompt") or call.get("code") or ""
+            if not instruction:
+                return "[TOOL ERROR] <instruction> is required."
+
+            sub_model = call.get("model") or self.model
+            sub_system = call.get("system_prompt") or ""
+            is_bg = (call.get("background") or "").strip().lower() == "true"
+
+            from dct.agent.session import Session
+            sub_session = Session(mode=self.session.mode)
+
+            sub_dynamic_prompt = get_system_prompt(sub_session, user_system_prompt=sub_system)
+            sub_session.set_system(sub_dynamic_prompt)
+            sub_session.add("user", instruction)
+
+            if is_bg:
+                global next_bg_id
+                with BACKGROUND_SUBAGENTS_LOCK:
+                    bg_id = f"subagent_{next_bg_id}"
+                    next_bg_id += 1
+                    BACKGROUND_SUBAGENTS[bg_id] = {
+                        "instruction": instruction,
+                        "model": sub_model,
+                        "status": "running",
+                        "result": "",
+                        "log": []
+                    }
+
+                bg_sub_data = BACKGROUND_SUBAGENTS[bg_id]
+
+                def bg_on_text(chunk: str):
+                    bg_sub_data["log"].append(chunk)
+
+                def bg_on_tool(sub_tool_name: str, sub_call_str: str):
+                    bg_sub_data["log"].append(f"\n⚡ tool: {sub_tool_name}\nCall: {sub_call_str}\n")
+
+                def bg_on_result(sub_tool_name: str, sub_result: str):
+                    bg_sub_data["log"].append(f"\nresult: {sub_tool_name}\n{sub_result}\n")
+
+                sub_agent = CodeAgent(
+                    server=self.server,
+                    model=sub_model,
+                    session=sub_session,
+                    stream_fn=self.stream_fn,
+                    on_text=bg_on_text,
+                    on_tool=bg_on_tool,
+                    on_result=bg_on_result,
+                    max_turns=self.max_turns,
+                )
+
+                def run_subagent_bg(b_id, agent_instance, msgs):
+                    try:
+                        res = agent_instance.run(msgs)
+                        with BACKGROUND_SUBAGENTS_LOCK:
+                            BACKGROUND_SUBAGENTS[b_id]["status"] = "completed"
+                            BACKGROUND_SUBAGENTS[b_id]["result"] = res
+                    except Exception as e:
+                        with BACKGROUND_SUBAGENTS_LOCK:
+                            BACKGROUND_SUBAGENTS[b_id]["status"] = "failed"
+                            BACKGROUND_SUBAGENTS[b_id]["result"] = str(e)
+
+                sub_thread = threading.Thread(target=run_subagent_bg, args=(bg_id, sub_agent, sub_session.as_messages()), daemon=True)
+                sub_thread.start()
+
+                from dct.core.theme import con, C
+                con.print(f"\n  [{C['purple']}][SUB-AGENT STARTED IN BACKGROUND][/{C['purple']}] Task ID: {bg_id} | Model: {sub_model}")
+                return f"[Sub-agent started in background. Task ID: {bg_id}]"
+
+            else:
+                from dct.core.theme import con, C, info, section
+                con.print(f"\n  [{C['purple']}][SUB-AGENT STARTING][/{C['purple']}] Model: {sub_model} | Mode: {sub_session.mode.upper()}")
+                con.print(f"  [{C['dim']}]Instruction: {instruction}[/{C['dim']}]")
+                con.print(f"  [{C['dim']}]{'─' * 66}[/{C['dim']}]")
+
+                def sub_on_text(chunk: str):
+                    con.print(f"[{C['purple']}]{chunk}[/{C['purple']}]", end="")
+
+                def sub_on_tool(sub_tool_name: str, sub_call_str: str):
+                    con.print()
+                    con.print(
+                        f"\n  [{C['purple']}]⚡ sub-agent tool:[/{C['purple']}] [{C['fg']}]{sub_tool_name}[/{C['fg']}]"
+                    )
+
+                def sub_on_result(sub_tool_name: str, sub_result: str):
+                    section(f"sub-agent result: {sub_tool_name}")
+                    if len(sub_result) > 2000:
+                        con.print(f"[{C['code']}]{sub_result[:2000]}[/{C['code']}]")
+                        info(f"… ({len(sub_result)} chars total)")
+                    else:
+                        con.print(f"[{C['code']}]{sub_result}[/{C['code']}]")
+                    con.print()
+                    con.print(f"  [{C['dim']}]continuing sub-agent…[/{C['dim']}]")
+                    con.print("  ", end="")
+
+                sub_agent = CodeAgent(
+                    server=self.server,
+                    model=sub_model,
+                    session=sub_session,
+                    stream_fn=self.stream_fn,
+                    on_text=sub_on_text,
+                    on_tool=sub_on_tool,
+                    on_result=sub_on_result,
+                    max_turns=self.max_turns,
+                )
+
+                try:
+                    sub_response = sub_agent.run(sub_session.as_messages())
+                    con.print(f"\n  [{C['purple']}][SUB-AGENT COMPLETED][/{C['purple']}]")
+                    con.print(f"  [{C['dim']}]{'─' * 66}[/{C['dim']}]")
+                    return f"[Sub-agent completed task successfully]\nResponse: {sub_response}"
+                except Exception as e:
+                    con.print(f"\n  [{C['err']}][SUB-AGENT FAILED]: {str(e)}[/{C['err']}]")
+                    con.print(f"  [{C['dim']}]{'─' * 66}[/{C['dim']}]")
+                    return f"[TOOL ERROR] Sub-agent execution failed: {str(e)}"
+
+        elif tool == "bg_status":
+            tid = call.get("id")
+            if tid:
+                with BACKGROUND_TASKS_LOCK:
+                    if tid in BACKGROUND_TASKS:
+                        bg_task = BACKGROUND_TASKS[tid]
+                        log_str = "".join(bg_task["log"])
+                        return f"[Background Task Details]\nTask ID: {tid}\nCommand: {bg_task['command']}\nStatus: {bg_task['status']}\nResult: {bg_task['result']}\nLogs:\n{log_str}"
+
+                with BACKGROUND_SUBAGENTS_LOCK:
+                    if tid in BACKGROUND_SUBAGENTS:
+                        sub = BACKGROUND_SUBAGENTS[tid]
+                        log_str = "".join(sub["log"])
+                        return f"[Background Sub-Agent Details]\nTask ID: {tid}\nInstruction: {sub['instruction']}\nStatus: {sub['status']}\nResult: {sub['result']}\nLogs:\n{log_str}"
+
+                return f"[TOOL ERROR] Background task or sub-agent with ID {tid} not found."
+
+            lines = ["[BACKGROUND TASKS & SUB-AGENTS]"]
+            with BACKGROUND_TASKS_LOCK:
+                for t_id, task in BACKGROUND_TASKS.items():
+                    lines.append(f"- {t_id} (Task): {task['status']} | Command: {task['command'][:60]}")
+            with BACKGROUND_SUBAGENTS_LOCK:
+                for s_id, sub in BACKGROUND_SUBAGENTS.items():
+                    lines.append(f"- {s_id} (Sub-agent): {sub['status']} | Instruction: {sub['instruction'][:60]}")
+
+            if len(lines) == 1:
+                return "No active or completed background tasks or sub-agents."
+            return "\n".join(lines)
+
         if tool in ("run_python", "run_bash", "run_shell", "python", "bash", "shell"):
             if mode == "plan":
                 return "[TOOL ERROR] Execution is blocked in PLAN mode. You must use <tool>exit_plan_mode</tool> first."
@@ -246,6 +407,39 @@ class CodeAgent:
             code = call.get("code") or ""
             if not code:
                 return "[TOOL ERROR] No code provided."
+
+            is_bg = (call.get("background") or "").strip().lower() == "true"
+            if is_bg:
+                global next_task_id
+                with BACKGROUND_TASKS_LOCK:
+                    task_id = f"task_{next_task_id}"
+                    next_task_id += 1
+                    BACKGROUND_TASKS[task_id] = {
+                        "command": code,
+                        "lang": lang,
+                        "status": "running",
+                        "result": "",
+                        "log": []
+                    }
+
+                def run_cmd_bg(t_id, lang_name, cmd_code):
+                    try:
+                        res: ExecResult = dispatch(lang_name, cmd_code, timeout=300)
+                        out = res.summary()
+                        status = "completed" if res.ok else "failed"
+                        with BACKGROUND_TASKS_LOCK:
+                            BACKGROUND_TASKS[t_id]["status"] = status
+                            BACKGROUND_TASKS[t_id]["result"] = out
+                            BACKGROUND_TASKS[t_id]["log"].append(f"[Exit code: {res.returncode}]")
+                    except Exception as e:
+                        with BACKGROUND_TASKS_LOCK:
+                            BACKGROUND_TASKS[t_id]["status"] = "failed"
+                            BACKGROUND_TASKS[t_id]["result"] = str(e)
+
+                cmd_thread = threading.Thread(target=run_cmd_bg, args=(task_id, lang, code), daemon=True)
+                cmd_thread.start()
+                return f"[Task started in background. Task ID: {task_id}]"
+
             result: ExecResult = dispatch(lang, code, timeout=30)
             out = result.summary()
             status = "✓" if result.ok else "✗"
@@ -417,13 +611,13 @@ class CodeAgent:
                 choices = [c.strip() for c in choices_str.split(",") if c.strip()]
                 if choices:
                     try:
-                        result = radiolist_dialog(
+                        dialog_res = radiolist_dialog(
                             title="Agent Question",
                             text=question,
                             values=[(c, c) for c in choices],
                         ).run()
-                        if result:
-                            return f"[User responded]\n{result}"
+                        if dialog_res:
+                            return f"[User responded]\n{dialog_res}"
                     except Exception:
                         pass
 
@@ -455,8 +649,8 @@ class CodeAgent:
             desc = _extract_tag(call["raw_text"], "description")
             if not subject or not desc:
                 return "[TOOL ERROR] <subject> and <description> are required."
-            t = get_tracker().create(subject, desc)
-            return f"Task created: ID {t.id} - {t.subject}"
+            new_task = get_tracker().create(subject, desc)
+            return f"Task created: ID {new_task.id} - {new_task.subject}"
         elif tool == "task_update":
             tid = _extract_tag(call["raw_text"], "id")
             new_status: str | None = _extract_tag(call["raw_text"], "status")

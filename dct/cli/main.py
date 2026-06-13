@@ -41,6 +41,7 @@ Interactive mode (default):
   python -m dct                                     launch shell (loads saved servers)
   python -m dct -H 192.168.1.10 -p 11434           start with a specific server active
   python -m dct -H 10.0.0.5 -a vps1 -m mistral    set alias and initial model
+  python -m dct --no-agent                         disable agent mode on startup
 
 Inside the shell type /help for all commands.
         """,
@@ -59,6 +60,11 @@ Inside the shell type /help for all commands.
         "--no-probe",
         action="store_true",
         help="skip initial parallel probe on startup",
+    )
+    p.add_argument(
+        "--no-agent",
+        action="store_true",
+        help="disable autonomous agent mode on startup",
     )
     p.add_argument("--version", action="store_true", help="print version and exit")
 
@@ -280,5 +286,7 @@ def main():
         con.print(f"  [{C['ok']}]{online}[/{C['ok']}] [{C['dim']}]online[/{C['dim']}]")
 
     shell = Shell(registry)
+    if args.no_agent:
+        shell.agent_mode = False
     shell.init(init_alias=init_alias, init_model=args.model)
     shell.run()

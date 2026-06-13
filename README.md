@@ -75,9 +75,10 @@ python -m dct
 ### Agent Mode
 | Command | Description |
 |---|---|
-| `/agent` | Toggle agent mode ON/OFF |
+| `/agent` | Toggle agent mode ON/OFF (ON by default on startup) |
 | `/agent status` | Show current state |
 
+Agent mode is active by default. You can disable it on startup using the `--no-agent` CLI flag.
 When agent mode is ON, the model autonomously calls tools:
 - `run_python` — execute Python
 - `run_bash` — execute bash
@@ -89,6 +90,7 @@ When agent mode is ON, the model autonomously calls tools:
 - `tree` — directory tree
 - `fetch_url` — fetch a URL
 - `web_search` — DuckDuckGo search
+- `run_subagent` — spawn a sub-agent to delegate a sub-task (accepts `<instruction>`, optional `<model>`, optional `<system_prompt>`)
 
 ### Direct Tools (no model)
 | Command | Description |
@@ -105,6 +107,11 @@ When agent mode is ON, the model autonomously calls tools:
 |---|---|
 | `/broadcast <message>` | Send to ALL online servers simultaneously |
 | `/bc <message>` | Same |
+
+### Side Queries (BTW)
+| Command | Description |
+|---|---|
+| `/btw <question>` | Ask the active model a side question using current context without modifying the session history |
 
 ## Model Router
 
