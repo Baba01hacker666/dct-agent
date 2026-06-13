@@ -176,6 +176,14 @@ class Shell:
                 topic = raw[5:].strip()
                 show_help(topic)
 
+            # ── rewind ───────────────────────────────────────────────────
+            elif lo in ("/rewind", "/back", "/undo"):
+                if session.rewind():
+                    ok("rewound conversation by 1 turn")
+                else:
+                    warn("nothing to rewind")
+                continue
+
             # ── servers ──────────────────────────────────────────────────
             elif lo == "/servers":
                 show_servers(self.registry)
