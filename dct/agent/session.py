@@ -46,6 +46,14 @@ class Session:
         """Full message list ready to send to Ollama."""
         return list(self.messages)
 
+    def rewind(self) -> bool:
+        """Remove the last user message and all subsequent messages."""
+        for i in range(len(self.messages) - 1, -1, -1):
+            if self.messages[i].get("role") == "user":
+                self.messages = self.messages[:i]
+                return True
+        return False
+
     def transcript(self, include_system: bool = False) -> str:
         """Render chat history as readable plain text."""
         lines: list[str] = []
