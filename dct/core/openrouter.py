@@ -7,8 +7,7 @@ Handles streaming chat, generate, list_models.
 from __future__ import annotations
 import json
 from typing import Iterator, TYPE_CHECKING
-
-import requests
+from dct.core import http
 
 if TYPE_CHECKING:
     from dct.core.registry import Server
@@ -43,7 +42,7 @@ def _post_stream(
     url: str, headers: dict, payload: dict, timeout: int
 ) -> Iterator[dict]:
     """POST with stream=True, yield parsed JSON chunks (SSE format)."""
-    with requests.post(
+    with http.client.post(
         url, headers=headers, json=payload, stream=True, timeout=timeout
     ) as r:
         r.raise_for_status()
@@ -92,7 +91,7 @@ def chat_once(srv: "Server", model: str, messages: list[dict]) -> str:
     }
     payload = {"model": model, "messages": messages, "stream": False}
 
-    r = requests.post(url, headers=headers, json=payload, timeout=CHAT_TIMEOUT)
+    r = http.client.post(url, headers=headers, json=payload, timeout=CHAT_TIMEOUT)
     r.raise_for_status()
     data = r.json()
     if "choices" in data and len(data["choices"]) > 0:
@@ -103,7 +102,7 @@ def chat_once(srv: "Server", model: str, messages: list[dict]) -> str:
 # ── Models ───────────────────────────────────────────────────────────────────
 def list_models(srv: "Server") -> list[dict]:
     url = f"{srv.base_url()}/api/v1/models"
-    r = requests.get(url, timeout=DEFAULT_TIMEOUT)
+    r = http.client.get(url, timeout=DEFAULT_TIMEOUT)
     r.raise_for_status()
     # OpenRouter returns { "data": [ { "id": "model/name", ... } ] }
     # Let's map it to Ollama's format { "name": "..." }
