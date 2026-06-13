@@ -484,6 +484,18 @@ class CodeAgent:
         final_text = ""
 
         for turn in range(self.max_turns):
+            # ── CONTEXT PRUNING (Sliding Window) ──
+            # Prevent context window exhaustion during long agentic loops
+            total_chars = sum(len(m.get("content", "")) for m in msgs)
+            if total_chars > 120000:  # Roughly 30k tokens
+                # Target reducing it to ~80k chars (20k tokens)
+                while total_chars > 80000 and len(msgs) > 3:
+                    for i, m in enumerate(msgs):
+                        if m.get("role") != "system":
+                            removed = msgs.pop(i)
+                            total_chars -= len(removed.get("content", ""))
+                            break
+
             response_text = ""
             for chunk in self.stream_fn(self.server, self.model, msgs):
                 self.on_text(chunk)

@@ -7,8 +7,7 @@ Handles streaming chat, generate, pull, delete, show, ps, version.
 from __future__ import annotations
 import json
 from typing import Iterator, TYPE_CHECKING
-
-import requests
+from dct.core import http
 
 if TYPE_CHECKING:
     from dct.core.registry import Server
@@ -20,7 +19,7 @@ DEFAULT_TIMEOUT = 6
 
 def _post_stream(url: str, payload: dict, timeout: int) -> Iterator[dict]:
     """POST with stream=True, yield parsed JSON lines."""
-    with requests.post(url, json=payload, stream=True, timeout=timeout) as r:
+    with http.client.post(url, json=payload, stream=True, timeout=timeout) as r:
         r.raise_for_status()
         for line in r.iter_lines():
             if line:
@@ -50,20 +49,20 @@ def chat_once(srv: "Server", model: str, messages: list[dict]) -> str:
     """Non-streaming chat — returns full reply as string."""
     url = f"{srv.base_url()}/api/chat"
     payload = {"model": model, "messages": messages, "stream": False}
-    r = requests.post(url, json=payload, timeout=CHAT_TIMEOUT)
+    r = http.client.post(url, json=payload, timeout=CHAT_TIMEOUT)
     r.raise_for_status()
     return r.json().get("message", {}).get("content", "")
 
 
 # ── Models ───────────────────────────────────────────────────────────────────
 def list_models(srv: "Server") -> list[dict]:
-    r = requests.get(f"{srv.base_url()}/api/tags", timeout=DEFAULT_TIMEOUT)
+    r = http.client.get(f"{srv.base_url()}/api/tags", timeout=DEFAULT_TIMEOUT)
     r.raise_for_status()
     return r.json().get("models", [])
 
 
 def show_model(srv: "Server", model: str) -> dict:
-    r = requests.post(
+    r = http.client.post(
         f"{srv.base_url()}/api/show",
         json={"name": model},
         timeout=DEFAULT_TIMEOUT,
@@ -73,7 +72,7 @@ def show_model(srv: "Server", model: str) -> dict:
 
 
 def delete_model(srv: "Server", model: str) -> bool:
-    r = requests.delete(
+    r = http.client.delete(
         f"{srv.base_url()}/api/delete",
         json={"name": model},
         timeout=DEFAULT_TIMEOUT,
@@ -82,13 +81,13 @@ def delete_model(srv: "Server", model: str) -> bool:
 
 
 def running_models(srv: "Server") -> list[dict]:
-    r = requests.get(f"{srv.base_url()}/api/ps", timeout=DEFAULT_TIMEOUT)
+    r = http.client.get(f"{srv.base_url()}/api/ps", timeout=DEFAULT_TIMEOUT)
     r.raise_for_status()
     return r.json().get("models", [])
 
 
 def get_version(srv: "Server") -> str:
-    r = requests.get(f"{srv.base_url()}/api/version", timeout=DEFAULT_TIMEOUT)
+    r = http.client.get(f"{srv.base_url()}/api/version", timeout=DEFAULT_TIMEOUT)
     r.raise_for_status()
     return r.json().get("version", "?")
 

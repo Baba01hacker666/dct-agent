@@ -7,7 +7,7 @@ from dct.core.openrouter import _extract_stream_text
 def test_chat_once_openrouter():
     s = Server("or1", "openrouter.ai", 443, provider="openrouter", api_key="test_key")
 
-    with patch("requests.post") as mock_post:
+    with patch("dct.core.http.client.post") as mock_post:
         mock_resp = MagicMock()
         mock_resp.json.return_value = {
             "choices": [{"message": {"content": "Hello from OpenRouter"}}]
