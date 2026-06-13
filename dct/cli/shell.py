@@ -184,6 +184,31 @@ class Shell:
                     warn("nothing to rewind")
                 continue
 
+            # ── editai ───────────────────────────────────────────────────
+            elif lo == "/editai":
+                last_ai_idx = -1
+                for i in range(len(self.session.messages) - 1, -1, -1):
+                    if self.session.messages[i].get("role") == "assistant":
+                        last_ai_idx = i
+                        break
+
+                if last_ai_idx == -1:
+                    warn("no AI response found to edit")
+                    continue
+
+                con.print(f"  [{C['dim']}]editing last AI response (press Esc then Enter to save)[/{C['dim']}]")
+                try:
+                    edited = session.prompt(
+                        "edit> ",
+                        default=self.session.messages[last_ai_idx].get("content", ""),
+                        multiline=True,
+                    )
+                    self.session.messages[last_ai_idx]["content"] = edited.strip()
+                    ok("AI response updated in session memory")
+                except (KeyboardInterrupt, EOFError):
+                    warn("edit cancelled")
+                continue
+
             # ── servers ──────────────────────────────────────────────────
             elif lo == "/servers":
                 show_servers(self.registry)
