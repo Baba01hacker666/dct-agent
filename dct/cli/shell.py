@@ -85,14 +85,14 @@ class Shell:
         st = self.active.status
         stc = C["ok"] if st == "online" else C["err"] if st == "offline" else C["dim"]
         ag = f"  [{C['purple']}][AGENT][/{C['purple']}]" if self.agent_mode else ""
+        tok_est = self.session.token_estimate
+        turns = self.session.user_turns
         return (
             f"  [{C['accent']}]{self.active.alias}[/{C['accent']}]"
             f"  [{stc}]●[/{stc}]"
             f"  [{C['dim']}]{self.active.host}:{self.active.port}[/{C['dim']}]"
             f"  [{C['fg']}]› {self.model}[/{C['fg']}]"
-            f"  [{C['dim']}]{self.session.user_turns}t · ~{
-                self.session.token_estimate
-            }tok[/{C['dim']}]"
+            f"  [{C['dim']}]{turns}t · ~{tok_est}tok[/{C['dim']}]"
             f"{ag}"
         )
 
@@ -375,10 +375,9 @@ class Shell:
                     and self.active.models
                     and new_model not in self.active.models
                 ):
+                    active_alias = self.active.alias
                     warn(
-                        f"{new_model} not in {
-                            self.active.alias
-                        } model list — sending anyway"
+                        f"{new_model} not in {active_alias} model list — sending anyway"
                     )
                 self.model = new_model
                 ok(f"model → {self.model}")
@@ -490,11 +489,9 @@ class Shell:
 
             # ── history ──────────────────────────────────────────────────
             elif lo == "/history":
-                info(
-                    f"{self.session.user_turns} user turns · ~{
-                        self.session.token_estimate
-                    } tokens estimated"
-                )
+                hist_turns = self.session.user_turns
+                hist_tok = self.session.token_estimate
+                info(f"{hist_turns} user turns · ~{hist_tok} tokens estimated")
 
             # ── copy ─────────────────────────────────────────────────────
             elif lo == "/copy":
@@ -855,10 +852,9 @@ class Shell:
 
     # ── Pull with progress ───────────────────────────────────────────────────
     def _pull(self, srv: Server, model_name: str):
+        fg = C['fg']
         con.print(
-            f"\n  [{C['accent']}]pull[/{C['accent']}] [{C['fg']}]{model_name}[/{
-                C['fg']
-            }] → {server_tag(srv)}\n"
+            f"\n  [{C['accent']}]pull[/{C['accent']}] [{fg}]{model_name}[/{fg}] → {server_tag(srv)}\n"
         )
         try:
             last_status = ""
