@@ -315,13 +315,7 @@ class Shell:
         from dct.core.probe import probe_all
         while not self._probe_stop.wait(interval):
             try:
-                results = probe_all(self.registry)
-                changed = sum(
-                    1 for r in results.values()
-                    if r.get("ok") and r.get("endpoint")
-                )
-                if changed > 0:
-                    pass  # silent background refresh
+                probe_all(self.registry)  # silent background refresh
             except Exception:
                 pass
 
@@ -687,8 +681,10 @@ class Shell:
 
                 self.session.messages = self.session.messages[:orig_idx]
                 raw = raw_prompt
-                con.print(f"  [{C['dim']}]resuming from: {raw[:60]}...[/{C['dim']}]")
-                pass
+                con.print(f"  [{C['dim']}]resuming from: {raw[:60]}…[/{C['dim']}]")
+                self._chat(raw)
+                continue
+
 
             # ── editai ───────────────────────────────────────────────────
             elif lo == "/editai":
@@ -728,9 +724,10 @@ class Shell:
 
                 self.session.rewind()
                 raw = last_user
-                con.print(f"  [{C['dim']}]retrying: {raw[:50]}...[/{C['dim']}]")
-                # Break out of command if/elif block to process `raw` below
-                pass
+                con.print(f"  [{C['dim']}]retrying: {raw[:50]}…[/{C['dim']}]")
+                self._chat(raw)
+                continue
+
 
             # ── commit ───────────────────────────────────────────────────
             elif lo == "/commit":
@@ -1637,6 +1634,10 @@ class Shell:
                     con.print(f"[{C['fg']}]{chunk}[/{C['fg']}]", end="")
                     full += chunk
                 break  # Success!
+            except KeyboardInterrupt:
+                status.stop()
+                con.print(f"\n  [{C['dim']}]cancelled[/{C['dim']}]")
+                break
             except Exception as e:
                 status.stop()
                 import requests
@@ -1661,10 +1662,6 @@ class Shell:
                 else:
                     con.print(f"\n  [{C['err']}]{str(e)}[/{C['err']}]")
                     break
-            except KeyboardInterrupt:
-                status.stop()
-                con.print(f"\n  [{C['dim']}]cancelled[/{C['dim']}]")
-                break
             finally:
                 status.stop()
 
@@ -1760,6 +1757,27 @@ class Shell:
         iteration = 1
         max_iterations = 10
 
+        # Define callbacks once outside the loop
+        def _on_text(chunk: str):
+            con.print(f"[{C['fg']}]{chunk}[/{C['fg']}]", end="")
+
+        def _on_tool(tool_name: str, _: str):
+            con.print()
+            con.print(
+                f"\n  [{C['yellow']}]⚡ tool:[/{C['yellow']}] [{C['fg']}]{tool_name}[/{C['fg']}]"
+            )
+
+        def _on_result(tool_name: str, result: str):
+            section(f"result: {tool_name}")
+            if len(result) > 2000:
+                con.print(f"[{C['code']}]{result[:2000]}[/{C['code']}]")
+                info(f"… ({len(result)} chars total)")
+            else:
+                con.print(f"[{C['code']}]{result}[/{C['code']}]")
+            con.print()
+            con.print(f"  [{C['dim']}]continuing…[/{C['dim']}]")
+            con.print("  ", end="")
+
         while iteration <= max_iterations:
             messages = self.session.as_messages()
             dynamic_prompt = get_system_prompt(
@@ -1772,26 +1790,6 @@ class Shell:
             con.print(
                 f"\n  [{C['purple']}][GOAL MODE ITERATION {iteration}][/{C['purple']}]  [{C['dim']}]{self.active.alias} · {self.model} · {self.session.mode.upper()} MODE[/{C['dim']}]"
             )
-
-            def _on_text(chunk: str):
-                con.print(f"[{C['fg']}]{chunk}[/{C['fg']}]", end="")
-
-            def _on_tool(tool_name: str, _: str):
-                con.print()
-                con.print(
-                    f"\n  [{C['yellow']}]⚡ tool:[/{C['yellow']}] [{C['fg']}]{tool_name}[/{C['fg']}]"
-                )
-
-            def _on_result(tool_name: str, result: str):
-                section(f"result: {tool_name}")
-                if len(result) > 2000:
-                    con.print(f"[{C['code']}]{result[:2000]}[/{C['code']}]")
-                    info(f"… ({len(result)} chars total)")
-                else:
-                    con.print(f"[{C['code']}]{result}[/{C['code']}]")
-                con.print()
-                con.print(f"  [{C['dim']}]continuing…[/{C['dim']}]")
-                con.print("  ", end="")
 
             agent = CodeAgent(
                 server=self.active,
