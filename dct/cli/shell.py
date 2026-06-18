@@ -390,6 +390,159 @@ class Shell:
 
         ok(f"squad {squad_name}: {len(results)}/{len(members)} completed successfully")
 
+    def _run_orchestrate(self, goal: str):
+        """Hierarchical orchestration: decompose goal → execute tasks in waves → synthesize."""
+        from dct.agent.codeagent import CodeAgent
+        from dct.agent.session import Session
+        from dct.core.client import chat_stream as client_chat_stream
+        import concurrent.futures
+
+        if not self.active:
+            err("no active server — /use <alias> first")
+            return
+
+        section(f"orchestrator  ·  goal: {goal}")
+        con.print(f"  [{C['dim']}]decomposing into subtasks…[/{C['dim']}]")
+
+        # ── Phase 1: Decompose ──────────────────────────────────────────
+        planner_prompt = (
+            "You are an expert task orchestrator. Decompose the user's goal into "
+            "parallelizable subtasks. Output them in this EXACT XML format:\n\n"
+            "<plan>\n"
+            "<task id=\"1\" desc=\"short label\" deps=\"\">detailed instructions for this subtask</task>\n"
+            "<task id=\"2\" desc=\"short label\" deps=\"1\">instructions (runs after task 1)</task>\n"
+            "<task id=\"3\" desc=\"short label\" deps=\"1\">instructions (runs parallel with task 2)</task>\n"
+            "</plan>\n\n"
+            "Rules:\n"
+            "- Every task needs an id (number), desc (3-5 word label), and deps (comma-separated ids of tasks it depends on, or empty)\n"
+            "- Tasks with empty deps run first, in parallel\n"
+            "- Maximize parallelism — tasks should only depend on others when truly necessary\n"
+            "- Each task's body should be detailed enough for a specialist to execute independently\n"
+            "- Number tasks sequentially starting from 1\n"
+            "- Include an <orchestrator_note> with your reasoning about the decomposition\n"
+            "Output ONLY the <plan> XML block, nothing else."
+        )
+
+        planner_session = Session()
+        planner_session.set_system(planner_prompt)
+        planner_session.add("user", f"Goal: {goal}\n\nDecompose this into parallel subtasks.")
+
+        plan_text = ""
+        try:
+            for chunk in client_chat_stream(self.active, self.model, planner_session.as_messages()):
+                plan_text += chunk
+                con.print(f"[{C['dim']}]{chunk}[/{C['dim']}]", end="")
+            con.print()
+        except Exception as e:
+            err(f"decomposition failed: {e}")
+            return
+
+        # ── Phase 2: Parse plan ─────────────────────────────────────────
+        tasks: dict[str, dict] = {}
+        import re
+        for match in re.finditer(
+            r'<task\s+id="(\d+)"\s+desc="([^"]*)"\s+deps="([^"]*)"\s*>(.*?)</task>',
+            plan_text, re.DOTALL
+        ):
+            tid = match.group(1)
+            tasks[tid] = {
+                "id": tid,
+                "desc": match.group(2),
+                "deps": [d.strip() for d in match.group(3).split(",") if d.strip()],
+                "body": match.group(4).strip(),
+                "result": "",
+            }
+
+        if not tasks:
+            err("no tasks parsed from the plan — try again with a clearer goal")
+            return
+
+        con.print(f"  [{C['ok']}]parsed {len(tasks)} subtasks[/{C['ok']}]")
+        for tid in sorted(tasks.keys(), key=int):
+            t = tasks[tid]
+            deps_str = f" ← {', '.join(t['deps'])}" if t['deps'] else ""
+            acc = C["accent"]; fg = C["fg"]; dim = C["dim"]
+            con.print(f"  [{acc}]{tid}.[/{acc}] [{fg}]{t['desc']}[/{fg}][{dim}]{deps_str}[/{dim}]")
+
+        # ── Phase 3: Execute in waves ───────────────────────────────────
+        completed: set = set()
+        wave_num = 0
+
+        while len(completed) < len(tasks):
+            wave_num += 1
+            # Find tasks whose deps are all complete
+            ready = [
+                tid for tid, t in tasks.items()
+                if tid not in completed and all(d in completed for d in t["deps"])
+            ]
+            if not ready:
+                err("deadlock detected — some task dependencies cannot be resolved")
+                break
+
+            section(f"wave {wave_num}  ·  {len(ready)} tasks in parallel")
+            for tid in ready:
+                con.print(f"  [{C['dim']}]→ {tid}. {tasks[tid]['desc']}[/{C['dim']}]")
+
+            def execute_task(tid: str) -> tuple[str, str]:
+                t = tasks[tid]
+                # Gather context from dependencies
+                dep_results = ""
+                for dep_id in t["deps"]:
+                    if tasks[dep_id]["result"]:
+                        dep_results += f"\n[Output from task {dep_id} ({tasks[dep_id]['desc']})]:\n{tasks[dep_id]['result'][:3000]}\n"
+
+                worker_session = Session()
+                worker_session.set_system(
+                    "You are a specialist executing a specific subtask. "
+                    "Focus ONLY on your assigned task. Produce complete, actionable output. "
+                    "Use tools (write_file, run_bash, etc.) to create real deliverables."
+                )
+                worker_session.add("user",
+                    f"Subtask {tid}: {t['desc']}\n\n{t['body']}{dep_results}"
+                )
+
+                def stream_fn(srv_, mdl_, msgs_):
+                    yield from client_chat_stream(srv_, mdl_, msgs_)
+
+                agent = CodeAgent(
+                    server=self.active, model=self.model,
+                    session=worker_session, stream_fn=stream_fn,
+                    on_text=lambda c: None, max_turns=10,
+                )
+                try:
+                    return tid, agent.run(worker_session.as_messages())
+                except Exception as e:
+                    return tid, f"[ERROR] {str(e)}"
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=len(ready)) as ex:
+                futures = {ex.submit(execute_task, tid): tid for tid in ready}
+                for fut in concurrent.futures.as_completed(futures):
+                    tid = futures[fut]
+                    try:
+                        rtid, result = fut.result()
+                        tasks[rtid]["result"] = result
+                        completed.add(rtid)
+                        ok_text = f"✓ {rtid}. {tasks[rtid]['desc']}"
+                        con.print(f"  [{C['ok']}]{ok_text}[/{C['ok']}]")
+                    except Exception as e:
+                        err(f"task {tid} failed: {e}")
+                        completed.add(tid)
+
+        # ── Phase 4: Synthesize ─────────────────────────────────────────
+        section("synthesis")
+        summary_parts = []
+        for tid in sorted(tasks.keys(), key=int):
+            t = tasks[tid]
+            result_preview = t["result"][:500] if t["result"] else "(no output)"
+            summary_parts.append(f"## Task {tid}: {t['desc']}\n{result_preview}")
+
+        summary = "\n\n".join(summary_parts)
+        con.print(f"[{C['code']}]{summary[:4000]}[/{C['code']}]")
+        if len(summary) > 4000:
+            info(f"… ({len(summary)} chars total)")
+
+        ok(f"orchestration complete: {len(completed)}/{len(tasks)} tasks in {wave_num} waves")
+
     def run(self):
         history_file = os.path.join(
             os.path.expanduser("~"), ".config", "dct", "history"
@@ -1101,6 +1254,14 @@ class Shell:
                 hint("  /squad add <name> <role> <model> [--provider <a>] [--skill <s>]")
                 hint("  /squad remove <name> <role>")
                 hint("  /squad run <name> <task> — execute task with all squad members")
+
+            # ── orchestrate ─────────────────────────────────────────────
+            elif lo.startswith("/orchestrate "):
+                goal = raw[13:].strip()
+                if not goal:
+                    warn("usage: /orchestrate <goal>")
+                    continue
+                self._run_orchestrate(goal)
             elif lo.startswith("/save "):
                 fname = raw[6:].strip()
                 try:
