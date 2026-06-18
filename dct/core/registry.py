@@ -29,6 +29,7 @@ class Server:
         "api_key",
         "tls",
         "tls_verify",
+        "_base_url",
     )
 
     def __init__(
@@ -45,6 +46,7 @@ class Server:
         api_key: str = "",
         tls: bool = False,
         tls_verify: bool = True,
+        base_url: str = "",
     ):
         self.alias = alias
         self.host = host
@@ -58,8 +60,11 @@ class Server:
         self.api_key = api_key
         self.tls = tls
         self.tls_verify = tls_verify
+        self._base_url = base_url
 
     def base_url(self) -> str:
+        if self._base_url:
+            return self._base_url.rstrip("/")
         if self.provider == "openrouter":
             return os.getenv("OPENROUTER_API_BASE") or "https://openrouter.ai"
         scheme = "https" if (self.tls or self.api_key) else "http"
@@ -79,6 +84,7 @@ class Server:
             "api_key": self.api_key,
             "tls": self.tls,
             "tls_verify": self.tls_verify,
+            "base_url": self._base_url,
         }
 
     @classmethod
@@ -96,6 +102,7 @@ class Server:
             api_key=d.get("api_key", ""),
             tls=d.get("tls", False),
             tls_verify=d.get("tls_verify", True),
+            base_url=d.get("base_url", ""),
         )
 
     def has_model(self, model: str) -> bool:
@@ -152,6 +159,7 @@ class ServerRegistry:
         api_key: str = "",
         tls: bool = False,
         tls_verify: bool = True,
+        base_url: str = "",
     ) -> Server:
         alias = alias or f"{host}:{port}"
         # Deduplicate by host+port
@@ -162,6 +170,7 @@ class ServerRegistry:
                 s.api_key = api_key or s.api_key
                 s.tls = tls
                 s.tls_verify = tls_verify
+                s._base_url = base_url or s._base_url
                 self.save()
                 return s
         srv = Server(
@@ -173,6 +182,7 @@ class ServerRegistry:
             api_key=api_key,
             tls=tls,
             tls_verify=tls_verify,
+            base_url=base_url,
         )
         with self._lock:
             self.servers.append(srv)

@@ -61,11 +61,11 @@ def chat_stream(srv: "Server", model: str, messages: list[dict], images: list[st
     payload: dict = {"model": model, "messages": list(messages), "stream": True}
     if images:
         # Attach images to the last user message (Ollama convention)
-        for msg in reversed(payload["messages"]):
-            if msg["role"] == "user":
-                msg = dict(msg)
+        for i in range(len(payload["messages"]) - 1, -1, -1):
+            if payload["messages"][i]["role"] == "user":
+                msg = dict(payload["messages"][i])
                 msg["images"] = images
-                payload["messages"][-1] = msg
+                payload["messages"][i] = msg
                 break
     for chunk in _post_stream(url, payload, CHAT_TIMEOUT, srv):
         content = chunk.get("message", {}).get("content", "")
@@ -80,11 +80,11 @@ def chat_once(srv: "Server", model: str, messages: list[dict], images: list[str]
     url = f"{srv.base_url()}/api/chat"
     payload: dict = {"model": model, "messages": list(messages), "stream": False}
     if images:
-        for msg in reversed(payload["messages"]):
-            if msg["role"] == "user":
-                msg = dict(msg)
+        for i in range(len(payload["messages"]) - 1, -1, -1):
+            if payload["messages"][i]["role"] == "user":
+                msg = dict(payload["messages"][i])
                 msg["images"] = images
-                payload["messages"][-1] = msg
+                payload["messages"][i] = msg
                 break
     r = http.client.post(url, **_request_kwargs(srv, {"json": payload, "timeout": CHAT_TIMEOUT}))
     r.raise_for_status()

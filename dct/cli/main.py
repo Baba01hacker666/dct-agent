@@ -30,6 +30,7 @@ def build_parser() -> argparse.ArgumentParser:
 One-shot commands (non-interactive):
   python -m dct add <host> <port> [alias] [note]    register a server
   python -m dct add-openrouter <key> [alias]        register OpenRouter
+  python -m dct add-openai <base_url> <key> [alias] [note]  register OpenAI-compatible (DeepSeek, Qwen, Z.ai, etc.)
   python -m dct remove <alias|#>                    remove a server
   python -m dct servers                             list all servers
   python -m dct probe [alias|#]                     probe servers
@@ -84,6 +85,13 @@ Inside the shell type /help for all commands.
     po = sub.add_parser("add-openrouter", help="register OpenRouter")
     po.add_argument("key", help="OpenRouter API Key")
     po.add_argument("alias", nargs="?", default="openrouter")
+
+    # add-openai
+    pai = sub.add_parser("add-openai", help="register OpenAI-compatible provider (DeepSeek, Qwen, etc.)")
+    pai.add_argument("base_url", help="API base URL (e.g. https://api.deepseek.com)")
+    pai.add_argument("key", help="API key")
+    pai.add_argument("alias", nargs="?", default="")
+    pai.add_argument("note", nargs="?", default="")
 
     # remove
     pr = sub.add_parser("remove", help="unregister a server")
@@ -168,6 +176,28 @@ def main():
         else:
             con.print(f"[{C['err']}]offline[/{C['err']}]")
             warn(f"added {srv.alias} but API key might be invalid")
+        return
+
+    if args.cmd == "add-openai":
+        alias = args.alias or args.base_url.split("://")[-1].split("/")[0].split(".")[0]
+        srv = registry.add(
+            "api",
+            443,
+            alias,
+            args.note or args.base_url,
+            provider="openai",
+            api_key=args.key,
+            base_url=args.base_url,
+        )
+        con.print(f"  [{C['dim']}]probing…[/{C['dim']}]", end=" ")
+        res = probe_server(srv)
+        registry.save()
+        if res["ok"]:
+            con.print(f"[{C['ok']}]online[/{C['ok']}]")
+            ok(f"added: {srv.alias}  ({len(srv.models)} models available)")
+        else:
+            con.print(f"[{C['err']}]offline[/{C['err']}]")
+            warn(f"added {srv.alias} but might be unreachable")
         return
 
     if args.cmd == "remove":

@@ -62,15 +62,14 @@ def _post_stream(
 # ── Chat ─────────────────────────────────────────────────────────────────────
 def chat_stream(srv: "Server", model: str, messages: list[dict]) -> Iterator[str]:
     """
-    Yield text chunks from OpenRouter /chat/completions (streaming).
+    Yield text chunks from OpenAI-compatible /chat/completions (streaming).
     Raises on HTTP error.
     """
     url = f"{srv.base_url()}/api/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {srv.api_key}",
-        "HTTP-Referer": "https://github.com/doraemon-cyber-team/dct",  # Optional, but recommended
-        "X-Title": "DCT Agent",  # Optional
-    }
+    headers = {"Authorization": f"Bearer {srv.api_key}"}
+    if srv.provider == "openrouter":
+        headers["HTTP-Referer"] = "https://github.com/doraemon-cyber-team/dct"
+        headers["X-Title"] = "DCT Agent"
     payload = {"model": model, "messages": messages, "stream": True}
 
     for chunk in _post_stream(url, headers, payload, CHAT_TIMEOUT):
@@ -84,11 +83,10 @@ def chat_stream(srv: "Server", model: str, messages: list[dict]) -> Iterator[str
 def chat_once(srv: "Server", model: str, messages: list[dict]) -> str:
     """Non-streaming chat — returns full reply as string."""
     url = f"{srv.base_url()}/api/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {srv.api_key}",
-        "HTTP-Referer": "https://github.com/doraemon-cyber-team/dct",
-        "X-Title": "DCT Agent",
-    }
+    headers = {"Authorization": f"Bearer {srv.api_key}"}
+    if srv.provider == "openrouter":
+        headers["HTTP-Referer"] = "https://github.com/doraemon-cyber-team/dct"
+        headers["X-Title"] = "DCT Agent"
     payload = {"model": model, "messages": messages, "stream": False}
 
     r = http.client.post(url, headers=headers, json=payload, timeout=CHAT_TIMEOUT)

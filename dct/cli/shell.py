@@ -392,6 +392,34 @@ class Shell:
                     con.print(f"[{C['err']}]offline[/{C['err']}]")
                     warn(f"added as {srv.alias} but unreachable — saved for later")
 
+            # ── add-openai ──────────────────────────────────────────────
+            elif lo.startswith("/add-openai "):
+                toks = raw[12:].strip().split()
+                if len(toks) < 2:
+                    warn("usage: /add-openai <base_url> <api_key> [alias] [note]")
+                    continue
+                base_url = toks[0]
+                api_key = toks[1]
+                alias = toks[2] if len(toks) > 2 else base_url.split("://")[-1].split("/")[0].split(".")[0]
+                note = " ".join(toks[3:]) if len(toks) > 3 else base_url
+                srv = self.registry.add(
+                    "api", 443, alias, note,
+                    provider="openai", api_key=api_key, base_url=base_url,
+                )
+                con.print(f"  [{C['dim']}]probing {srv.alias}…[/{C['dim']}]", end=" ")
+                res = probe_server(srv)
+                self.registry.save()
+                if res["ok"]:
+                    con.print(f"[{C['ok']}]online[/{C['ok']}]")
+                    ok(f"added: {server_tag(srv)}  ·  {len(srv.models)} model(s)")
+                    if not self.active:
+                        self.active = srv
+                        self.model = srv.best_model()
+                        ok(f"auto-selected as active server  ·  model: {self.model}")
+                else:
+                    con.print(f"[{C['err']}]offline[/{C['err']}]")
+                    warn(f"added {srv.alias} but might be unreachable — saved for later")
+
             # ── remove ───────────────────────────────────────────────────
             elif lo.startswith("/remove "):
                 target = raw[8:].strip()

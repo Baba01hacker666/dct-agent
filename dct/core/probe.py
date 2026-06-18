@@ -37,7 +37,7 @@ def probe_server(srv: "Server") -> dict:
     if not srv.tls_verify:
         req_kwargs["verify"] = False
 
-    if srv.provider == "openrouter":
+    if srv.provider in ("openrouter", "openai"):
         try:
             t0 = time.time()
             r = requests.get(f"{base}/api/v1/models", **req_kwargs)
@@ -50,7 +50,7 @@ def probe_server(srv: "Server") -> dict:
                 srv.models = [
                     m.get("id") for m in models_data
                 ]
-                srv.version = "OpenRouter v1"
+                srv.version = "OpenRouter v1" if srv.provider == "openrouter" else "OpenAI API"
                 return {
                     "ok": True,
                     "endpoint": "/api/v1/models",
