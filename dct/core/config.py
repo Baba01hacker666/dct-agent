@@ -20,6 +20,7 @@ DEFAULTS = {
     "auto_probe_interval": 60,
     "custom_skills": {},
     "squads": {},
+    "enable_tracing": False,
 }
 
 

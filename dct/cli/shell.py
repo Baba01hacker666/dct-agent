@@ -38,7 +38,7 @@ from dct.core.client import (
     delete_model,
     show_model,
 )
-from dct.agent.session import Session
+from dct.agent.session import Session, write_trace_entry
 from dct.tools.executor import dispatch
 from dct.tools.files import read_file, write_file
 from dct.tools.web import fetch_url, search_ddg
@@ -634,12 +634,61 @@ class Shell:
                 show_help(topic)
 
             # ── rewind ───────────────────────────────────────────────────
-            elif lo in ("/rewind", "/back", "/undo"):
-                if self.session.rewind():
-                    ok("rewound conversation by 1 turn")
+            elif lo.startswith("/rewind") or lo.startswith("/rewindto") or lo in ("/back", "/undo"):
+                parts = raw.split()
+                user_msgs = [
+                    (idx, msg["content"])
+                    for idx, msg in enumerate(self.session.messages)
+                    if msg.get("role") == "user"
+                ]
+
+                if not user_msgs:
+                    warn("no user messages in session to rewind to")
+                    continue
+
+                target_idx = None
+                if len(parts) > 1:
+                    try:
+                        target_idx = int(parts[1])
+                    except ValueError:
+                        warn("usage: /rewind [message_index]")
+                        continue
+
+                if target_idx is None and len(user_msgs) > 1 and (lo.startswith("/rewind") or lo.startswith("/rewindto")):
+                    con.print(f"\n  [{C['accent']}]Select a message to rewind and resume from:[/{C['accent']}]")
+                    for display_idx, (orig_idx, content) in enumerate(user_msgs, 1):
+                        truncated = content.replace("\n", " ")[:60]
+                        con.print(f"    [{C['yellow']}]{display_idx}[/{C['yellow']}]: {truncated}...")
+
+                    try:
+                        ans = input("\n  Rewind to index › ").strip()
+                        if not ans:
+                            ok("cancelled")
+                            continue
+                        choice = int(ans)
+                        if choice < 1 or choice > len(user_msgs):
+                            warn("invalid selection")
+                            continue
+                        orig_idx = user_msgs[choice - 1][0]
+                        raw_prompt = user_msgs[choice - 1][1]
+                    except (ValueError, IndexError, KeyboardInterrupt, EOFError):
+                        warn("cancelled or invalid selection")
+                        continue
                 else:
-                    warn("nothing to rewind")
-                continue
+                    if target_idx is not None:
+                        if target_idx < 1 or target_idx > len(user_msgs):
+                            warn(f"invalid message index. must be between 1 and {len(user_msgs)}")
+                            continue
+                        orig_idx = user_msgs[target_idx - 1][0]
+                        raw_prompt = user_msgs[target_idx - 1][1]
+                    else:
+                        orig_idx = user_msgs[-1][0]
+                        raw_prompt = user_msgs[-1][1]
+
+                self.session.messages = self.session.messages[:orig_idx]
+                raw = raw_prompt
+                con.print(f"  [{C['dim']}]resuming from: {raw[:60]}...[/{C['dim']}]")
+                pass
 
             # ── editai ───────────────────────────────────────────────────
             elif lo == "/editai":
@@ -1537,6 +1586,7 @@ class Shell:
                     return
 
         self.session.add("user", user_text)
+        write_trace_entry(self.session, "user_message", {"content": user_text})
         messages = self.session.as_messages()
 
         if self.agent_mode:
@@ -1603,6 +1653,7 @@ class Shell:
         con.print()
         if full:
             self.session.add("assistant", full)
+            write_trace_entry(self.session, "model_response", {"content": full})
 
     def _run_agent(self, messages: list[dict], user_text: str):
         """Run the agentic loop."""

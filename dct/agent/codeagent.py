@@ -64,6 +64,7 @@ from dct.tools.web import fetch_url, search_ddg
 from dct.tools.tasks import get_tracker
 from dct.skills.notebook import edit_notebook_cell
 from dct.skills.web import fetch_and_extract
+from dct.agent.session import write_trace_entry
 
 if TYPE_CHECKING:
     from dct.core.registry import Server
@@ -144,6 +145,7 @@ AVAILABLE TOOLS:
   <tool>read_image</tool><path>...</path>        — read an image file, returns base64 data URL for vision models
   <tool>write_file</tool><path>...</path><code>...</code>  — write/create a file
   <tool>patch_file</tool><path>...</path><old>...</old><new>...</new>  — find+replace in file
+  <tool>multi_patch_file</tool><path>...</path><patch><old>...</old><new>...</new></patch> — multiple non-contiguous find+replaces in file
   <tool>list_dir</tool><path>...</path>          — list directory
   <tool>tree</tool><path>...</path>              — directory tree
   <tool>glob</tool><pattern>...</pattern><path>...</path>      — fast file discovery using ripgrep
@@ -173,6 +175,17 @@ TOOL CALL FORMAT:
   <path>README.md</path>
   <start_line>1</start_line>
   <end_line>50</end_line>
+- For multi-patch edits:
+  <tool>multi_patch_file</tool>
+  <path>file.py</path>
+  <patch>
+  <old>old_text_1</old>
+  <new>new_text_1</new>
+  </patch>
+  <patch>
+  <old>old_text_2</old>
+  <new>new_text_2</new>
+  </patch>
 - For web:
   <tool>web_extract</tool>
   <url>https://example.com</url>
@@ -223,6 +236,18 @@ def _has_tool_call(text: str) -> bool:
     return bool(re.search(r"<tool(?:\s+[^>]*)?>(.+?)</tool>", text, re.DOTALL | re.IGNORECASE))
 
 
+def _parse_multi_patch(text: str) -> list[dict[str, str]]:
+    """Parse multiple <patch> blocks containing <old> and <new>."""
+    patches = []
+    for patch_match in re.finditer(r"<patch>(.*?)</patch>", text, re.DOTALL | re.IGNORECASE):
+        patch_content = patch_match.group(1)
+        old = _extract_tag(patch_content, "old")
+        new = _extract_tag(patch_content, "new")
+        if old is not None and new is not None:
+            patches.append({"old": old, "new": new})
+    return patches
+
+
 def _parse_tool_call(text: str) -> Optional[dict]:
     """Extract the first tool call from model output."""
     tool = _extract_tag(text, "tool")
@@ -252,6 +277,7 @@ def _parse_tool_call(text: str) -> Optional[dict]:
         "background": _extract_tag(text, "background"),
         "id": _extract_tag(text, "id"),
         "input": _extract_tag(text, "input"),
+        "patches": _parse_multi_patch(text) if tool.strip() == "multi_patch_file" else None,
     }
 
 
@@ -688,6 +714,56 @@ class CodeAgent:
             size_info = f"  {len(r.content.encode('utf-8', errors='replace')) / 1024:.1f} KB" if r.content else ""
             return f"[patched: {r.path}{size_info}]\n{r.diff[:1200]}"
 
+        elif tool == "multi_patch_file":
+            path = call.get("path") or ""
+
+            if mode == "plan":
+                import os
+                if os.path.abspath(path) != plan_file:
+                    return f"[TOOL ERROR] In PLAN mode, you may only modify the designated plan file: {plan_file}"
+
+            patches = call.get("patches") or []
+            if not path:
+                return "[TOOL ERROR] <path> is required for multi_patch_file."
+            if not patches:
+                return "[TOOL ERROR] At least one <patch> block containing <old> and <new> is required."
+
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    content = f.read()
+            except Exception as e:
+                return f"[TOOL ERROR] Failed to read file: {str(e)}"
+
+            import difflib
+            old_content = content
+            for i, p in enumerate(patches):
+                old_text = p["old"]
+                new_text = p["new"]
+                if old_text not in content:
+                    return f"[TOOL ERROR] Patch #{i + 1} failed: Target content not found in the file."
+
+                occurrences = content.count(old_text)
+                if occurrences > 1:
+                    return f"[TOOL ERROR] Patch #{i + 1} failed: Target content is not unique (found {occurrences} occurrences)."
+
+                content = content.replace(old_text, new_text)
+
+            try:
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                diff_lines = list(difflib.unified_diff(
+                    old_content.splitlines(keepends=True),
+                    content.splitlines(keepends=True),
+                    fromfile="a/" + path,
+                    tofile="b/" + path,
+                    n=3
+                ))
+                diff_str = "".join(diff_lines)
+                size_info = f"  {len(content.encode('utf-8', errors='replace')) / 1024:.1f} KB"
+                return f"[multi-patched: {path}{size_info}]\n{diff_str[:1200]}"
+            except Exception as e:
+                return f"[TOOL ERROR] Failed to write file: {str(e)}"
+
         elif tool == "grep":
             pattern = call.get("pattern")
             if not pattern:
@@ -872,6 +948,7 @@ class CodeAgent:
         Run agentic loop. `messages` should already include system prompt + user message.
         Returns final accumulated text.
         """
+        write_trace_entry(self.session, "agent_run_start", {"messages_count": len(messages)})
         msgs = list(messages)
         final_text = ""
 
@@ -912,6 +989,7 @@ class CodeAgent:
 
             final_text = response_text
             msgs.append({"role": "assistant", "content": response_text})
+            write_trace_entry(self.session, "model_response", {"content": response_text})
 
             if not _has_tool_call(response_text):
                 break
@@ -924,6 +1002,11 @@ class CodeAgent:
                 break
 
             tool_name = call["tool"]
+            write_trace_entry(
+                self.session,
+                "tool_call",
+                {"tool": tool_name, "arguments": {k: v for k, v in call.items() if k != "raw_text"}}
+            )
             if self.on_tool:
                 self.on_tool(tool_name, str(call))
 
@@ -934,6 +1017,7 @@ class CodeAgent:
             finally:
                 exec_status.stop()
 
+            write_trace_entry(self.session, "tool_result", {"tool": tool_name, "result": result})
             if self.on_result:
                 self.on_result(tool_name, result)
 

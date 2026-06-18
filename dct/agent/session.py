@@ -104,3 +104,38 @@ class Session:
             mode=d.get("mode", "execute"),
         )
         return s
+
+
+def write_trace_entry(session: "Session", entry_type: str, data: dict):
+    """Write a structured trace entry to session JSONL log if enabled."""
+    try:
+        from dct.core.config import Config
+        cfg = Config()
+        if not cfg.get("enable_tracing", False):
+            return
+    except Exception:
+        return
+
+    import os
+    import json
+
+    log_dir = os.path.expanduser("~/.config/dct/transcripts")
+    os.makedirs(log_dir, exist_ok=True)
+
+    session_id = session.name or f"session_{int(session.created_at)}"
+    # Sanitize filename
+    session_id = "".join(c for c in session_id if c.isalnum() or c in ("-", "_"))
+    log_file = os.path.join(log_dir, f"{session_id}.jsonl")
+
+    trace_data = {
+        "timestamp": time.time(),
+        "type": entry_type,
+        "session_name": session.name,
+        **data
+    }
+
+    try:
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(trace_data) + "\n")
+    except Exception:
+        pass
