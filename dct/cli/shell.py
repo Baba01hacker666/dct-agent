@@ -788,26 +788,81 @@ class Shell:
 
             # ── skill presets ────────────────────────────────────────────
             elif lo == "/skills":
+                custom = self.config.get("custom_skills", {})
                 section("agent skill presets")
-                for key, s in SKILL_PRESETS.items():
+                all_names = sorted(set(list(SKILL_PRESETS.keys()) + list(custom.keys())))
+                for key in all_names:
+                    if key in custom:
+                        s = custom[key]
+                        tag = "[*]"
+                    else:
+                        s = SKILL_PRESETS[key]
+                        tag = "   "
                     con.print(
-                        f"  [{C['accent']}]{key:12}[/{C['accent']}] [{C['dim']}]{s['desc']}[/{C['dim']}]"
+                        f"  [{C['accent']}]{tag} {key:12}[/{C['accent']}] [{C['dim']}]{s['desc']}[/{C['dim']}]"
                     )
-                hint("use: /skill <name>")
+                hint("use: /skill <name>  |  /skill add <name> <desc>  |  /skill remove <name>")
+                if custom:
+                    hint("[*] = custom skill")
+
+            elif lo.startswith("/skill add "):
+                rest = raw[11:].strip()
+                parts_sk = rest.split(None, 1)
+                if len(parts_sk) < 2:
+                    warn("usage: /skill add <name> <description>")
+                    continue
+                name, desc = parts_sk[0].lower(), parts_sk[1]
+                if name in SKILL_PRESETS:
+                    warn(f"'{name}' is a built-in skill name — choose a different name")
+                    continue
+                con.print(f"  [{C['dim']}]enter system prompt (end with a line containing only ///)[/{C['dim']}]")
+                lines = []
+                while True:
+                    try:
+                        line = input("  ... ")
+                    except (KeyboardInterrupt, EOFError):
+                        con.print()
+                        break
+                    if line.strip() == "///":
+                        break
+                    lines.append(line)
+                prompt = "\n".join(lines)
+                if not prompt.strip():
+                    warn("empty prompt — skill not saved")
+                    continue
+                custom = dict(self.config.get("custom_skills", {}))
+                custom[name] = {"prompt": prompt, "desc": desc}
+                self.config.set("custom_skills", custom)
+                self.config.save()
+                ok(f"custom skill saved: {name}")
+
+            elif lo.startswith("/skill remove "):
+                name = raw[15:].strip().lower()
+                custom = dict(self.config.get("custom_skills", {}))
+                if name not in custom:
+                    warn(f"custom skill not found: {name}")
+                    continue
+                del custom[name]
+                self.config.set("custom_skills", custom)
+                self.config.save()
+                ok(f"removed custom skill: {name}")
 
             elif lo.startswith("/skill "):
                 name = raw[7:].strip().lower()
-                skill = SKILL_PRESETS.get(name)
+                custom = self.config.get("custom_skills", {})
+                skill = custom.get(name) or SKILL_PRESETS.get(name)
                 if not skill:
                     warn(f"unknown skill: {name}")
-                    hint(f"available: {', '.join(SKILL_PRESETS.keys())}")
-                    hint("use /skills to see descriptions")
+                    hint(f"built-in: {', '.join(SKILL_PRESETS.keys())}")
+                    hint(f"custom: {', '.join(custom.keys())}" if custom else "no custom skills yet — use /skill add")
+                    hint("use /skills to see all")
                     continue
                 self.session.set_system(skill["prompt"])
                 if not self.agent_mode:
                     self.agent_mode = True
                     con.print(f"  [{C['purple']}][AGENT ON][/{C['purple']}]", end=" ")
-                ok(f"loaded skill: {name} — {skill['desc']}")
+                tag = "[custom] " if name in custom else ""
+                ok(f"loaded skill: {tag}{name} — {skill['desc']}")
 
             # ── save ─────────────────────────────────────────────────────
             elif lo.startswith("/save "):
@@ -849,7 +904,7 @@ class Shell:
                 info("config (~/.config/dct/config.json):")
                 for k in ["default_server", "default_model", "agent_enabled",
                           "max_agent_turns", "history_limit", "no_probe_on_start",
-                          "auto_probe_interval"]:
+                          "auto_probe_interval", "custom_skills"]:
                     v = self.config.get(k)
                     con.print(f"  [{C['dim']}]{k}[/{C['dim']}] = [{C['fg']}]{v!r}[/{C['fg']}]")
 
