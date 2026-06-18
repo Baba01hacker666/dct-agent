@@ -553,7 +553,8 @@ class CodeAgent:
             r = write_file(path, content)
             if not r.ok:
                 return f"[TOOL ERROR] {r.message}"
-            return f"[written: {r.path}]\n{r.diff[:1200] if r.diff else '(new file)'}"
+            size_info = f"  {len(content.encode('utf-8', errors='replace')) / 1024:.1f} KB"
+            return f"[written: {r.path}{size_info}]\n{r.diff[:1200] if r.diff else '(new file)'}"
 
         elif tool == "patch_file":
             path = call.get("path") or ""
@@ -569,7 +570,8 @@ class CodeAgent:
             r = patch_file(path, old, new)
             if not r.ok:
                 return f"[TOOL ERROR] {r.message}"
-            return f"[patched: {r.path}]\n{r.diff[:1200]}"
+            size_info = f"  {len(r.content.encode('utf-8', errors='replace')) / 1024:.1f} KB" if r.content else ""
+            return f"[patched: {r.path}{size_info}]\n{r.diff[:1200]}"
 
         elif tool == "grep":
             pattern = call.get("pattern")

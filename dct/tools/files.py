@@ -22,6 +22,12 @@ class FileResult:
     diff: str = ""
 
 
+# Skip diff generation for files larger than this (bytes)
+DIFF_MAX_BYTES = 100_000
+# Reject writes larger than this (bytes)
+WRITE_MAX_BYTES = 50 * 1024 * 1024  # 50 MB
+
+
 def read_file(path: str, max_bytes: int = 512_000) -> FileResult:
     try:
         p = Path(path).expanduser().resolve()
@@ -43,6 +49,13 @@ def write_file(path: str, content: str, backup: bool = True) -> FileResult:
     try:
         p = Path(path).expanduser().resolve()
 
+        content_bytes = len(content.encode("utf-8", errors="replace"))
+        if content_bytes > WRITE_MAX_BYTES:
+            return FileResult(
+                ok=False, path=str(p),
+                message=f"content too large ({content_bytes / 1024 / 1024:.1f} MB, max {WRITE_MAX_BYTES / 1024 / 1024:.0f} MB)",
+            )
+
         # Auto-Linter: prevent writing broken python syntax
         if p.suffix == ".py":
             import ast
@@ -52,13 +65,22 @@ def write_file(path: str, content: str, backup: bool = True) -> FileResult:
                 return FileResult(ok=False, path=str(p), message=f"SyntaxError: {e.msg} at line {e.lineno}")
 
         old_content = ""
-        if p.exists():
-            old_content = p.read_text(errors="replace")
+        was_new = not p.exists()
+        if not was_new:
+            if content_bytes <= DIFF_MAX_BYTES:
+                old_content = p.read_text(errors="replace")
             if backup:
                 shutil.copy2(p, str(p) + ".dct.bak")
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content)
-        diff = _make_diff(old_content, content, str(p))
+
+        if content_bytes > DIFF_MAX_BYTES:
+            diff = f"(file too large for diff: {content_bytes / 1024:.1f} KB)"
+        elif was_new:
+            diff = "(new file)"
+        else:
+            diff = _make_diff(old_content, content, str(p))
+
         return FileResult(
             ok=True, path=str(p), content=content, message="written", diff=diff
         )
@@ -89,7 +111,13 @@ def patch_file(path: str, old: str, new: str) -> FileResult:
 
         shutil.copy2(p, str(p) + ".dct.bak")
         p.write_text(new_content)
-        diff = _make_diff(content, new_content, str(p))
+
+        new_bytes = len(new_content.encode("utf-8", errors="replace"))
+        if new_bytes > DIFF_MAX_BYTES:
+            diff = f"(file too large for diff: {new_bytes / 1024:.1f} KB)"
+        else:
+            diff = _make_diff(content, new_content, str(p))
+
         return FileResult(
             ok=True,
             path=str(p),
