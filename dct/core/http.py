@@ -4,7 +4,7 @@ Shared resilient HTTP client with automatic retries for transient errors.
 """
 import requests
 from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util.retry import Retry
+from urllib3.util.retry import Retry
 
 
 def _get_retry_session() -> requests.Session:

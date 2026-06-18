@@ -716,6 +716,10 @@ class CodeAgent:
 
         elif tool == "multi_patch_file":
             path = call.get("path") or ""
+            
+            from pathlib import Path
+            if path:
+                path = str(Path(path).expanduser().resolve())
 
             if mode == "plan":
                 import os
@@ -748,7 +752,19 @@ class CodeAgent:
 
                 content = content.replace(old_text, new_text)
 
+            if path.endswith(".py"):
+                import ast
+                try:
+                    ast.parse(content)
+                except SyntaxError as e:
+                    return f"[TOOL ERROR] SyntaxError after multi-patch: {e.msg} at line {e.lineno}"
+
             try:
+                import shutil
+                import os
+                if os.path.exists(path):
+                    shutil.copy2(path, path + ".dct.bak")
+                    
                 with open(path, "w", encoding="utf-8") as f:
                     f.write(content)
                 diff_lines = list(difflib.unified_diff(
@@ -881,7 +897,7 @@ class CodeAgent:
         elif tool == "notebook_edit":
             path = _extract_tag(call["raw_text"], "path")
             index = _extract_tag(call["raw_text"], "index")
-            mode = _extract_tag(call["raw_text"], "mode") or "replace"
+            edit_mode = _extract_tag(call["raw_text"], "mode") or "replace"
             source = _extract_tag(call["raw_text"], "source") or ""
 
             if not path or not index:
@@ -891,7 +907,7 @@ class CodeAgent:
             except ValueError:
                 return "[TOOL ERROR] <index> must be an integer."
 
-            r_nb = edit_notebook_cell(path, idx, source, mode)
+            r_nb = edit_notebook_cell(path, idx, source, edit_mode)
             if not r_nb.ok:
                 return f"[TOOL ERROR] {r_nb.message}"
             return "[SUCCESS] Notebook updated."

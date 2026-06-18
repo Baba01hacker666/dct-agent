@@ -1858,6 +1858,10 @@ class Shell:
                     con.print(f"[{C['fg']}]{chunk}[/{C['fg']}]", end="")
                     full += chunk
                 break  # Success!
+            except KeyboardInterrupt:
+                status.stop()
+                con.print(f"\n  [{C['dim']}]cancelled[/{C['dim']}]")
+                break
             except Exception as e:
                 status.stop()
                 import requests
@@ -1881,10 +1885,6 @@ class Shell:
                 else:
                     con.print(f"\n  [{C['err']}]{str(e)}[/{C['err']}]")
                     break
-            except KeyboardInterrupt:
-                status.stop()
-                con.print(f"\n  [{C['dim']}]cancelled[/{C['dim']}]")
-                break
             finally:
                 status.stop()
         con.print()

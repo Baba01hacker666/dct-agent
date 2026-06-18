@@ -100,7 +100,8 @@ def chat_once(srv: "Server", model: str, messages: list[dict]) -> str:
 # ── Models ───────────────────────────────────────────────────────────────────
 def list_models(srv: "Server") -> list[dict]:
     url = f"{srv.base_url()}/api/v1/models"
-    r = http.client.get(url, timeout=DEFAULT_TIMEOUT)
+    headers = {"Authorization": f"Bearer {srv.api_key}"} if srv.api_key else {}
+    r = http.client.get(url, headers=headers, timeout=DEFAULT_TIMEOUT)
     r.raise_for_status()
     # OpenRouter returns { "data": [ { "id": "model/name", ... } ] }
     # Let's map it to Ollama's format { "name": "..." }

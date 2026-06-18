@@ -236,7 +236,10 @@ def prepare_background_command(
         code = textwrap.dedent(code)
         # Define dedicated virtual environment path
         venv_dir = os.path.expanduser("~/.config/dct/venv")
-        venv_python = os.path.join(venv_dir, "bin", "python")
+        if os.name == "nt":
+            venv_python = os.path.join(venv_dir, "Scripts", "python.exe")
+        else:
+            venv_python = os.path.join(venv_dir, "bin", "python")
 
         # Try setting up virtual environment
         use_venv = True
@@ -263,8 +266,11 @@ def prepare_background_command(
         ) as f:
             f.write("#!/usr/bin/env bash\nset -euo pipefail\n" + code)
             tmp = f.name
-        os.chmod(tmp, 0o700)
-        return ["/usr/bin/env", "bash", tmp], tmp
+        try:
+            os.chmod(tmp, 0o700)
+        except Exception:
+            pass
+        return ["bash", tmp], tmp
 
     else:
         # Raw shell command
