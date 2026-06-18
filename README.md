@@ -1,8 +1,8 @@
 # DCT Agent — Doraemon Cyber Team
-**Multi-server AI agent · v3.1**
+**Multi-server AI agent · v3.2**
 made by baba01hacker
 
-Supports **Ollama**, **OpenRouter**, and **any OpenAI-compatible provider** (DeepSeek, Qwen, Z.ai, Groq, etc.). Automatic failover, load-balancing, autonomous agent mode.
+Supports **Ollama**, **OpenRouter**, and **any OpenAI-compatible provider** (DeepSeek, Qwen, Z.ai, Groq, etc.). Automatic failover, load-balancing, autonomous agent mode, multi-agent squads, and hierarchical task orchestration.
 
 ## Install
 
@@ -127,6 +127,17 @@ python -m dct add-openrouter sk-or-xxx
 | `/prompt <name>` | Apply a built-in system prompt preset |
 | `/skills` | List agent skill presets (specialized personas) |
 | `/skill <name>` | Load an agent skill (sets system prompt + auto-enables agent) |
+
+### Multi-Agent Commands
+| Command | Description |
+|---|---|
+| `/squad list` | List all squads |
+| `/squad create <name>` | Create a new agent squad |
+| `/squad add <name> <role> <model> [--provider <a>] [--skill <s>]` | Add a member with role, model, optional provider and skill |
+| `/squad remove <name> <role>` | Remove a member |
+| `/squad show <name>` | Show squad configuration |
+| `/squad run <name> <task>` | Execute task with all squad members in parallel |
+| `/orchestrate <goal>` | Hierarchical decomposition → parallel wave execution → synthesis |
 | `/copy` | Copy transcript to clipboard (fallback prints text) |
 | `/save <file>` | Save conversation JSON |
 | `/load <file>` | Resume saved conversation |
@@ -252,6 +263,42 @@ Use `/skill <name>` to load a specialized persona:
 ```
 web-design   react        backend      python       pentest
 devops       data         bug-hunt     cli-tool     refactor
+```
+
+Custom skills can be created with `/skill add <name> <desc>` (persisted to config).
+
+## Multi-Agent Systems
+
+### Squads — Parallel Agent Teams
+Define a team of agents with different roles, models, and providers. Run them in parallel on any task:
+```bash
+/squad create webteam
+/squad add webteam frontend qwen-coder --provider qwen --skill web-design
+/squad add webteam backend deepseek-chat --provider deepseek --skill backend
+/squad add webteam security deepseek-chat --skill bug-hunt
+/squad run webteam "Build a task management dashboard"
+```
+
+Each squad member runs as an independent agent with its own model, provider, role, and skill preset. Results from all members are collected and displayed. Squads persist in config.
+
+### Orchestrator — Hierarchical Task Decomposition
+For large complex goals, the orchestrator decomposes the work into a DAG of subtasks and executes them in parallel waves:
+```bash
+/orchestrate "Build a full-stack e-commerce app with auth, cart, and checkout"
+```
+
+**How it works:**
+1. **Plan** — The planner agent decomposes the goal into structured tasks with dependencies
+2. **DAG** — Tasks form a dependency graph (task 3 depends on task 1 → runs after it)
+3. **Waves** — Each wave runs all ready tasks in parallel using independent CodeAgents
+4. **Context flow** — Dependent tasks receive output from their predecessors
+5. **Synthesize** — All results are collected into a final summary
+
+Example execution:
+```
+Wave 1 (parallel): [1. Scaffold] [2. DB schema]
+Wave 2 (parallel): [3. Auth API ← 2] [4. Frontend ← 1]
+Wave 3 (serial):   [5. Integration ← 3,4]
 ```
 
 ## Reliability & Resilience
