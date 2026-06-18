@@ -19,6 +19,7 @@ DEFAULTS = {
     "no_probe_on_start": False,
     "auto_probe_interval": 60,
     "custom_skills": {},
+    "squads": {},
 }
 
 

@@ -288,6 +288,108 @@ class Shell:
     def _stop_auto_probe(self):
         self._probe_stop.set()
 
+    def _run_squad(self, squad_name: str, members: list[dict], task: str):
+        """Run a task with all squad members in parallel."""
+        from dct.agent.codeagent import CodeAgent
+        from dct.agent.session import Session
+        from dct.core.client import chat_stream as client_chat_stream
+        import concurrent.futures
+
+        section(f"squad: {squad_name}  ·  {len(members)} agents")
+        con.print(f"  [{C['dim']}]task: {task}[/{C['dim']}]")
+        con.print(f"  [{C['dim']}]{'─' * 66}[/{C['dim']}]")
+
+        results: dict[str, str] = {}
+        errors: dict[str, str] = {}
+
+        def run_member(member: dict) -> tuple[str, str]:
+            role = member["role"]
+            model = member["model"]
+            provider_alias = member.get("provider", "")
+            skill_name = member.get("skill", "")
+
+            # Resolve server
+            srv = self.active
+            if provider_alias:
+                resolved = self.registry.resolve(provider_alias)
+                if resolved:
+                    srv = resolved
+                else:
+                    return role, f"[ERROR] provider '{provider_alias}' not found"
+
+            if not srv:
+                return role, "[ERROR] no active server"
+
+            # Build system prompt
+            skill_prompt = ""
+            if skill_name:
+                custom = self.config.get("custom_skills", {})
+                skill = custom.get(skill_name) or SKILL_PRESETS.get(skill_name)
+                if skill:
+                    skill_prompt = skill["prompt"]
+
+            role_prompt = (
+                f"You are the '{role}' specialist in a multi-agent squad. "
+                f"Your role: {role}. Focus ONLY on your specialty.\n"
+            )
+            system_prompt = role_prompt + (skill_prompt or "")
+
+            # Create session and agent
+            session = Session()
+            session.set_system(system_prompt)
+            session.add("user", f"Squad task: {task}\n\nAs the {role} specialist, complete your part of this task. Be thorough and produce actionable output.")
+
+            def stream_fn(srv_, mdl_, msgs_):
+                yield from client_chat_stream(srv_, mdl_, msgs_)
+
+            agent = CodeAgent(
+                server=srv, model=model, session=session,
+                stream_fn=stream_fn,
+                on_text=lambda c: None,
+                max_turns=8,
+            )
+
+            try:
+                response = agent.run(session.as_messages())
+                return role, response
+            except Exception as e:
+                return role, f"[ERROR] {str(e)}"
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(members)) as ex:
+            futures = {ex.submit(run_member, m): m for m in members}
+            for fut in concurrent.futures.as_completed(futures):
+                member = futures[fut]
+                role = member["role"]
+                try:
+                    r_role, r_text = fut.result()
+                    if r_text.startswith("[ERROR]"):
+                        errors[r_role] = r_text
+                    else:
+                        results[r_role] = r_text
+                    status = f"[{C['err']}]✗[/{C['err']}]" if r_role in errors else f"[{C['ok']}]✓[/{C['ok']}]"
+                    con.print(f"  {status} [{C['accent']}]{r_role}[/{C['accent']}] completed")
+                except Exception as e:
+                    errors[role] = str(e)
+                    con.print(f"  [{C['err']}]✗[/{C['err']}] [{C['accent']}]{role}[/{C['accent']}] failed: {e}")
+
+        con.print(f"  [{C['dim']}]{'─' * 66}[/{C['dim']}]")
+
+        # Show results
+        for role in sorted(results.keys()):
+            section(f"result: {role}")
+            text = results[role]
+            if len(text) > 2000:
+                con.print(f"[{C['code']}]{text[:2000]}[/{C['code']}]")
+                info(f"… ({len(text)} chars total)")
+            else:
+                con.print(f"[{C['code']}]{text}[/{C['code']}]")
+
+        for role, err_text in errors.items():
+            section(f"error: {role}")
+            con.print(f"[{C['err']}]{err_text}[/{C['err']}]")
+
+        ok(f"squad {squad_name}: {len(results)}/{len(members)} completed successfully")
+
     def run(self):
         history_file = os.path.join(
             os.path.expanduser("~"), ".config", "dct", "history"
@@ -864,7 +966,141 @@ class Shell:
                 tag = "[custom] " if name in custom else ""
                 ok(f"loaded skill: {tag}{name} — {skill['desc']}")
 
-            # ── save ─────────────────────────────────────────────────────
+            # ── squad (multi-agent teams) ───────────────────────────────
+            elif lo == "/squad list" or lo == "/squads":
+                squads = self.config.get("squads", {})
+                if not squads:
+                    info("no squads defined yet")
+                    hint("/squad create <name>  |  /squad add <name> <role> <model> [--provider <alias>] [--skill <name>]")
+                    continue
+                section("agent squads")
+                for name, sq in squads.items():
+                    members = sq.get("members", [])
+                    m_str = ", ".join(f"{m['role']}({m['model']})" for m in members)
+                    con.print(f"  [{C['accent']}]{name}[/{C['accent']}]  [{C['dim']}]{len(members)} agents: {m_str}[/{C['dim']}]")
+
+            elif lo.startswith("/squad create "):
+                name = raw[14:].strip().lower()
+                if not name:
+                    warn("usage: /squad create <name>")
+                    continue
+                squads = dict(self.config.get("squads", {}))
+                if name in squads:
+                    warn(f"squad '{name}' already exists")
+                    continue
+                squads[name] = {"members": []}
+                self.config.set("squads", squads)
+                self.config.save()
+                ok(f"squad created: {name}  (add members with /squad add {name} ...)")
+
+            elif lo.startswith("/squad add "):
+                toks = raw[11:].strip().split()
+                if len(toks) < 3:
+                    warn("usage: /squad add <squad_name> <role_label> <model> [--provider <alias>] [--skill <name>]")
+                    continue
+                squad_name = toks[0].lower()
+                squads = dict(self.config.get("squads", {}))
+                if squad_name not in squads:
+                    err(f"squad not found: {squad_name}")
+                    hint("/squad create <name> first")
+                    continue
+                role = toks[1]
+                model = toks[2]
+                provider = ""
+                skill = ""
+                i = 3
+                while i < len(toks):
+                    if toks[i] == "--provider" and i + 1 < len(toks):
+                        provider = toks[i + 1]
+                        i += 2
+                    elif toks[i] == "--skill" and i + 1 < len(toks):
+                        skill = toks[i + 1]
+                        i += 2
+                    else:
+                        i += 1
+                squads[squad_name]["members"].append({
+                    "role": role, "model": model,
+                    "provider": provider, "skill": skill,
+                })
+                self.config.set("squads", squads)
+                self.config.save()
+                extras = []
+                if provider: extras.append(f"provider={provider}")
+                if skill: extras.append(f"skill={skill}")
+                extra_str = f" ({', '.join(extras)})" if extras else ""
+                ok(f"added to {squad_name}: {role} → {model}{extra_str}")
+
+            elif lo.startswith("/squad remove "):
+                toks = raw[14:].strip().split()
+                if len(toks) < 2:
+                    warn("usage: /squad remove <squad_name> <role_label>")
+                    continue
+                squad_name = toks[0].lower()
+                role = toks[1]
+                squads = dict(self.config.get("squads", {}))
+                if squad_name not in squads:
+                    err(f"squad not found: {squad_name}")
+                    continue
+                members = squads[squad_name]["members"]
+                squads[squad_name]["members"] = [m for m in members if m["role"] != role]
+                self.config.set("squads", squads)
+                self.config.save()
+                ok(f"removed {role} from {squad_name}")
+
+            elif lo.startswith("/squad show "):
+                name = raw[12:].strip().lower()
+                squads = self.config.get("squads", {})
+                if name not in squads:
+                    err(f"squad not found: {name}")
+                    continue
+                sq = squads[name]
+                section(f"squad: {name}")
+                for m in sq.get("members", []):
+                    extras = []
+                    if m.get("provider"): extras.append(f"provider={m['provider']}")
+                    if m.get("skill"): extras.append(f"skill={m['skill']}")
+                    extra_str = f" ({', '.join(extras)})" if extras else ""
+                    con.print(f"  [{C['accent']}]{m['role']:16}[/{C['accent']}] [{C['fg']}]{m['model']}[/{C['fg']}]{extra_str}")
+                con.print()
+                hint(f"/squad run {name} <task>")
+
+            elif lo.startswith("/squad delete "):
+                name = raw[14:].strip().lower()
+                squads = dict(self.config.get("squads", {}))
+                if name not in squads:
+                    err(f"squad not found: {name}")
+                    continue
+                del squads[name]
+                self.config.set("squads", squads)
+                self.config.save()
+                ok(f"squad deleted: {name}")
+
+            elif lo.startswith("/squad run "):
+                rest = raw[11:].strip()
+                parts_sr = rest.split(None, 1)
+                if len(parts_sr) < 2:
+                    warn("usage: /squad run <squad_name> <task>")
+                    continue
+                squad_name = parts_sr[0].lower()
+                task = parts_sr[1]
+                squads = self.config.get("squads", {})
+                if squad_name not in squads:
+                    err(f"squad not found: {squad_name}")
+                    continue
+                members = squads[squad_name].get("members", [])
+                if not members:
+                    warn(f"squad '{squad_name}' has no members — use /squad add")
+                    continue
+                self._run_squad(squad_name, members, task)
+
+            elif lo.startswith("/squad "):
+                hint("squad commands: list create add remove show delete run")
+                hint("  /squad list              — list all squads")
+                hint("  /squad create <name>     — create a squad")
+                hint("  /squad show <name>       — show squad members")
+                hint("  /squad add <name> <role> <model> [--provider <a>] [--skill <s>]")
+                hint("  /squad remove <name> <role>")
+                hint("  /squad run <name> <task> — execute task with all squad members")
             elif lo.startswith("/save "):
                 fname = raw[6:].strip()
                 try:
@@ -904,7 +1140,7 @@ class Shell:
                 info("config (~/.config/dct/config.json):")
                 for k in ["default_server", "default_model", "agent_enabled",
                           "max_agent_turns", "history_limit", "no_probe_on_start",
-                          "auto_probe_interval", "custom_skills"]:
+                          "auto_probe_interval", "custom_skills", "squads"]:
                     v = self.config.get(k)
                     con.print(f"  [{C['dim']}]{k}[/{C['dim']}] = [{C['fg']}]{v!r}[/{C['fg']}]")
 
