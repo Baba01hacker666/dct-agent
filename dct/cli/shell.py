@@ -69,6 +69,23 @@ PROMPT_PRESETS: dict[str, str] = {
     "concise": "Answer briefly, with direct actionable output.",
 }
 
+# Built-in OpenAI-compatible provider presets — just /add-provider <name> <key>
+PROVIDER_PRESETS: dict[str, dict] = {
+    "deepseek":     {"base_url": "https://api.deepseek.com",                    "note": "DeepSeek"},
+    "qwen":         {"base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "note": "Alibaba Qwen (DashScope)"},
+    "zai":          {"base_url": "https://api.z.ai",                            "note": "Z.ai"},
+    "groq":         {"base_url": "https://api.groq.com/openai/v1",              "note": "Groq"},
+    "together":     {"base_url": "https://api.together.xyz/v1",                 "note": "Together AI"},
+    "openai":       {"base_url": "https://api.openai.com/v1",                   "note": "OpenAI"},
+    "mistral":      {"base_url": "https://api.mistral.ai/v1",                   "note": "Mistral AI"},
+    "xai":          {"base_url": "https://api.x.ai/v1",                         "note": "xAI Grok"},
+    "perplexity":   {"base_url": "https://api.perplexity.ai",                   "note": "Perplexity"},
+    "fireworks":    {"base_url": "https://api.fireworks.ai/inference/v1",       "note": "Fireworks AI"},
+    "hyperbolic":   {"base_url": "https://api.hyperbolic.xyz/v1",               "note": "Hyperbolic"},
+    "cerebras":     {"base_url": "https://api.cerebras.ai/v1",                  "note": "Cerebras"},
+    "sambanova":    {"base_url": "https://api.sambanova.ai/v1",                 "note": "SambaNova"},
+}
+
 
 class Shell:
     def __init__(self, registry: ServerRegistry):
@@ -407,6 +424,47 @@ class Shell:
                     provider="openai", api_key=api_key, base_url=base_url,
                 )
                 con.print(f"  [{C['dim']}]probing {srv.alias}…[/{C['dim']}]", end=" ")
+                res = probe_server(srv)
+                self.registry.save()
+                if res["ok"]:
+                    con.print(f"[{C['ok']}]online[/{C['ok']}]")
+                    ok(f"added: {server_tag(srv)}  ·  {len(srv.models)} model(s)")
+                    if not self.active:
+                        self.active = srv
+                        self.model = srv.best_model()
+                        ok(f"auto-selected as active server  ·  model: {self.model}")
+                else:
+                    con.print(f"[{C['err']}]offline[/{C['err']}]")
+                    warn(f"added {srv.alias} but might be unreachable — saved for later")
+
+            # ── add-provider (convenience) ──────────────────────────────
+            elif lo.startswith("/add-provider "):
+                toks = raw[14:].strip().split()
+                if not toks:
+                    warn("usage: /add-provider <name> <api_key> [alias]  —  /add-provider --list")
+                    continue
+                if toks[0] == "--list":
+                    info("built-in provider presets:")
+                    for name, p in PROVIDER_PRESETS.items():
+                        con.print(f"  [{C['accent']}]{name:12}[/{C['accent']}] [{C['dim']}]{p['base_url']}[/{C['dim']}]  ({p['note']})")
+                    continue
+                name = toks[0].lower()
+                if name not in PROVIDER_PRESETS:
+                    err(f"unknown provider: {name}")
+                    hint("use /add-provider --list to see built-in presets")
+                    hint(f"or /add-openai <base_url> <api_key> for custom endpoints")
+                    continue
+                if len(toks) < 2:
+                    warn(f"usage: /add-provider {name} <api_key> [alias]")
+                    continue
+                preset = PROVIDER_PRESETS[name]
+                api_key = toks[1]
+                alias = toks[2] if len(toks) > 2 else name
+                srv = self.registry.add(
+                    "api", 443, alias, preset["note"],
+                    provider="openai", api_key=api_key, base_url=preset["base_url"],
+                )
+                con.print(f"  [{C['dim']}]probing {srv.alias} ({preset['note']})…[/{C['dim']}]", end=" ")
                 res = probe_server(srv)
                 self.registry.save()
                 if res["ok"]:

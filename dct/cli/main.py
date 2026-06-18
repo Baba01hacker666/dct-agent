@@ -31,6 +31,7 @@ One-shot commands (non-interactive):
   python -m dct add <host> <port> [alias] [note]    register a server
   python -m dct add-openrouter <key> [alias]        register OpenRouter
   python -m dct add-openai <base_url> <key> [alias] [note]  register OpenAI-compatible (DeepSeek, Qwen, Z.ai, etc.)
+  python -m dct add-provider <name> <key> [alias]  register from built-in presets (deepseek, qwen, groq, etc.)
   python -m dct remove <alias|#>                    remove a server
   python -m dct servers                             list all servers
   python -m dct probe [alias|#]                     probe servers
@@ -92,6 +93,12 @@ Inside the shell type /help for all commands.
     pai.add_argument("key", help="API key")
     pai.add_argument("alias", nargs="?", default="")
     pai.add_argument("note", nargs="?", default="")
+
+    # add-provider (convenience)
+    pap = sub.add_parser("add-provider", help="register from built-in provider presets")
+    pap.add_argument("name", help="provider name (deepseek, qwen, groq, etc.)")
+    pap.add_argument("key", help="API key")
+    pap.add_argument("alias", nargs="?", default="")
 
     # remove
     pr = sub.add_parser("remove", help="unregister a server")
@@ -190,6 +197,30 @@ def main():
             base_url=args.base_url,
         )
         con.print(f"  [{C['dim']}]probing…[/{C['dim']}]", end=" ")
+        res = probe_server(srv)
+        registry.save()
+        if res["ok"]:
+            con.print(f"[{C['ok']}]online[/{C['ok']}]")
+            ok(f"added: {srv.alias}  ({len(srv.models)} models available)")
+        else:
+            con.print(f"[{C['err']}]offline[/{C['err']}]")
+            warn(f"added {srv.alias} but might be unreachable")
+        return
+
+    if args.cmd == "add-provider":
+        from dct.cli.shell import PROVIDER_PRESETS
+        name = args.name.lower()
+        if name not in PROVIDER_PRESETS:
+            err(f"unknown provider: {name}")
+            info("built-in presets: " + ", ".join(sorted(PROVIDER_PRESETS.keys())))
+            sys.exit(1)
+        preset = PROVIDER_PRESETS[name]
+        alias = args.alias or name
+        srv = registry.add(
+            "api", 443, alias, preset["note"],
+            provider="openai", api_key=args.key, base_url=preset["base_url"],
+        )
+        con.print(f"  [{C['dim']}]probing {name}…[/{C['dim']}]", end=" ")
         res = probe_server(srv)
         registry.save()
         if res["ok"]:
