@@ -57,13 +57,30 @@ python -m dct
 
 ### OpenAI-Compatible Providers (DeepSeek, Qwen, Z.ai, Groq, etc.)
 ```bash
-# Register any OpenAI-compatible API
+# Convenience — built-in presets (13 providers)
+python -m dct add-provider deepseek sk-xxx
+python -m dct add-provider qwen sk-xxx
+python -m dct add-provider groq sk-xxx
+python -m dct add-provider together sk-xxx
+
+# Or with full URL for any OpenAI-compatible API
 python -m dct add-openai https://api.deepseek.com sk-xxx deepseek
-python -m dct add-openai https://dashscope.aliyuncs.com/compatible-mode/v1 sk-xxx qwen
-python -m dct add-openai https://api.z.ai sk-xxx zai
 
 # Register OpenRouter
 python -m dct add-openrouter sk-or-xxx
+```
+
+### Agent Skills
+```bash
+# List all skill presets
+/skills
+
+# Load a specialized persona (sets system prompt + enables agent mode)
+/skill web-design    # Frontend — HTML, CSS, JS, responsive UIs
+/skill python        # Idiomatic typed Python 3.11+
+/skill pentest       # Penetration testing workflow
+/skill bug-hunt      # Security code review
+/skill devops        # Docker, K8s, CI/CD, cloud
 ```
 
 ### Config
@@ -82,6 +99,7 @@ python -m dct add-openrouter sk-or-xxx
 | `/servers` | List all servers with status, latency, model count |
 | `/add <host> <port> [alias] [note] [--api-key KEY] [--tls] [--no-tls-verify]` | Register + probe an Ollama server |
 | `/add-openai <base_url> <api_key> [alias] [note]` | Register an OpenAI-compatible provider |
+| `/add-provider <name> <api_key> [alias]` | Quick-add from built-in presets (deepseek, qwen, groq, etc.) — use `--list` to see all |
 | `/remove <alias\|#>` | Unregister a server |
 | `/probe` | Probe **all** servers in parallel |
 | `/probe <alias\|#>` | Detailed probe of one server (all endpoints) |
@@ -107,6 +125,8 @@ python -m dct add-openrouter sk-or-xxx
 | `/system <prompt>` | Set system prompt |
 | `/prompts` | List built-in system prompt presets |
 | `/prompt <name>` | Apply a built-in system prompt preset |
+| `/skills` | List agent skill presets (specialized personas) |
+| `/skill <name>` | Load an agent skill (sets system prompt + auto-enables agent) |
 | `/copy` | Copy transcript to clipboard (fallback prints text) |
 | `/save <file>` | Save conversation JSON |
 | `/load <file>` | Resume saved conversation |
@@ -218,6 +238,21 @@ Failover is automatic — if the active server dies mid-chat, the agent reprobes
 | **Ollama** | Native | API key (Bearer), TLS | Local or remote, streaming, model pull/delete |
 | **OpenRouter** | OpenAI-compatible | API key | 200+ models, streaming |
 | **OpenAI-compatible** | Generic | API key (Bearer) | DeepSeek, Qwen, Z.ai, Groq, any `/v1/chat/completions` endpoint |
+
+### Built-in Provider Presets
+Use `/add-provider <name> <key>` or `python -m dct add-provider <name> <key>`:
+```
+deepseek     qwen         groq         together     openai
+mistral      xai          perplexity   fireworks    hyperbolic
+cerebras     sambanova    zai
+```
+
+### Built-in Agent Skills
+Use `/skill <name>` to load a specialized persona:
+```
+web-design   react        backend      python       pentest
+devops       data         bug-hunt     cli-tool     refactor
+```
 
 ## Reliability & Resilience
 
