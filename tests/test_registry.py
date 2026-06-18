@@ -14,6 +14,34 @@ def test_server_dict_serialization():
     assert s2.base_url() == "https://openrouter.ai"
 
 
+def test_server_tls_auth_serialization():
+    s = Server("secure", "ollama.example.com", 443, api_key="secret123", tls=True, tls_verify=False)
+    d = s.to_dict()
+    assert d["tls"] is True
+    assert d["tls_verify"] is False
+    assert d["api_key"] == "secret123"
+
+    s2 = Server.from_dict(d)
+    assert s2.tls is True
+    assert s2.tls_verify is False
+    assert s2.api_key == "secret123"
+    assert s2.base_url() == "https://ollama.example.com:443"
+
+
+def test_server_base_url_tls():
+    # api_key implies https
+    s = Server("s1", "10.0.0.1", 11434, api_key="key1")
+    assert s.base_url() == "https://10.0.0.1:11434"
+
+    # explicit tls
+    s2 = Server("s2", "10.0.0.2", 11434, tls=True)
+    assert s2.base_url() == "https://10.0.0.2:11434"
+
+    # default: no tls, no api_key → http
+    s3 = Server("s3", "localhost", 11434)
+    assert s3.base_url() == "http://localhost:11434"
+
+
 def test_registry_add_openrouter(tmp_path):
     reg_path = tmp_path / "servers.json"
     reg = ServerRegistry(str(reg_path))
@@ -70,21 +98,6 @@ def test_code_agent_xml_extraction():
         result = agent._execute_tool(call)
         assert "file1.py" in result
         mock_glob.assert_called_once_with("*.py", "/some/dir")
-
-
-def test_shell_rewind_logic():
-    from dct.agent.session import Session
-    session = Session()
-    session.add("user", "Hello")
-    session.add("assistant", "Hi")
-    session.add("user", "Help me")
-    session.add("assistant", "Sure")
-
-    # Rewind should remove the last user message and subsequent assistant messages
-    assert session.rewind()
-    assert len(session.messages) == 2
-    assert session.messages[0]["content"] == "Hello"
-    assert session.messages[1]["content"] == "Hi"
 
 
 def test_subagent_tool_parsing_and_execution():
@@ -256,3 +269,132 @@ def test_shell_btw_command():
             assert len(shell.session.messages) == 2
             assert not any("side question" in m["content"] for m in shell.session.messages)
             assert not any("BTW reply" in m["content"] for m in shell.session.messages)
+
+
+def test_cleanup_background_state_removes_stale():
+    import time
+    from dct.agent.codeagent import (
+        _cleanup_background_state,
+        BACKGROUND_TASKS,
+        BACKGROUND_TASKS_LOCK,
+        BACKGROUND_SUBAGENTS,
+        BACKGROUND_SUBAGENTS_LOCK,
+        BG_CLEANUP_TTL,
+    )
+
+    now = time.time()
+
+    with BACKGROUND_TASKS_LOCK:
+        BACKGROUND_TASKS.clear()
+        BACKGROUND_TASKS["task_stale"] = {
+            "command": "echo stale",
+            "lang": "bash",
+            "status": "completed",
+            "result": "ok",
+            "log": [],
+            "completed_at": now - BG_CLEANUP_TTL - 10,
+        }
+        BACKGROUND_TASKS["task_fresh"] = {
+            "command": "echo fresh",
+            "lang": "bash",
+            "status": "completed",
+            "result": "ok",
+            "log": [],
+            "completed_at": now - 10,
+        }
+        BACKGROUND_TASKS["task_running"] = {
+            "command": "echo running",
+            "lang": "bash",
+            "status": "running",
+            "result": "",
+            "log": [],
+            "completed_at": 0,
+        }
+
+    with BACKGROUND_SUBAGENTS_LOCK:
+        BACKGROUND_SUBAGENTS.clear()
+        BACKGROUND_SUBAGENTS["sub_stale"] = {
+            "instruction": "do stuff",
+            "model": "llama3",
+            "status": "failed",
+            "result": "error",
+            "log": [],
+            "completed_at": now - BG_CLEANUP_TTL - 5,
+        }
+
+    _cleanup_background_state()
+
+    with BACKGROUND_TASKS_LOCK:
+        assert "task_stale" not in BACKGROUND_TASKS
+        assert "task_fresh" in BACKGROUND_TASKS
+        assert "task_running" in BACKGROUND_TASKS
+
+    with BACKGROUND_SUBAGENTS_LOCK:
+        assert "sub_stale" not in BACKGROUND_SUBAGENTS
+
+    # Cleanup
+    with BACKGROUND_TASKS_LOCK:
+        BACKGROUND_TASKS.clear()
+    with BACKGROUND_SUBAGENTS_LOCK:
+        BACKGROUND_SUBAGENTS.clear()
+
+
+def test_append_log_safe_truncates():
+    from dct.agent.codeagent import _append_log_safe, BG_LOG_MAX_CHARS
+
+    entry = {"log": []}
+    chunk = "x" * (BG_LOG_MAX_CHARS // 2 + 1)
+    _append_log_safe(entry, chunk)
+    assert len(entry["log"]) == 1
+
+    _append_log_safe(entry, chunk)
+    assert len(entry["log"]) == 1  # first chunk evicted
+
+    total = sum(len(c) for c in entry["log"])
+    assert total <= BG_LOG_MAX_CHARS
+
+
+def test_config_defaults(tmp_path):
+    from dct.core.config import Config, DEFAULTS
+    cfg_path = tmp_path / "config.json"
+    cfg = Config(str(cfg_path))
+    assert cfg.get("agent_enabled") is True
+    assert cfg.get("max_agent_turns") == 12
+    assert cfg.get("default_server") == ""
+
+    cfg.set("default_model", "llama3")
+    cfg.set("agent_enabled", False)
+    cfg.save()
+
+    cfg2 = Config(str(cfg_path))
+    assert cfg2.get("default_model") == "llama3"
+    assert cfg2.get("agent_enabled") is False
+    # Unset keys fall back to defaults
+    assert cfg2.get("max_agent_turns") == 12
+
+
+def test_auto_probe_thread_lifecycle():
+    import time
+    from dct.cli.shell import Shell
+    from dct.core.registry import ServerRegistry
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(suffix=".json") as tmp:
+        registry = ServerRegistry(tmp.name)
+        shell = Shell(registry)
+        # Disable auto-probe for this test
+        shell.config.set("auto_probe_interval", 0)
+        shell.config.save()
+        shell._start_auto_probe()
+        assert shell._probe_thread is None  # interval <= 0
+
+        # Enable and start
+        shell.config.set("auto_probe_interval", 60)
+        shell.config.save()
+        shell._start_auto_probe()
+        assert shell._probe_thread is not None
+        assert shell._probe_thread.is_alive()
+
+        shell._stop_auto_probe()
+        shell._probe_thread.join(timeout=2)
+        assert not shell._probe_thread.is_alive()

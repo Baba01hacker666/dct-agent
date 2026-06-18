@@ -46,6 +46,7 @@ Tool call format the model is instructed to use:
 from __future__ import annotations
 import re
 import threading
+import time
 from typing import Callable, Optional, TYPE_CHECKING
 
 from dct.tools.executor import dispatch, ExecResult
@@ -58,6 +59,7 @@ from dct.tools.files import (
     run_grep,
     run_glob,
 )
+from dct.tools.image import read_image
 from dct.tools.web import fetch_url, search_ddg
 from dct.tools.tasks import get_tracker
 from dct.skills.notebook import edit_notebook_cell
@@ -76,6 +78,43 @@ next_task_id = 1
 BACKGROUND_SUBAGENTS: dict[str, dict] = {}
 BACKGROUND_SUBAGENTS_LOCK = threading.Lock()
 next_bg_id = 1
+
+# Cleanup: remove completed/failed entries older than this (seconds)
+BG_CLEANUP_TTL = 300
+# Max chars per background log
+BG_LOG_MAX_CHARS = 10000
+
+
+def _cleanup_background_state() -> None:
+    """Remove stale completed/failed background tasks and sub-agents."""
+    now = time.time()
+    with BACKGROUND_TASKS_LOCK:
+        stale = [
+            tid
+            for tid, t in BACKGROUND_TASKS.items()
+            if t["status"] in ("completed", "failed")
+            and now - t.get("completed_at", 0) > BG_CLEANUP_TTL
+        ]
+        for tid in stale:
+            del BACKGROUND_TASKS[tid]
+    with BACKGROUND_SUBAGENTS_LOCK:
+        stale = [
+            sid
+            for sid, s in BACKGROUND_SUBAGENTS.items()
+            if s["status"] in ("completed", "failed")
+            and now - s.get("completed_at", 0) > BG_CLEANUP_TTL
+        ]
+        for sid in stale:
+            del BACKGROUND_SUBAGENTS[sid]
+
+
+def _append_log_safe(entry: dict, text: str) -> None:
+    """Append to a background entry log, capping total length."""
+    entry["log"].append(text)
+    total = sum(len(c) for c in entry["log"])
+    while total > BG_LOG_MAX_CHARS and len(entry["log"]) > 1:
+        removed = entry["log"].pop(0)
+        total -= len(removed)
 
 
 def get_system_prompt(session, user_system_prompt: str = "") -> str:
@@ -102,6 +141,7 @@ AVAILABLE TOOLS:
   <tool>run_bash</tool><code>...</code><background>true|false</background>    — execute bash script (background optional)
   <tool>run_shell</tool><code>...</code><background>true|false</background>   — run a shell command (background optional)
   <tool>read_file</tool><path>...</path><start_line>...</start_line><end_line>...</end_line><tail>...</tail> — read a file (lines are optional)
+  <tool>read_image</tool><path>...</path>        — read an image file, returns base64 data URL for vision models
   <tool>write_file</tool><path>...</path><code>...</code>  — write/create a file
   <tool>patch_file</tool><path>...</path><old>...</old><new>...</new>  — find+replace in file
   <tool>list_dir</tool><path>...</path>          — list directory
@@ -269,6 +309,7 @@ class CodeAgent:
             sub_session.add("user", instruction)
 
             if is_bg:
+                _cleanup_background_state()
                 global next_bg_id
                 with BACKGROUND_SUBAGENTS_LOCK:
                     bg_id = f"subagent_{next_bg_id}"
@@ -278,19 +319,20 @@ class CodeAgent:
                         "model": sub_model,
                         "status": "running",
                         "result": "",
-                        "log": []
+                        "log": [],
+                        "completed_at": 0,
                     }
 
                 bg_sub_data = BACKGROUND_SUBAGENTS[bg_id]
 
                 def bg_on_text(chunk: str):
-                    bg_sub_data["log"].append(chunk)
+                    _append_log_safe(bg_sub_data, chunk)
 
                 def bg_on_tool(sub_tool_name: str, sub_call_str: str):
-                    bg_sub_data["log"].append(f"\n⚡ tool: {sub_tool_name}\nCall: {sub_call_str}\n")
+                    _append_log_safe(bg_sub_data, f"\n⚡ tool: {sub_tool_name}\nCall: {sub_call_str}\n")
 
                 def bg_on_result(sub_tool_name: str, sub_result: str):
-                    bg_sub_data["log"].append(f"\nresult: {sub_tool_name}\n{sub_result}\n")
+                    _append_log_safe(bg_sub_data, f"\nresult: {sub_tool_name}\n{sub_result}\n")
 
                 sub_agent = CodeAgent(
                     server=self.server,
@@ -309,10 +351,12 @@ class CodeAgent:
                         with BACKGROUND_SUBAGENTS_LOCK:
                             BACKGROUND_SUBAGENTS[b_id]["status"] = "completed"
                             BACKGROUND_SUBAGENTS[b_id]["result"] = res
+                            BACKGROUND_SUBAGENTS[b_id]["completed_at"] = time.time()
                     except Exception as e:
                         with BACKGROUND_SUBAGENTS_LOCK:
                             BACKGROUND_SUBAGENTS[b_id]["status"] = "failed"
                             BACKGROUND_SUBAGENTS[b_id]["result"] = str(e)
+                            BACKGROUND_SUBAGENTS[b_id]["completed_at"] = time.time()
 
                 sub_thread = threading.Thread(target=run_subagent_bg, args=(bg_id, sub_agent, sub_session.as_messages()), daemon=True)
                 sub_thread.start()
@@ -369,6 +413,7 @@ class CodeAgent:
                     return f"[TOOL ERROR] Sub-agent execution failed: {str(e)}"
 
         elif tool == "bg_status":
+            _cleanup_background_state()
             tid = call.get("id")
             if tid:
                 with BACKGROUND_TASKS_LOCK:
@@ -410,6 +455,7 @@ class CodeAgent:
 
             is_bg = (call.get("background") or "").strip().lower() == "true"
             if is_bg:
+                _cleanup_background_state()
                 global next_task_id
                 with BACKGROUND_TASKS_LOCK:
                     task_id = f"task_{next_task_id}"
@@ -419,7 +465,8 @@ class CodeAgent:
                         "lang": lang,
                         "status": "running",
                         "result": "",
-                        "log": []
+                        "log": [],
+                        "completed_at": 0,
                     }
 
                 def run_cmd_bg(t_id, lang_name, cmd_code):
@@ -430,11 +477,13 @@ class CodeAgent:
                         with BACKGROUND_TASKS_LOCK:
                             BACKGROUND_TASKS[t_id]["status"] = status
                             BACKGROUND_TASKS[t_id]["result"] = out
+                            BACKGROUND_TASKS[t_id]["completed_at"] = time.time()
                             BACKGROUND_TASKS[t_id]["log"].append(f"[Exit code: {res.returncode}]")
                     except Exception as e:
                         with BACKGROUND_TASKS_LOCK:
                             BACKGROUND_TASKS[t_id]["status"] = "failed"
                             BACKGROUND_TASKS[t_id]["result"] = str(e)
+                            BACKGROUND_TASKS[t_id]["completed_at"] = time.time()
 
                 cmd_thread = threading.Thread(target=run_cmd_bg, args=(task_id, lang, code), daemon=True)
                 cmd_thread.start()
@@ -444,6 +493,15 @@ class CodeAgent:
             out = result.summary()
             status = "✓" if result.ok else "✗"
             return f"[{status} {lang} exit={result.returncode} {result.duration_ms}ms]\n{out}"
+
+        elif tool == "read_image":
+            path = call.get("path") or ""
+            if not path:
+                return "[TOOL ERROR] <path> is required for read_image tool."
+            r = read_image(path)
+            if not r.ok:
+                return f"[TOOL ERROR] {r.message}"
+            return f"[image: {r.path}  {r.mime_type}  data_url length: {len(r.data_url)} chars]\n{r.data_url}"
 
         elif tool == "read_file":
             path = call.get("path") or ""
@@ -540,8 +598,8 @@ class CodeAgent:
             return f"[grep: {pattern!r} in {r.path}]\n{r.content}"
 
         elif tool == "glob":
-            pattern = _extract_tag(call["raw_text"], "pattern")
-            path = _extract_tag(call["raw_text"], "path") or "."
+            pattern = call.get("pattern")
+            path = call.get("path") or "."
             if not pattern:
                 return "[TOOL ERROR] <pattern> is required for glob tool."
             r = run_glob(pattern, path)

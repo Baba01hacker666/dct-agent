@@ -76,6 +76,9 @@ Inside the shell type /help for all commands.
     pa.add_argument("port", type=int)
     pa.add_argument("alias", nargs="?", default="")
     pa.add_argument("note", nargs="?", default="")
+    pa.add_argument("--api-key", default="", help="API key for auth (Bearer)")
+    pa.add_argument("--tls", action="store_true", help="use HTTPS")
+    pa.add_argument("--no-tls-verify", action="store_true", help="skip TLS cert verification")
 
     # add-openrouter
     po = sub.add_parser("add-openrouter", help="register OpenRouter")
@@ -125,7 +128,15 @@ def main():
 
     # ── Non-interactive one-shot commands ────────────────────────────────────
     if args.cmd == "add":
-        srv = registry.add(args.host, args.port, args.alias, args.note)
+        srv = registry.add(
+            args.host,
+            args.port,
+            args.alias,
+            args.note,
+            api_key=args.api_key,
+            tls=args.tls,
+            tls_verify=not args.no_tls_verify,
+        )
         con.print(f"  [{C['dim']}]probing…[/{C['dim']}]", end=" ")
         res = probe_server(srv)
         registry.save()

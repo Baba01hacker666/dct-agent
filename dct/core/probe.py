@@ -30,23 +30,26 @@ def probe_server(srv: "Server") -> dict:
     Returns: {"ok": bool, "endpoint": str, "data": dict}
     """
     base = srv.base_url()
-    _t_start = time.time()
+    headers = {}
+    if srv.api_key:
+        headers["Authorization"] = f"Bearer {srv.api_key}"
+    req_kwargs = {"timeout": PROBE_TIMEOUT, "headers": headers}
+    if not srv.tls_verify:
+        req_kwargs["verify"] = False
 
     if srv.provider == "openrouter":
         try:
             t0 = time.time()
-            r = requests.get(f"{base}/api/v1/models", timeout=PROBE_TIMEOUT)
+            r = requests.get(f"{base}/api/v1/models", **req_kwargs)
             ms = int((time.time() - t0) * 1000)
             if r.status_code == 200:
                 data = r.json()
                 srv.latency_ms = ms
                 srv.status = "online"
-                # To prevent huge list, maybe just keep top models or empty if we don't want to sync all OpenRouter models.
-                # Actually, letting user provide the model name is better, but we will store top 100 or empty.
                 models_data = data.get("data", [])
                 srv.models = [
                     m.get("id") for m in models_data
-                ]  # Store all for auto-complete
+                ]
                 srv.version = "OpenRouter v1"
                 return {
                     "ok": True,
@@ -66,7 +69,7 @@ def probe_server(srv: "Server") -> dict:
             tried_tags = True
         try:
             t0 = time.time()
-            r = requests.get(f"{base}{path}", timeout=PROBE_TIMEOUT)
+            r = requests.get(f"{base}{path}", **req_kwargs)
             ms = int((time.time() - t0) * 1000)
             if r.status_code == 200:
                 try:
@@ -77,15 +80,12 @@ def probe_server(srv: "Server") -> dict:
                 srv.latency_ms = ms
                 srv.status = "online"
 
-                # Harvest models from /api/tags
                 if path == "/api/tags" and "models" in data:
                     srv.models = [m["name"] for m in data["models"]]
                 else:
-                    # Fetch tags separately if we hit a different endpoint
-                    # first and haven't tried/failed on tags yet
                     if not tried_tags:
                         try:
-                            tr = requests.get(f"{base}/api/tags", timeout=PROBE_TIMEOUT)
+                            tr = requests.get(f"{base}/api/tags", **req_kwargs)
                             if tr.ok:
                                 srv.models = [
                                     m["name"] for m in tr.json().get("models", [])
@@ -93,9 +93,8 @@ def probe_server(srv: "Server") -> dict:
                         except Exception:
                             pass
 
-                # Harvest version
                 try:
-                    vr = requests.get(f"{base}/api/version", timeout=2)
+                    vr = requests.get(f"{base}/api/version", **req_kwargs)
                     if vr.ok:
                         srv.version = vr.json().get("version", "")
                 except Exception:
@@ -147,11 +146,17 @@ def probe_endpoints_detail(srv: "Server") -> list[dict]:
     Used for the detailed /probe <alias> display.
     """
     base = srv.base_url()
+    headers = {}
+    if srv.api_key:
+        headers["Authorization"] = f"Bearer {srv.api_key}"
+    req_kwargs = {"timeout": PROBE_TIMEOUT, "headers": headers}
+    if not srv.tls_verify:
+        req_kwargs["verify"] = False
     rows = []
     for path in PROBE_ORDER:
         try:
             t0 = time.time()
-            r = requests.get(f"{base}{path}", timeout=PROBE_TIMEOUT)
+            r = requests.get(f"{base}{path}", **req_kwargs)
             ms = int((time.time() - t0) * 1000)
             try:
                 snippet = str(r.json())[:72] + "…"

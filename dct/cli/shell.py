@@ -76,7 +76,11 @@ class Shell:
         self.session = Session()
         self.active: Optional[Server] = None
         self.model: str = ""
-        self.agent_mode: bool = True
+        from dct.core.config import Config
+        self.config = Config()
+        self.agent_mode: bool = self.config.get("agent_enabled", True)
+        self._probe_stop = threading.Event()
+        self._probe_thread: Optional[threading.Thread] = None
 
     # ── Status bar ──────────────────────────────────────────────────────────
     def _status_bar(self) -> str:
@@ -98,6 +102,9 @@ class Shell:
 
     # ── Init: pick server + model ────────────────────────────────────────────
     def init(self, init_alias: str = "", init_model: str = ""):
+        # CLI args override config defaults
+        init_alias = init_alias or self.config.get("default_server", "")
+        init_model = init_model or self.config.get("default_model", "")
         route = self.registry.route(init_model, init_alias)
         if route:
             self.active, self.model = route
@@ -128,7 +135,36 @@ class Shell:
             hint("  /add localhost 11434 local")
             hint("  /add 192.168.1.10 11434 home")
 
-    # ── Main REPL ────────────────────────────────────────────────────────────
+        self._start_auto_probe()
+
+    # ── Auto-probe ───────────────────────────────────────────────────────────
+
+    def _start_auto_probe(self):
+        interval = self.config.get("auto_probe_interval", 60)
+        if interval <= 0:
+            return
+        self._probe_stop.clear()
+        self._probe_thread = threading.Thread(
+            target=self._auto_probe_loop, args=(interval,), daemon=True
+        )
+        self._probe_thread.start()
+
+    def _auto_probe_loop(self, interval: int):
+        from dct.core.probe import probe_all
+        while not self._probe_stop.wait(interval):
+            try:
+                results = probe_all(self.registry)
+                changed = sum(
+                    1 for r in results.values()
+                    if r.get("ok") and r.get("endpoint")
+                )
+                if changed > 0:
+                    pass  # silent background refresh
+            except Exception:
+                pass
+
+    def _stop_auto_probe(self):
+        self._probe_stop.set()
 
     def run(self):
         history_file = os.path.join(
@@ -156,6 +192,7 @@ class Shell:
 
             except (KeyboardInterrupt, EOFError):
                 con.print(f"\n  [{C['dim']}]goodbye[/{C['dim']}]")
+                self._stop_auto_probe()
                 self.registry.save()
                 break
 
@@ -168,6 +205,7 @@ class Shell:
             # ── exit ─────────────────────────────────────────────────────
             if lo in ("/exit", "/quit", "/q"):
                 con.print(f"  [{C['dim']}]goodbye[/{C['dim']}]")
+                self._stop_auto_probe()
                 self.registry.save()
                 break
 
@@ -302,8 +340,29 @@ class Shell:
             # ── add ──────────────────────────────────────────────────────
             elif lo.startswith("/add "):
                 toks = parts[1:]
+                # Parse flags
+                api_key = ""
+                use_tls = False
+                no_tls_verify = False
+                positional = []
+                i = 0
+                while i < len(toks):
+                    if toks[i] == "--api-key" and i + 1 < len(toks):
+                        api_key = toks[i + 1]
+                        i += 2
+                    elif toks[i] == "--tls":
+                        use_tls = True
+                        i += 1
+                    elif toks[i] == "--no-tls-verify":
+                        no_tls_verify = True
+                        i += 1
+                    else:
+                        positional.append(toks[i])
+                        i += 1
+                toks = positional
+
                 if len(toks) < 2:
-                    warn("usage: /add <host> <port> [alias] [note]")
+                    warn("usage: /add <host> <port> [alias] [note] [--api-key KEY] [--tls] [--no-tls-verify]")
                     continue
                 host = toks[0]
                 try:
@@ -313,7 +372,12 @@ class Shell:
                     continue
                 alias = toks[2] if len(toks) > 2 else ""
                 note = " ".join(toks[3:]) if len(toks) > 3 else ""
-                srv = self.registry.add(host, port, alias, note)
+                srv = self.registry.add(
+                    host, port, alias, note,
+                    api_key=api_key,
+                    tls=use_tls,
+                    tls_verify=not no_tls_verify,
+                )
                 con.print(f"  [{C['dim']}]probing {srv.alias}…[/{C['dim']}]", end=" ")
                 res = probe_server(srv)
                 self.registry.save()
@@ -566,6 +630,38 @@ class Shell:
                 state = "ON" if self.agent_mode else "OFF"
                 info(f"agent mode: {state}")
 
+            # ── config ──────────────────────────────────────────────────
+            elif lo == "/config":
+                info("config (~/.config/dct/config.json):")
+                for k in ["default_server", "default_model", "agent_enabled",
+                          "max_agent_turns", "history_limit", "no_probe_on_start",
+                          "auto_probe_interval"]:
+                    v = self.config.get(k)
+                    con.print(f"  [{C['dim']}]{k}[/{C['dim']}] = [{C['fg']}]{v!r}[/{C['fg']}]")
+
+            elif lo.startswith("/config set "):
+                rest = raw[12:].strip()
+                parts_cfg = rest.split(None, 1)
+                if len(parts_cfg) < 2:
+                    warn("usage: /config set <key> <value>")
+                    continue
+                key, raw_val = parts_cfg[0], parts_cfg[1]
+                # Coerce bool/int
+                if raw_val.lower() in ("true", "yes", "on"):
+                    val = True
+                elif raw_val.lower() in ("false", "no", "off"):
+                    val = False
+                elif raw_val.isdigit():
+                    val = int(raw_val)
+                else:
+                    val = raw_val
+                try:
+                    self.config.set(key, val)
+                    self.config.save()
+                    ok(f"config {key} = {val!r}")
+                except Exception as e:
+                    err(f"failed to set config: {e}")
+
             # ── goal mode ────────────────────────────────────────────────
             elif lo.startswith("/goal ") or lo == "/goal":
                 goal_text = raw[5:].strip()
@@ -584,6 +680,34 @@ class Shell:
                 code = raw.split(None, 2)[2] if len(parts) > 2 else ""
                 result = dispatch(lang, code)
                 show_exec_result(result)
+
+            elif lo.startswith("/vision ") or lo.startswith("/image "):
+                rest = raw.split(None, 1)
+                if len(rest) < 2:
+                    warn("usage: /vision <image_path> <prompt>")
+                    continue
+                img_path = rest[1].split(None, 1)[0]
+                prompt = rest[1][len(img_path):].strip()
+                if not prompt:
+                    warn("usage: /vision <image_path> <prompt>")
+                    continue
+                from dct.tools.image import read_image
+                img = read_image(img_path)
+                if not img.ok:
+                    err(img.message)
+                    continue
+                if not self.active:
+                    err("no active server — /use <alias> first")
+                    continue
+                con.print(f"  [{C['dim']}]image: {img.path} ({img.mime_type})[/{C['dim']}]")
+                con.print(f"  [{C['dim']}]asking {self.model}…[/{C['dim']}]")
+                msgs = [{"role": "user", "content": prompt}]
+                try:
+                    for chunk in chat_stream(self.active, self.model, msgs, images=[img.data_url]):
+                        con.print(f"[{C['fg']}]{chunk}[/{C['fg']}]", end="")
+                    con.print()
+                except Exception as e:
+                    err(str(e))
 
             # ── direct read ──────────────────────────────────────────────
             elif lo.startswith("/read "):

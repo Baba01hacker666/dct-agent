@@ -13,17 +13,17 @@ if TYPE_CHECKING:
     from dct.core.registry import Server
 
 
-def chat_stream(srv: "Server", model: str, messages: list[dict]) -> Iterator[str]:
+def chat_stream(srv: "Server", model: str, messages: list[dict], images: list[str] | None = None) -> Iterator[str]:
     if srv.provider == "openrouter":
         yield from openrouter.chat_stream(srv, model, messages)
     else:
-        yield from ollama.chat_stream(srv, model, messages)
+        yield from ollama.chat_stream(srv, model, messages, images)
 
 
-def chat_once(srv: "Server", model: str, messages: list[dict]) -> str:
+def chat_once(srv: "Server", model: str, messages: list[dict], images: list[str] | None = None) -> str:
     if srv.provider == "openrouter":
         return openrouter.chat_once(srv, model, messages)
-    return ollama.chat_once(srv, model, messages)
+    return ollama.chat_once(srv, model, messages, images)
 
 
 def list_models(srv: "Server") -> list[dict]:

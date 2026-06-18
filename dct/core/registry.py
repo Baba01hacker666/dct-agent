@@ -27,6 +27,8 @@ class Server:
         "latency_ms",
         "provider",
         "api_key",
+        "tls",
+        "tls_verify",
     )
 
     def __init__(
@@ -41,6 +43,8 @@ class Server:
         latency_ms: int = -1,
         provider: str = "ollama",
         api_key: str = "",
+        tls: bool = False,
+        tls_verify: bool = True,
     ):
         self.alias = alias
         self.host = host
@@ -52,11 +56,14 @@ class Server:
         self.latency_ms = latency_ms
         self.provider = provider
         self.api_key = api_key
+        self.tls = tls
+        self.tls_verify = tls_verify
 
     def base_url(self) -> str:
         if self.provider == "openrouter":
             return os.getenv("OPENROUTER_API_BASE") or "https://openrouter.ai"
-        return f"http://{self.host}:{self.port}"
+        scheme = "https" if (self.tls or self.api_key) else "http"
+        return f"{scheme}://{self.host}:{self.port}"
 
     def to_dict(self) -> dict:
         return {
@@ -70,6 +77,8 @@ class Server:
             "latency_ms": self.latency_ms,
             "provider": self.provider,
             "api_key": self.api_key,
+            "tls": self.tls,
+            "tls_verify": self.tls_verify,
         }
 
     @classmethod
@@ -85,6 +94,8 @@ class Server:
             latency_ms=d.get("latency_ms", -1),
             provider=d.get("provider", "ollama"),
             api_key=d.get("api_key", ""),
+            tls=d.get("tls", False),
+            tls_verify=d.get("tls_verify", True),
         )
 
     def has_model(self, model: str) -> bool:
@@ -139,6 +150,8 @@ class ServerRegistry:
         note: str = "",
         provider: str = "ollama",
         api_key: str = "",
+        tls: bool = False,
+        tls_verify: bool = True,
     ) -> Server:
         alias = alias or f"{host}:{port}"
         # Deduplicate by host+port
@@ -147,6 +160,8 @@ class ServerRegistry:
                 s.alias = alias
                 s.note = note or s.note
                 s.api_key = api_key or s.api_key
+                s.tls = tls
+                s.tls_verify = tls_verify
                 self.save()
                 return s
         srv = Server(
@@ -156,6 +171,8 @@ class ServerRegistry:
             note=note,
             provider=provider,
             api_key=api_key,
+            tls=tls,
+            tls_verify=tls_verify,
         )
         with self._lock:
             self.servers.append(srv)
