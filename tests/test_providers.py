@@ -23,7 +23,7 @@ def test_ollama_auth_headers():
 
 
 def test_read_image():
-    import tempfile
+    import tempfile, os
     from dct.tools.image import read_image
 
     # Non-existent file
@@ -32,12 +32,16 @@ def test_read_image():
     assert "not found" in r.message
 
     # Unsupported extension
-    with tempfile.NamedTemporaryFile(suffix=".txt") as f:
+    with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as f:
         f.write(b"hello")
         f.flush()
-        r = read_image(f.name)
+        tmp_path = f.name
+    try:
+        r = read_image(tmp_path)
         assert not r.ok
         assert "unsupported" in r.message
+    finally:
+        os.unlink(tmp_path)
 
     # Valid PNG (1x1 pixel)
     import struct, zlib
@@ -55,13 +59,17 @@ def test_read_image():
                 + chunk(b"IDAT", compressed)
                 + chunk(b"IEND", b""))
 
-    with tempfile.NamedTemporaryFile(suffix=".png") as f:
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
         f.write(make_png())
         f.flush()
-        r = read_image(f.name)
+        png_path = f.name
+    try:
+        r = read_image(png_path)
         assert r.ok
         assert r.data_url.startswith("data:image/png;base64,")
         assert r.mime_type == "image/png"
+    finally:
+        os.unlink(png_path)
 
 
 def test_ollama_chat_with_images():

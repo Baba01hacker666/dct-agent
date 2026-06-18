@@ -145,7 +145,7 @@ def test_shell_default_agent_mode():
 
 def test_background_subagent_execution():
     import time
-    from dct.agent.codeagent import _parse_tool_call, CodeAgent, BACKGROUND_SUBAGENTS
+    from dct.agent.codeagent import _parse_tool_call, CodeAgent, BACKGROUND_SUBAGENTS, BACKGROUND_SUBAGENTS_LOCK
     from dct.agent.session import Session
     from dct.core.registry import Server
 
@@ -180,10 +180,14 @@ def test_background_subagent_execution():
         
     assert BACKGROUND_SUBAGENTS[bg_id]["status"] == "completed"
 
+    # Cleanup
+    with BACKGROUND_SUBAGENTS_LOCK:
+        BACKGROUND_SUBAGENTS.pop(bg_id, None)
+
 
 def test_background_task_execution():
     import time
-    from dct.agent.codeagent import _parse_tool_call, CodeAgent, BACKGROUND_TASKS
+    from dct.agent.codeagent import _parse_tool_call, CodeAgent, BACKGROUND_TASKS, BACKGROUND_TASKS_LOCK
     from dct.agent.session import Session
     from dct.core.registry import Server
 
@@ -204,16 +208,27 @@ def test_background_task_execution():
     assert "started in background" in result
     assert len(BACKGROUND_TASKS) > 0
     task_id = list(BACKGROUND_TASKS.keys())[-1]
-    
+
+    # Wait for task to complete
+    for _ in range(30):
+        with BACKGROUND_TASKS_LOCK:
+            if BACKGROUND_TASKS[task_id]["status"] in ("completed", "failed"):
+                break
+        time.sleep(0.1)
+
     # Check status tool
     status_call = {"tool": "bg_status"}
     status_res = agent._execute_tool(status_call)
     assert task_id in status_res
-    
+
     # Check status details tool
     status_call_detail = {"tool": "bg_status", "id": task_id}
     status_detail_res = agent._execute_tool(status_call_detail)
     assert "echo 'bg task'" in status_detail_res
+
+    # Cleanup
+    with BACKGROUND_TASKS_LOCK:
+        BACKGROUND_TASKS.pop(task_id, None)
 
 
 def test_shell_goal_mode():
