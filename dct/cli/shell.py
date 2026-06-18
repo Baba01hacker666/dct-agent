@@ -27,6 +27,7 @@ from dct.core.theme import (
     section,
     ts,
     server_tag,
+    get_funny_thinking_msg,
 )
 from dct.core.registry import ServerRegistry, Server
 from dct.core.probe import probe_server, probe_all, probe_endpoints_detail
@@ -71,19 +72,58 @@ PROMPT_PRESETS: dict[str, str] = {
 
 # Built-in OpenAI-compatible provider presets — just /add-provider <name> <key>
 PROVIDER_PRESETS: dict[str, dict] = {
-    "deepseek":     {"base_url": "https://api.deepseek.com",                    "note": "DeepSeek"},
-    "qwen":         {"base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "note": "Alibaba Qwen (DashScope)"},
-    "zai":          {"base_url": "https://api.z.ai",                            "note": "Z.ai"},
-    "groq":         {"base_url": "https://api.groq.com/openai/v1",              "note": "Groq"},
-    "together":     {"base_url": "https://api.together.xyz/v1",                 "note": "Together AI"},
-    "openai":       {"base_url": "https://api.openai.com/v1",                   "note": "OpenAI"},
-    "mistral":      {"base_url": "https://api.mistral.ai/v1",                   "note": "Mistral AI"},
-    "xai":          {"base_url": "https://api.x.ai/v1",                         "note": "xAI Grok"},
-    "perplexity":   {"base_url": "https://api.perplexity.ai",                   "note": "Perplexity"},
-    "fireworks":    {"base_url": "https://api.fireworks.ai/inference/v1",       "note": "Fireworks AI"},
-    "hyperbolic":   {"base_url": "https://api.hyperbolic.xyz/v1",               "note": "Hyperbolic"},
-    "cerebras":     {"base_url": "https://api.cerebras.ai/v1",                  "note": "Cerebras"},
-    "sambanova":    {"base_url": "https://api.sambanova.ai/v1",                 "note": "SambaNova"},
+    "deepseek": {
+        "base_url": "https://api.deepseek.com",
+        "note": "DeepSeek",
+    },
+    "qwen": {
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "note": "Alibaba Qwen (DashScope)",
+    },
+    "zai": {
+        "base_url": "https://api.z.ai",
+        "note": "Z.ai",
+    },
+    "groq": {
+        "base_url": "https://api.groq.com/openai/v1",
+        "note": "Groq",
+    },
+    "together": {
+        "base_url": "https://api.together.xyz/v1",
+        "note": "Together AI",
+    },
+    "openai": {
+        "base_url": "https://api.openai.com/v1",
+        "note": "OpenAI",
+    },
+    "mistral": {
+        "base_url": "https://api.mistral.ai/v1",
+        "note": "Mistral AI",
+    },
+    "xai": {
+        "base_url": "https://api.x.ai/v1",
+        "note": "xAI Grok",
+    },
+    "perplexity": {
+        "base_url": "https://api.perplexity.ai",
+        "note": "Perplexity",
+    },
+    "fireworks": {
+        "base_url": "https://api.fireworks.ai/inference/v1",
+        "note": "Fireworks AI",
+    },
+    "hyperbolic": {
+        "base_url": "https://api.hyperbolic.xyz/v1",
+        "note": "Hyperbolic",
+    },
+    "cerebras": {
+        "base_url": "https://api.cerebras.ai/v1",
+        "note": "Cerebras",
+    },
+    "sambanova": {
+        "base_url": "https://api.sambanova.ai/v1",
+        "note": "SambaNova",
+    },
 }
 
 # Agent skill presets — /skill <name> to load a specialized persona
@@ -461,7 +501,9 @@ class Shell:
         for tid in sorted(tasks.keys(), key=int):
             t = tasks[tid]
             deps_str = f" ← {', '.join(t['deps'])}" if t['deps'] else ""
-            acc = C["accent"]; fg = C["fg"]; dim = C["dim"]
+            acc = C["accent"]
+            fg = C["fg"]
+            dim = C["dim"]
             con.print(f"  [{acc}]{tid}.[/{acc}] [{fg}]{t['desc']}[/{fg}][{dim}]{deps_str}[/{dim}]")
 
         # ── Phase 3: Execute in waves ───────────────────────────────────
@@ -812,7 +854,7 @@ class Shell:
                 if name not in PROVIDER_PRESETS:
                     err(f"unknown provider: {name}")
                     hint("use /add-provider --list to see built-in presets")
-                    hint(f"or /add-openai <base_url> <api_key> for custom endpoints")
+                    hint("or /add-openai <base_url> <api_key> for custom endpoints")
                     continue
                 if len(toks) < 2:
                     warn(f"usage: /add-provider {name} <api_key> [alias]")
@@ -1178,8 +1220,10 @@ class Shell:
                 self.config.set("squads", squads)
                 self.config.save()
                 extras = []
-                if provider: extras.append(f"provider={provider}")
-                if skill: extras.append(f"skill={skill}")
+                if provider:
+                    extras.append(f"provider={provider}")
+                if skill:
+                    extras.append(f"skill={skill}")
                 extra_str = f" ({', '.join(extras)})" if extras else ""
                 ok(f"added to {squad_name}: {role} → {model}{extra_str}")
 
@@ -1210,8 +1254,10 @@ class Shell:
                 section(f"squad: {name}")
                 for m in sq.get("members", []):
                     extras = []
-                    if m.get("provider"): extras.append(f"provider={m['provider']}")
-                    if m.get("skill"): extras.append(f"skill={m['skill']}")
+                    if m.get("provider"):
+                        extras.append(f"provider={m['provider']}")
+                    if m.get("skill"):
+                        extras.append(f"skill={m['skill']}")
                     extra_str = f" ({', '.join(extras)})" if extras else ""
                     con.print(f"  [{C['accent']}]{m['role']:16}[/{C['accent']}] [{C['fg']}]{m['model']}[/{C['fg']}]{extra_str}")
                 con.print()
@@ -1512,12 +1558,19 @@ class Shell:
         full = ""
 
         while True:
+            status = con.status(f"[{C['dim']}]{get_funny_thinking_msg()}[/{C['dim']}]", spinner="dots")
+            status.start()
+            first_chunk = True
             try:
                 for chunk in chat_stream(self.active, self.model, messages):
+                    if first_chunk:
+                        status.stop()
+                        first_chunk = False
                     con.print(f"[{C['fg']}]{chunk}[/{C['fg']}]", end="")
                     full += chunk
                 break  # Success!
             except Exception as e:
+                status.stop()
                 import requests
 
                 if isinstance(e, requests.exceptions.RequestException):
@@ -1541,8 +1594,11 @@ class Shell:
                     con.print(f"\n  [{C['err']}]{str(e)}[/{C['err']}]")
                     break
             except KeyboardInterrupt:
+                status.stop()
                 con.print(f"\n  [{C['dim']}]cancelled[/{C['dim']}]")
                 break
+            finally:
+                status.stop()
 
         con.print()
         if full:
@@ -1724,12 +1780,19 @@ class Shell:
 
         full = ""
         while True:
+            status = con.status(f"[{C['dim']}]{get_funny_thinking_msg()}[/{C['dim']}]", spinner="dots")
+            status.start()
+            first_chunk = True
             try:
                 for chunk in chat_stream(self.active, self.model, messages):
+                    if first_chunk:
+                        status.stop()
+                        first_chunk = False
                     con.print(f"[{C['fg']}]{chunk}[/{C['fg']}]", end="")
                     full += chunk
                 break  # Success!
             except Exception as e:
+                status.stop()
                 import requests
                 if isinstance(e, requests.exceptions.RequestException):
                     warn(f"\nConnection to {self.active.alias} lost mid-stream.")
@@ -1752,8 +1815,11 @@ class Shell:
                     con.print(f"\n  [{C['err']}]{str(e)}[/{C['err']}]")
                     break
             except KeyboardInterrupt:
+                status.stop()
                 con.print(f"\n  [{C['dim']}]cancelled[/{C['dim']}]")
                 break
+            finally:
+                status.stop()
         con.print()
 
     # ── Broadcast ────────────────────────────────────────────────────────────

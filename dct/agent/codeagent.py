@@ -92,7 +92,7 @@ def _cleanup_background_state() -> None:
         stale = [
             tid
             for tid, t in BACKGROUND_TASKS.items()
-            if t["status"] in ("completed", "failed")
+            if t["status"] in ("completed", "failed", "killed")
             and now - t.get("completed_at", 0) > BG_CLEANUP_TTL
         ]
         for tid in stale:
@@ -158,6 +158,8 @@ AVAILABLE TOOLS:
   <tool>get_cwd</tool>                           — Get current working directory
   <tool>run_subagent</tool><instruction>...</instruction><model>...</model><system_prompt>...</system_prompt><background>true|false</background> — spawn a sub-agent to perform a sub-task (background, model, and system_prompt are optional)
   <tool>bg_status</tool><id>...</id>             — check status and logs of background tasks/sub-agents (id optional)
+  <tool>bg_kill</tool><id>...</id>               — kill a running background task
+  <tool>bg_send_input</tool><id>...</id><input>...</input> — send input (stdin) to a running background task
   <tool>enter_plan_mode</tool>                   — Enter PLAN mode to explore and write a plan before coding
   <tool>exit_plan_mode</tool>                    — Exit PLAN mode once a plan is approved and you are ready to code
 
@@ -249,6 +251,7 @@ def _parse_tool_call(text: str) -> Optional[dict]:
         "model": _extract_tag(text, "model"),
         "background": _extract_tag(text, "background"),
         "id": _extract_tag(text, "id"),
+        "input": _extract_tag(text, "input"),
     }
 
 
@@ -442,6 +445,68 @@ class CodeAgent:
                 return "No active or completed background tasks or sub-agents."
             return "\n".join(lines)
 
+        elif tool == "bg_kill":
+            tid = call.get("id")
+            if not tid:
+                return "[TOOL ERROR] <id> is required for bg_kill."
+
+            with BACKGROUND_TASKS_LOCK:
+                if tid in BACKGROUND_TASKS:
+                    bg_task = BACKGROUND_TASKS[tid]
+                    if bg_task["status"] != "running":
+                        return f"[TOOL ERROR] Task {tid} is not running (status: {bg_task['status']})."
+
+                    proc = bg_task.get("proc")
+                    if proc:
+                        try:
+                            import subprocess
+                            proc.terminate()
+                            try:
+                                proc.wait(timeout=1)
+                            except subprocess.TimeoutExpired:
+                                proc.kill()
+                        except Exception:
+                            pass
+
+                    bg_task["status"] = "killed"
+                    bg_task["result"] = "[Killed by user/agent]"
+                    bg_task["completed_at"] = time.time()
+                    bg_task["log"].append("[Process terminated by bg_kill]\n")
+                    return f"[Success] Terminated background task {tid}."
+
+            return f"[TOOL ERROR] Background task with ID {tid} not found."
+
+        elif tool == "bg_send_input":
+            tid = call.get("id")
+            input_text = call.get("input")
+            if not tid:
+                return "[TOOL ERROR] <id> is required for bg_send_input."
+            if input_text is None:
+                return "[TOOL ERROR] <input> is required for bg_send_input."
+
+            if not input_text.endswith("\n"):
+                input_text += "\n"
+
+            with BACKGROUND_TASKS_LOCK:
+                if tid in BACKGROUND_TASKS:
+                    bg_task = BACKGROUND_TASKS[tid]
+                    if bg_task["status"] != "running":
+                        return f"[TOOL ERROR] Task {tid} is not running (status: {bg_task['status']})."
+
+                    proc = bg_task.get("proc")
+                    if not proc or not proc.stdin:
+                        return f"[TOOL ERROR] Task {tid} has no active input stream."
+
+                    try:
+                        proc.stdin.write(input_text)
+                        proc.stdin.flush()
+                        bg_task["log"].append(f"[Input sent: {input_text}]")
+                        return f"[Success] Sent input to background task {tid}."
+                    except Exception as e:
+                        return f"[TOOL ERROR] Failed to write to task stdin: {str(e)}"
+
+            return f"[TOOL ERROR] Background task with ID {tid} not found."
+
         if tool in ("run_python", "run_bash", "run_shell", "python", "bash", "shell"):
             if mode == "plan":
                 return "[TOOL ERROR] Execution is blocked in PLAN mode. You must use <tool>exit_plan_mode</tool> first."
@@ -457,6 +522,10 @@ class CodeAgent:
             if is_bg:
                 _cleanup_background_state()
                 global next_task_id
+                import subprocess
+                import os
+                from dct.tools.executor import prepare_background_command
+
                 with BACKGROUND_TASKS_LOCK:
                     task_id = f"task_{next_task_id}"
                     next_task_id += 1
@@ -467,25 +536,71 @@ class CodeAgent:
                         "result": "",
                         "log": [],
                         "completed_at": 0,
+                        "proc": None,
+                        "temp_file": None,
                     }
 
-                def run_cmd_bg(t_id, lang_name, cmd_code):
+                cmd_args, temp_file = prepare_background_command(lang, code)
+                try:
+                    proc = subprocess.Popen(
+                        cmd_args,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        stdin=subprocess.PIPE,
+                        text=True,
+                        bufsize=1,
+                        universal_newlines=True,
+                    )
+                    with BACKGROUND_TASKS_LOCK:
+                        BACKGROUND_TASKS[task_id]["proc"] = proc
+                        BACKGROUND_TASKS[task_id]["temp_file"] = temp_file
+                except Exception as e:
+                    with BACKGROUND_TASKS_LOCK:
+                        BACKGROUND_TASKS[task_id]["status"] = "failed"
+                        BACKGROUND_TASKS[task_id]["result"] = f"Failed to start process: {str(e)}"
+                        BACKGROUND_TASKS[task_id]["completed_at"] = time.time()
+                    if temp_file:
+                        try:
+                            os.unlink(temp_file)
+                        except Exception:
+                            pass
+                    return f"[TOOL ERROR] Failed to start background process: {str(e)}"
+
+                def read_output(t_id, p_obj):
                     try:
-                        res: ExecResult = dispatch(lang_name, cmd_code, timeout=300)
-                        out = res.summary()
-                        status = "completed" if res.ok else "failed"
-                        with BACKGROUND_TASKS_LOCK:
-                            BACKGROUND_TASKS[t_id]["status"] = status
-                            BACKGROUND_TASKS[t_id]["result"] = out
-                            BACKGROUND_TASKS[t_id]["completed_at"] = time.time()
-                            BACKGROUND_TASKS[t_id]["log"].append(f"[Exit code: {res.returncode}]")
+                        # Read line-by-line
+                        for line in iter(p_obj.stdout.readline, ""):
+                            if not line:
+                                break
+                            with BACKGROUND_TASKS_LOCK:
+                                if t_id in BACKGROUND_TASKS:
+                                    _append_log_safe(BACKGROUND_TASKS[t_id], line)
                     except Exception as e:
                         with BACKGROUND_TASKS_LOCK:
-                            BACKGROUND_TASKS[t_id]["status"] = "failed"
-                            BACKGROUND_TASKS[t_id]["result"] = str(e)
-                            BACKGROUND_TASKS[t_id]["completed_at"] = time.time()
+                            if t_id in BACKGROUND_TASKS:
+                                BACKGROUND_TASKS[t_id]["log"].append(f"[Error reading output: {str(e)}]\n")
+                    finally:
+                        rc = p_obj.wait()
 
-                cmd_thread = threading.Thread(target=run_cmd_bg, args=(task_id, lang, code), daemon=True)
+                        # Clean up temp file and set exit status
+                        temp_file_to_del = None
+                        with BACKGROUND_TASKS_LOCK:
+                            if t_id in BACKGROUND_TASKS:
+                                task_entry = BACKGROUND_TASKS[t_id]
+                                temp_file_to_del = task_entry.get("temp_file")
+                                if task_entry["status"] == "running":
+                                    task_entry["status"] = "completed" if rc == 0 else "failed"
+                                    task_entry["result"] = f"[Completed with exit code {rc}]"
+                                task_entry["completed_at"] = time.time()
+                                task_entry["log"].append(f"[Process exited with code {rc}]\n")
+
+                        if temp_file_to_del:
+                            try:
+                                os.unlink(temp_file_to_del)
+                            except Exception:
+                                pass
+
+                cmd_thread = threading.Thread(target=read_output, args=(task_id, proc), daemon=True)
                 cmd_thread.start()
                 return f"[Task started in background. Task ID: {task_id}]"
 
@@ -780,10 +895,20 @@ class CodeAgent:
                     insert_idx = 1 if msgs and msgs[0].get("role") == "system" else 0
                     msgs.insert(insert_idx, {"role": "system", "content": f"[PREVIOUS CONTEXT SUMMARY]\n{summary}"})
 
+            from dct.core.theme import con, C, get_funny_thinking_msg, get_funny_exec_msg
             response_text = ""
-            for chunk in self.stream_fn(self.server, self.model, msgs):
-                self.on_text(chunk)
-                response_text += chunk
+            status = con.status(f"[{C['dim']}]{get_funny_thinking_msg()}[/{C['dim']}]", spinner="dots")
+            status.start()
+            first_chunk = True
+            try:
+                for chunk in self.stream_fn(self.server, self.model, msgs):
+                    if first_chunk:
+                        status.stop()
+                        first_chunk = False
+                    self.on_text(chunk)
+                    response_text += chunk
+            finally:
+                status.stop()
 
             final_text = response_text
             msgs.append({"role": "assistant", "content": response_text})
@@ -802,7 +927,12 @@ class CodeAgent:
             if self.on_tool:
                 self.on_tool(tool_name, str(call))
 
-            result = self._execute_tool(call)
+            exec_status = con.status(f"[{C['yellow']}]{get_funny_exec_msg(tool_name)}[/{C['yellow']}]", spinner="bouncingBar")
+            exec_status.start()
+            try:
+                result = self._execute_tool(call)
+            finally:
+                exec_status.stop()
 
             if self.on_result:
                 self.on_result(tool_name, result)

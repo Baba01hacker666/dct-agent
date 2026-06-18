@@ -8,6 +8,8 @@ import time
 from rich.console import Console
 from rich.rule import Rule
 
+import random
+
 con = Console()
 
 C = {
@@ -83,3 +85,43 @@ def status_dot(status: str) -> str:
     if status == "offline":
         return f"[{C['err']}]○[/{C['err']}]"
     return f"[{C['dim']}]·[/{C['dim']}]"
+
+
+# ── Funny status phrases ───────────────────────────────────────────────────
+FUNNY_THINKING_PHRASES = [
+    "reticulating splines...",
+    "consulting the digital oracle...",
+    "searching for the missing semicolon...",
+    "counting to infinity (twice)...",
+    "rewriting this section in Rust...",
+    "asking StackOverflow very nicely...",
+    "charging the flux capacitor...",
+    "translating binary to sarcasm...",
+    "calculating the ultimate answer to life...",
+    "convincing the CPU to play along...",
+    "teaching the AI how to love...",
+    "generating believable excuses...",
+    "searching for free RAM...",
+    "mining bitcoin in the background (jk)...",
+    "brewing espresso for the processor...",
+]
+
+FUNNY_EXEC_PHRASES = [
+    "summoning code monkeys to run {tool_name}...",
+    "telling the OS to execute {tool_name} or else...",
+    "brute forcing {tool_name} with positive vibes...",
+    "unleashing {tool_name} upon the world...",
+    "bribing the kernel to allow {tool_name}...",
+    "performing magic trick: {tool_name}...",
+    "whispering sweet nothings to {tool_name}...",
+    "cross-referencing {tool_name} with ancient scrolls...",
+]
+
+
+def get_funny_thinking_msg() -> str:
+    return random.choice(FUNNY_THINKING_PHRASES)
+
+
+def get_funny_exec_msg(tool_name: str) -> str:
+    phrase = random.choice(FUNNY_EXEC_PHRASES)
+    return phrase.format(tool_name=tool_name)

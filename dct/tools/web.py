@@ -5,6 +5,7 @@ No heavy dependencies — uses requests only.
 """
 
 from __future__ import annotations
+from html import unescape
 import re
 import urllib.parse
 from dataclasses import dataclass
@@ -94,21 +95,58 @@ def search_ddg(query: str, max_results: int = 8) -> list[dict]:
 
 
 def _strip_html(html: str) -> str:
-    """Remove HTML tags and decode common entities."""
-    text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.I)
-    text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.I)
-    text = re.sub(r"<[^>]+>", " ", text)
-    text = re.sub(r"&amp;", "&", text)
-    text = re.sub(r"&lt;", "<", text)
-    text = re.sub(r"&gt;", ">", text)
-    text = re.sub(r"&quot;", '"', text)
-    text = re.sub(r"&#39;", "'", text)
-    text = re.sub(r"&nbsp;", " ", text)
-    text = re.sub(r"\s{3,}", "\n\n", text)
-    return text.strip()
+    """Remove HTML tags and decode common entities using BeautifulSoup4, falling back to regex."""
+    if not html:
+        return ""
+
+    # If there are no HTML tags, we can skip BeautifulSoup parsing entirely
+    if "<" not in html or ">" not in html:
+        text = html
+    else:
+        try:
+            from bs4 import BeautifulSoup
+
+            soup = BeautifulSoup(html, "html.parser")
+
+            # Decompose non-content / UI / layout elements
+            for element in soup(["script", "style", "nav", "footer", "header", "noscript", "iframe", "aside", "form"]):
+                element.decompose()
+
+            text = soup.get_text(separator="\n")
+        except Exception:
+            # Fallback to regex-based extraction
+            text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.I)
+            text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.I)
+            text = re.sub(r"<[^>]+>", " ", text)
+
+    # Decode HTML entities
+    text = unescape(text).replace("\xa0", " ")
+
+    # Process lines: strip each line and discard excess blank lines
+    cleaned_lines = []
+    for line in text.splitlines():
+        line_strip = line.strip()
+        if line_strip:
+            cleaned_lines.append(line_strip)
+        elif cleaned_lines and cleaned_lines[-1] != "":
+            cleaned_lines.append("")
+
+    return "\n".join(cleaned_lines).strip()
 
 
 def _extract_title(html: str) -> str:
+    """Extract page title, preferably using BeautifulSoup."""
+    if not html:
+        return ""
+    try:
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(html, "html.parser")
+        if soup.title:
+            title_text = soup.title.get_text()
+            if title_text:
+                return unescape(title_text).strip()
+    except Exception:
+        pass
     m = re.search(r"<title[^>]*>(.*?)</title>", html, re.DOTALL | re.I)
     return _strip_html(m.group(1)).strip() if m else ""
 

@@ -413,3 +413,55 @@ def test_auto_probe_thread_lifecycle():
         shell._stop_auto_probe()
         shell._probe_thread.join(timeout=2)
         assert not shell._probe_thread.is_alive()
+
+
+def test_run_python_auto_install():
+    from unittest.mock import patch, MagicMock
+    from dct.tools.executor import run_python
+
+    # Mock the internal _run function
+    # On first call, return ModuleNotFoundError in stderr and returncode 1
+    # On second call, return successful execution
+    with patch("dct.tools.executor._run") as mock_run, \
+         patch("dct.tools.executor.subprocess.run") as mock_sub_run, \
+         patch("dct.tools.executor.os.path.exists") as mock_exists:
+
+        called_venv = []
+
+        def side_effect_fn(path):
+            if "venv" in str(path) and str(path).endswith("python"):
+                called_venv.append(path)
+                return len(called_venv) > 1
+            return True
+        mock_exists.side_effect = side_effect_fn
+
+        mock_run.side_effect = [
+            ("", "ModuleNotFoundError: No module named 'fake_module_for_test'", 1, False),
+            ("success_output", "", 0, False)
+        ]
+
+        # Mock subprocess.run for the pip install call to succeed
+        mock_pip_res = MagicMock()
+        mock_pip_res.returncode = 0
+        mock_sub_run.return_value = mock_pip_res
+
+        res = run_python("import fake_module_for_test")
+
+        assert res.ok
+        assert "Auto-installed missing packages in venv: fake_module_for_test" in res.stdout
+        assert "success_output" in res.stdout
+        assert mock_run.call_count == 2
+
+        # Verify venv setup and pip install were called
+        assert mock_sub_run.call_count == 2
+
+        # First call: venv creation
+        venv_args = mock_sub_run.call_args_list[0][0][0]
+        assert "venv" in venv_args
+
+        # Second call: pip install
+        pip_args = mock_sub_run.call_args_list[1][0][0]
+        assert "pip" in pip_args
+        assert "install" in pip_args
+        assert "fake_module_for_test" in pip_args
+
