@@ -957,14 +957,21 @@ class CodeAgent:
             # Prevent context window exhaustion during long agentic loops
             total_chars = sum(len(m.get("content", "")) for m in msgs)
             if total_chars > 120000:  # Roughly 30k tokens
+                # Collect non-system message indices oldest-first
+                non_sys = [
+                    i for i, m in enumerate(msgs)
+                    if m.get("role") != "system"
+                ]
                 dropped = []
-                while total_chars > 80000 and len(msgs) > 3:
-                    for i, m in enumerate(msgs):
-                        if m.get("role") != "system":
-                            removed = msgs.pop(i)
-                            dropped.append(removed)
-                            total_chars -= len(removed.get("content", ""))
-                            break
+                for i in sorted(non_sys):
+                    if total_chars <= 80000 or len(msgs) - len(dropped) <= 3:
+                        break
+                    dropped.append(msgs[i])
+                    total_chars -= len(msgs[i].get("content", ""))
+
+                # Remove dropped messages (iterate in reverse to preserve indices)
+                drop_set = set(id(m) for m in dropped)
+                msgs = [m for m in msgs if id(m) not in drop_set]
 
                 if dropped:
                     self.on_text("\n\n[System] Context limit reached. Summarizing older interactions...\n")

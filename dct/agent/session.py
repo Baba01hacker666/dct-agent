@@ -106,12 +106,26 @@ class Session:
         return s
 
 
+_cfg = None  # Module-level config cache to avoid repeated disk reads
+
+
+def _get_cfg():
+    """Return a cached Config instance (loaded once per process)."""
+    global _cfg
+    if _cfg is None:
+        try:
+            from dct.core.config import Config
+            _cfg = Config()
+        except Exception:
+            pass
+    return _cfg
+
+
 def write_trace_entry(session: "Session", entry_type: str, data: dict):
     """Write a structured trace entry to session JSONL log if enabled."""
     try:
-        from dct.core.config import Config
-        cfg = Config()
-        if not cfg.get("enable_tracing", False):
+        cfg = _get_cfg()
+        if cfg is None or not cfg.get("enable_tracing", False):
             return
     except Exception:
         return

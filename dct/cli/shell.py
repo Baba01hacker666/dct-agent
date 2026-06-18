@@ -1396,7 +1396,8 @@ class Shell:
                 info("config (~/.config/dct/config.json):")
                 for k in ["default_server", "default_model", "agent_enabled",
                           "max_agent_turns", "history_limit", "no_probe_on_start",
-                          "auto_probe_interval", "custom_skills", "squads"]:
+                          "auto_probe_interval", "enable_tracing",
+                          "custom_skills", "squads"]:
                     v = self.config.get(k)
                     con.print(f"  [{C['dim']}]{k}[/{C['dim']}] = [{C['fg']}]{v!r}[/{C['fg']}]")
 
@@ -1422,6 +1423,23 @@ class Shell:
                     ok(f"config {key} = {val!r}")
                 except Exception as e:
                     err(f"failed to set config: {e}")
+
+            # ── trace toggle ─────────────────────────────────────────────
+            elif lo == "/trace":
+                current = self.config.get("enable_tracing", False)
+                new_val = not current
+                self.config.set("enable_tracing", new_val)
+                self.config.save()
+                state_str = "ON" if new_val else "OFF"
+                color = C["ok"] if new_val else C["warn"]
+                con.print(f"  [{color}]tracing {state_str}[/{color}]  "
+                          f"[{C['dim']}](logs: ~/.config/dct/transcripts/)[/{C['dim']}]")
+
+            # ── tasks ─────────────────────────────────────────────────────
+            elif lo == "/tasks":
+                from dct.tools.tasks import get_tracker
+                summary = get_tracker().summary()
+                con.print(f"\n[{C['accent']}]{summary}[/{C['accent']}]\n")
 
             # ── goal mode ────────────────────────────────────────────────
             elif lo.startswith("/goal ") or lo == "/goal":

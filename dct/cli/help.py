@@ -109,7 +109,7 @@ HELP_SECTIONS = {
       Example: /bc What is your current context window size?[/{C["dim"]}]
 """,
     "agent": f"""
-[{C["accent"]}]── Agent Mode ───────────────────────────────────────────────────[/{C["accent"]}]
+[{C["accent"]}]── Agent Mode ─────────────────────────────────────────[/{C["accent"]}]
 
   [{C["fg"]}]/agent[/{C["fg"]}]
       [{C["dim"]}]Toggle agent mode ON/OFF (ON by default on startup).
@@ -126,17 +126,38 @@ HELP_SECTIONS = {
       and emits <tool>DONE</tool> or is manually cancelled with Ctrl+C.[/{C["dim"]}]
 
   [{C["fg"]}]Agent tool calls (model emits these automatically):[/{C["fg"]}]
-      [{C["dim"]}]run_python   — execute Python code
-      run_bash     — execute bash script
-      run_shell    — run shell command
-      read_file    — read file contents
-      write_file   — write/create a file
-      patch_file   — find+replace in a file
-      list_dir     — list directory
-      tree         — directory tree
-      fetch_url    — fetch a URL
-      web_search   — DuckDuckGo search
-      run_subagent — spawn a sub-agent to delegate a sub-task[/{C["dim"]}]
+      [{C["dim"]}]run_python          — execute Python code
+      run_bash            — execute bash script
+      run_shell           — run shell command
+      read_file           — read file (supports start_line, end_line, tail)
+      write_file          — write/create a file
+      patch_file          — find+replace in a file
+      multi_patch_file    — multiple non-contiguous find+replaces in one file
+      list_dir            — list directory
+      tree                — directory tree
+      grep                — ripgrep regex search (content or file list mode)
+      glob                — fast file discovery by pattern
+      fetch_url           — fetch a URL (HTML → markdown)
+      web_search          — DuckDuckGo search
+      web_extract         — fetch URL + optional CSS selector extraction
+      run_subagent        — spawn a sub-agent to delegate a sub-task
+      bg_status           — check status/logs of background tasks
+      bg_kill             — terminate a running background task
+      bg_send_input       — send stdin to a running background task
+      task_create         — create a tracked task with subject + description
+      task_update         — update task status (pending|in_progress|completed)
+      task_list           — list all tracked tasks
+      notebook_edit       — edit Jupyter notebook cells
+      ask_user            — ask the user a question (optional radio dialog)
+      read_image          — read image for vision models
+      enter_plan_mode     — switch to read-only planning mode
+      exit_plan_mode      — return to execution mode
+      get_cwd             — get current working directory[/{C["dim"]}]
+
+  [{C["fg"]}]Background tasks:[/{C["fg"]}]
+      [{C["dim"]}]Add <background>true</background> to run_python/run_bash/run_shell
+      or run_subagent to run asynchronously. Use bg_status to poll, bg_kill
+      to terminate, and bg_send_input to write to stdin.[/{C["dim"]}]
 """,
     "tools": f"""
 [{C["accent"]}]── Direct Tool Commands ─────────────────────────────────────────[/{C["accent"]}]
@@ -165,7 +186,7 @@ HELP_SECTIONS = {
       Example: /search CVE-2024-55556 Laravel[/{C["dim"]}]
 """,
     "misc": f"""
-[{C["accent"]}]── Navigation ───────────────────────────────────────────────────[/{C["accent"]}]
+[{C["accent"]}]── Navigation ───────────────────────────────────────────[/{C["accent"]}]
 
   [{C["fg"]}]/help[/{C["fg"]}]               [{C["dim"]}]this overview[/{C["dim"]}]
   [{C["fg"]}]/help servers[/{C["fg"]}]       [{C["dim"]}]server management commands[/{C["dim"]}]
@@ -173,7 +194,32 @@ HELP_SECTIONS = {
   [{C["fg"]}]/help chat[/{C["fg"]}]          [{C["dim"]}]chat and session commands[/{C["dim"]}]
   [{C["fg"]}]/help agent[/{C["fg"]}]         [{C["dim"]}]agent mode and tools[/{C["dim"]}]
   [{C["fg"]}]/help tools[/{C["fg"]}]         [{C["dim"]}]direct tool commands[/{C["dim"]}]
-  [{C["fg"]}]/help broadcast[/{C["fg"]}]     [{C["dim"]}]broadcast to all servers[/{C["dim"]}]
+  [{C["fg"]}]/help broadcast[/{C["fg"]}]     [{C["dim"]}]broadcast to all servers[/{C["fg"]}]
+
+[{C["accent"]}]── Session Rewind ──────────────────────────────────────[/{C["accent"]}]
+
+  [{C["fg"]}]/rewind [n][/{C["fg"]}]
+      [{C["dim"]}]Interactively pick a past user message to rewind and resume from.
+      Pass an index n to rewind to that message directly.
+      Aliases: /rewindto, /back, /undo[/{C["dim"]}]
+
+  [{C["fg"]}]/retry[/{C["fg"]}]
+      [{C["dim"]}]Re-send the last user message (removes last response and replays).[/{C["dim"]}]
+
+  [{C["fg"]}]/editai[/{C["fg"]}]
+      [{C["dim"]}]Open the last AI response in an inline editor to fix it in-session.[/{C["dim"]}]
+
+  [{C["fg"]}]/commit[/{C["fg"]}]
+      [{C["dim"]}]Auto-generate a commit message for staged changes using the model
+      and optionally commit right from DCT.[/{C["dim"]}]
+
+  [{C["fg"]}]/tasks[/{C["fg"]}]
+      [{C["dim"]}]List all agent-created tracked tasks and their status.[/{C["dim"]}]
+
+  [{C["fg"]}]/trace[/{C["fg"]}]
+      [{C["dim"]}]Toggle session JSONL tracing on/off.
+      Logs are written to ~/.config/dct/transcripts/[/{C["dim"]}]
+
   [{C["fg"]}]/exit  Ctrl+C[/{C["fg"]}]      [{C["dim"]}]quit[/{C["dim"]}]
 """,
 }

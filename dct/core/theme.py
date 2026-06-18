@@ -124,6 +124,25 @@ FUNNY_THINKING_PHRASES = [
     "trying to exit Vim...",
     "centering a div using advanced witchcraft...",
     "rebooting the universe in safe mode...",
+    "pip installing self-confidence...",
+    "stack overflowing on purpose...",
+    "reading documentation (just kidding)...",
+    "running sudo rm -rf on my doubts...",
+    "fixing the bug by explaining it to ChatGPT...",
+    "grepping through 10k lines to find a typo...",
+    "replacing jQuery with Vanilla JS (again)...",
+    "updating all dependencies and breaking everything...",
+    "deploying on Friday — what could go wrong...",
+    "bisecting git history to find the cursed commit...",
+    "configuring webpack (estimated: 3-7 business days)...",
+    "watching the CI pipeline fail on the last step...",
+    "opening 47 browser tabs for documentation...",
+    "computing hash of my anxiety...",
+    "padding the oracle (it's a cryptography joke, I swear)...",
+    "enumerating subdomains of my career choices...",
+    "privilege escalating my brain cells...",
+    "XSS-ing my own thoughts...",
+    "doing a fuzzing run on the plot...",
 ]
 
 FUNNY_EXEC_PHRASES = [
@@ -147,6 +166,16 @@ FUNNY_EXEC_PHRASES = [
     "running {tool_name} (do not press Ctrl+C, please)...",
     "convincing {tool_name} it's just a test environment...",
     "distracting the garbage collector while running {tool_name}...",
+    "segfaulting politely during {tool_name}...",
+    "making {tool_name} feel appreciated before it crashes...",
+    "sandboxing {tool_name} in a container of good intentions...",
+    "allocating heap memory for {tool_name} and immediately leaking it...",
+    "chmod 777 {tool_name} and hoping for the best...",
+    "piping {tool_name} into /dev/null if it misbehaves...",
+    "running {tool_name} behind a VPN for moral reasons...",
+    "spinning up {tool_name} in the matrix...",
+    "issuing {tool_name} a CVE if it fails...",
+    "git blaming whoever wrote {tool_name}...",
 ]
 
 
