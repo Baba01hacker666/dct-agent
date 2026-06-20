@@ -85,6 +85,18 @@ BG_CLEANUP_TTL = 300
 # Max chars per background log
 BG_LOG_MAX_CHARS = 10000
 
+def load_persona_file(filename: str, default_content: str) -> str:
+    import os
+    path = os.path.join(os.path.expanduser("~"), ".config", "dct", filename)
+    if not os.path.exists(path):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(default_content)
+        return default_content
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read().strip()
+
+
 
 def _cleanup_background_state() -> None:
     """Remove stale completed/failed background tasks and sub-agents."""
@@ -164,6 +176,7 @@ AVAILABLE TOOLS:
   <tool>mcp_call</tool><server>...</server><name>...</name><args>{{...json...}}</args> — Call an MCP server tool
   <tool>memory_store</tool><text>...</text>      — Store important facts, decisions, or user preferences in permanent long-term vector memory
   <tool>memory_search</tool><query>...</query>   — Semantically search long-term memory for past facts
+  <tool>core_memory_append</tool><text>...</text> — Append a critical fact to your core memory.md (always visible in context)
   <tool>bg_status</tool><id>...</id>             — check status and logs of background tasks/sub-agents (id optional)
   <tool>bg_kill</tool><id>...</id>               — kill a running background task
   <tool>bg_send_input</tool><id>...</id><input>...</input> — send input (stdin) to a running background task
@@ -223,6 +236,24 @@ You are currently in PLAN mode.
 - You CANNOT modify files, EXCEPT for the designated plan file: {plan_file}
 - Your goal is to use read_file, grep, list_dir, and tree to explore the codebase, understand patterns, and write a concrete implementation strategy into the plan file using write_file.
 - Once the user approves the plan, use <tool>exit_plan_mode</tool> to return to execution mode.
+"""
+
+    soul_content = load_persona_file("soul.md", "You are DCT Agent, an autonomous and elite developer AI.\\nYou prioritize clean code, user autonomy, and security.")
+    user_content = load_persona_file("user.md", "The user is a developer using DCT Agent. They prefer concise and direct answers.")
+    memory_content = load_persona_file("memory.md", "- Initialized memory.\\n- Use <tool>core_memory_append</tool> to add important facts here.")
+    
+    prompt += f"""
+<soul>
+{soul_content}
+</soul>
+
+<user_profile>
+{user_content}
+</user_profile>
+
+<core_memory>
+{memory_content}
+</core_memory>
 """
 
     if user_system_prompt.strip():
@@ -574,6 +605,19 @@ class CodeAgent:
             for mem_res in results:
                 lines.append(f"- {mem_res['text']}")
             return "\n".join(lines)
+            
+        elif tool == "core_memory_append":
+            m_text = call.get("text")
+            if not m_text:
+                return "[TOOL ERROR] <text> is required."
+            import os
+            path = os.path.join(os.path.expanduser("~"), ".config", "dct", "memory.md")
+            try:
+                with open(path, "a", encoding="utf-8") as f:
+                    f.write(f"\n- {m_text}")
+                return "[Success] Appended to core memory.md. It will be visible in your next turn."
+            except Exception as e:
+                return f"[TOOL ERROR] Failed to append: {e}"
 
         elif tool == "run_subagent":
             instruction = (
@@ -1222,7 +1266,7 @@ class CodeAgent:
             return f"[User responded]\n{answer}"
 
         elif tool == "notebook_edit":
-            path = _extract_tag(call["raw_text"], "path")
+            path = _extract_tag(call["raw_text"], "path") or ""
             index = _extract_tag(call["raw_text"], "index")
             edit_mode = _extract_tag(call["raw_text"], "mode") or "replace"
             source = _extract_tag(call["raw_text"], "source") or ""
