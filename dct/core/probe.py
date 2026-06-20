@@ -8,6 +8,7 @@ from __future__ import annotations
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING, Any
+from dct.core.logging import get_logger
 
 import requests
 from requests.exceptions import (
@@ -15,6 +16,8 @@ from requests.exceptions import (
     Timeout,
     RequestException,
 )
+
+logger = get_logger("dct.core.probe")
 
 if TYPE_CHECKING:
     from dct.core.registry import Server, ServerRegistry
@@ -94,14 +97,14 @@ def probe_server(srv: "Server") -> dict:
                                     for m in tr.json().get("models", [])
                                 ]
                         except Exception:
-                            pass
+                            logger.debug("Failed to fetch tags from %s", base, exc_info=True)
 
                 try:
                     vr = requests.get(f"{base}/api/version", **req_kwargs)
                     if vr.ok:
                         srv.version = vr.json().get("version", "")
                 except Exception:
-                    pass
+                    logger.debug("Failed to fetch version from %s", base, exc_info=True)
 
                 return {
                     "ok": True,

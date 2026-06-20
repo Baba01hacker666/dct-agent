@@ -14,6 +14,9 @@ import tempfile
 import textwrap
 import time
 from dataclasses import dataclass
+from dct.core.logging import get_logger
+
+logger = get_logger("dct.tools.executor")
 
 
 @dataclass
@@ -80,7 +83,10 @@ def run_python(
 
     # Define dedicated virtual environment path
     venv_dir = os.path.expanduser("~/.config/dct/venv")
-    venv_python = os.path.join(venv_dir, "bin", "python")
+    if os.name == "nt":
+        venv_python = os.path.join(venv_dir, "Scripts", "python.exe")
+    else:
+        venv_python = os.path.join(venv_dir, "bin", "python")
 
     # Try setting up virtual environment
     use_venv = True
@@ -91,6 +97,7 @@ def run_python(
                 [sys.executable, "-m", "venv", venv_dir], check=True
             )
     except Exception:
+        logger.debug("Failed to set up venv at %s", venv_dir, exc_info=True)
         use_venv = False
 
     python_bin = (
@@ -130,7 +137,7 @@ def run_python(
             try:
                 os.unlink(tmp)
             except Exception:
-                pass
+                logger.debug("Failed to clean up temp file %s", tmp, exc_info=True)
 
         if rc != 0 and not timed_out:
             import re
@@ -161,7 +168,7 @@ def run_python(
                         retries += 1
                         continue  # Retry running the python code
                 except Exception:
-                    pass
+                    logger.debug("Failed to pip install %s", package_name, exc_info=True)
         break
 
     if installed_packages:

@@ -7,6 +7,9 @@ from __future__ import annotations
 import os
 import json
 import threading
+from dct.core.logging import get_logger
+
+logger = get_logger("dct.core.config")
 
 CONFIG_FILE = os.path.join(
     os.path.expanduser("~"), ".config", "dct", "config.json"
@@ -48,13 +51,18 @@ class Config:
                         self._data[k] = loaded[k]
         except (FileNotFoundError, json.JSONDecodeError):
             pass
+        except Exception:
+            logger.exception("Failed to load config from %s", self._path)
 
     def save(self):
         os.makedirs(os.path.dirname(self._path), exist_ok=True)
-        with self._lock:
-            data = dict(self._data)
-        with open(self._path, "w") as f:
-            json.dump(data, f, indent=2)
+        try:
+            with self._lock:
+                data = dict(self._data)
+            with open(self._path, "w") as f:
+                json.dump(data, f, indent=2)
+        except Exception:
+            logger.exception("Failed to save config to %s", self._path)
 
     def get(self, key: str, default=None):
         with self._lock:

@@ -72,7 +72,7 @@ PROMPT_PRESETS: dict[str, str] = {
 # Built-in OpenAI-compatible provider presets — just /add-provider <name> <key>
 PROVIDER_PRESETS: dict[str, dict] = {
     "deepseek": {
-        "base_url": "https://api.deepseek.com",
+        "base_url": "https://api.deepseek.com/v1",
         "note": "DeepSeek",
     },
     "qwen": {

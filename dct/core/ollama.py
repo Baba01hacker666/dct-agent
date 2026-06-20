@@ -175,10 +175,6 @@ def get_embeddings(srv: "Server", text: str, model: str = "nomic-embed-text") ->
     kwargs["json"] = {"model": model, "prompt": text}
     kwargs["timeout"] = 15
     url = f"{srv.base_url()}/api/embeddings"
-    try:
-        r = http.client.post(url, **kwargs)
-        if r.status_code == 200:
-            return r.json().get("embedding", [])
-    except Exception:
-        pass
-    return []
+    r = http.client.post(url, **kwargs)
+    r.raise_for_status()
+    return r.json().get("embedding", [])

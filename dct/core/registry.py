@@ -9,6 +9,9 @@ import os
 import json
 import threading
 from typing import Optional
+from dct.core.logging import get_logger
+
+logger = get_logger("dct.core.registry")
 
 REGISTRY_FILE = os.path.join(
     os.path.expanduser("~"), ".config", "dct", "servers.json"
@@ -68,7 +71,7 @@ class Server:
         if self._base_url:
             return self._base_url.rstrip("/")
         if self.provider == "openrouter":
-            return os.getenv("OPENROUTER_API_BASE") or "https://openrouter.ai"
+            return os.getenv("OPENROUTER_API_BASE") or "https://openrouter.ai/api/v1"
         scheme = "https" if (self.tls or self.api_key) else "http"
         return f"{scheme}://{self.host}:{self.port}"
 
@@ -140,6 +143,7 @@ class ServerRegistry:
                         Server.from_dict(s) for s in data.get("servers", [])
                     ]
             except Exception:
+                logger.exception("Failed to load servers from %s", self._path)
                 self.servers = []
 
     def save(self):
@@ -150,7 +154,7 @@ class ServerRegistry:
             with open(self._path, "w") as f:
                 json.dump(data, f, indent=2)
         except Exception:
-            pass
+            logger.exception("Failed to save servers to %s", self._path)
 
     # ── CRUD ─────────────────────────────────────────────────────────────────
     def add(

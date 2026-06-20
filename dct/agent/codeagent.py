@@ -653,20 +653,26 @@ class CodeAgent:
                 return "[TOOL ERROR] <text> is required."
             from dct.core.client import get_embeddings
             from dct.core.memory import get_store
-            vec = get_embeddings(self.server, m_text)
+            try:
+                vec = get_embeddings(self.server, m_text)
+            except Exception as e:
+                return f"[TOOL ERROR] Embedding API failed: {e}"
             if not vec:
-                return "[TOOL ERROR] Failed to generate embedding vector from the API."
+                return "[TOOL ERROR] Embedding API returned empty vector."
             return get_store().store(m_text, vec)
-            
+
         elif tool == "memory_search":
             m_query = call.get("query")
             if not m_query:
                 return "[TOOL ERROR] <query> is required."
             from dct.core.client import get_embeddings
             from dct.core.memory import get_store
-            vec = get_embeddings(self.server, m_query)
+            try:
+                vec = get_embeddings(self.server, m_query)
+            except Exception as e:
+                return f"[TOOL ERROR] Embedding API failed: {e}"
             if not vec:
-                return "[TOOL ERROR] Failed to generate embedding vector for query."
+                return "[TOOL ERROR] Embedding API returned empty vector."
             results = get_store().search(vec, top_k=3)
             if not results:
                 return "No matching memories found."

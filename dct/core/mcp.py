@@ -8,6 +8,9 @@ import json
 import threading
 import time
 from typing import Optional, Dict, Any, List
+from dct.core.logging import get_logger
+
+logger = get_logger("dct.core.mcp")
 
 
 class MCPClient:
@@ -118,6 +121,7 @@ class MCPManager:
                 self.clients[name] = client
                 return True
             except Exception:
+                logger.exception("Failed to add MCP server '%s'", name)
                 return False
 
     def list_all_tools(self) -> str:

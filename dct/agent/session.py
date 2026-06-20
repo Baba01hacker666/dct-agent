@@ -8,6 +8,9 @@ import json
 import time
 from dataclasses import dataclass, field
 from typing import Optional
+from dct.core.logging import get_logger
+
+logger = get_logger("dct.agent.session")
 
 
 @dataclass
@@ -37,7 +40,7 @@ class Session:
         try:
             self.save(os.path.join(chats_dir, f"{self.name}.json"))
         except Exception:
-            pass
+            logger.debug("Autosave failed for session %s", self.name, exc_info=True)
 
     def add(self, role: str, content: str):
         self.messages.append({"role": role, "content": content})

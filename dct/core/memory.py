@@ -9,6 +9,9 @@ import math
 import uuid
 import time
 from typing import List, Dict, Any
+from dct.core.logging import get_logger
+
+logger = get_logger("dct.core.memory")
 
 MEMORY_FILE = os.path.join(os.path.expanduser("~"), ".config", "dct", "memory.json")
 
@@ -24,12 +27,16 @@ class VectorStore:
                 with open(self.path, "r", encoding="utf-8") as f:
                     self.memories = json.load(f)
             except Exception:
+                logger.exception("Failed to load memory store from %s", self.path)
                 self.memories = []
-                
+
     def save(self) -> None:
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
-        with open(self.path, "w", encoding="utf-8") as f:
-            json.dump(self.memories, f)
+        try:
+            with open(self.path, "w", encoding="utf-8") as f:
+                json.dump(self.memories, f)
+        except Exception:
+            logger.exception("Failed to save memory store to %s", self.path)
             
     def store(self, text: str, vector: List[float]) -> str:
         if not vector:

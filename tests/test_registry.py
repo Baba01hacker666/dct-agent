@@ -11,7 +11,7 @@ def test_server_dict_serialization():
     s2 = Server.from_dict(d)
     assert s2.provider == "openrouter"
     assert s2.api_key == "sk-test"
-    assert s2.base_url() == "https://openrouter.ai"
+    assert s2.base_url() == "https://openrouter.ai/api/v1"
 
 
 def test_server_tls_auth_serialization():

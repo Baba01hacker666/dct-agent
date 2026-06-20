@@ -67,7 +67,7 @@ def chat_stream(
     Yield text chunks from OpenAI-compatible /chat/completions (streaming).
     Raises on HTTP error.
     """
-    url = f"{srv.base_url()}/api/v1/chat/completions"
+    url = f"{srv.base_url()}/chat/completions"
     headers = {"Authorization": f"Bearer {srv.api_key}"}
     if srv.provider == "openrouter":
         headers["HTTP-Referer"] = "https://github.com/doraemon-cyber-team/dct"
@@ -84,7 +84,7 @@ def chat_stream(
 
 def chat_once(srv: "Server", model: str, messages: list[dict]) -> str:
     """Non-streaming chat — returns full reply as string."""
-    url = f"{srv.base_url()}/api/v1/chat/completions"
+    url = f"{srv.base_url()}/chat/completions"
     headers = {"Authorization": f"Bearer {srv.api_key}"}
     if srv.provider == "openrouter":
         headers["HTTP-Referer"] = "https://github.com/doraemon-cyber-team/dct"
@@ -103,7 +103,7 @@ def chat_once(srv: "Server", model: str, messages: list[dict]) -> str:
 
 # ── Models ───────────────────────────────────────────────────────────────────
 def list_models(srv: "Server") -> list[dict]:
-    url = f"{srv.base_url()}/api/v1/models"
+    url = f"{srv.base_url()}/models"
     headers = {"Authorization": f"Bearer {srv.api_key}"} if srv.api_key else {}
     r = http.client.get(url, headers=headers, timeout=DEFAULT_TIMEOUT)
     r.raise_for_status()
@@ -143,18 +143,15 @@ def pull_stream(srv: "Server", model: str) -> Iterator[dict]:
     yield {"status": "success"}
 
 def get_embeddings(srv: "Server", text: str, model: str = "text-embedding-3-small") -> list[float]:
-    url = f"{srv.base_url()}/api/v1/embeddings"
+    url = f"{srv.base_url()}/embeddings"
     headers = {"Authorization": f"Bearer {srv.api_key}"}
     if srv.provider == "openrouter":
         headers["HTTP-Referer"] = "https://github.com/doraemon-cyber-team/dct"
         headers["X-Title"] = "DCT Agent"
     payload = {"model": model, "input": text}
-    try:
-        r = http.client.post(url, headers=headers, json=payload, timeout=15)
-        if r.status_code == 200:
-            data = r.json().get("data", [])
-            if data:
-                return data[0].get("embedding", [])
-    except Exception:
-        pass
+    r = http.client.post(url, headers=headers, json=payload, timeout=15)
+    r.raise_for_status()
+    data = r.json().get("data", [])
+    if data:
+        return data[0].get("embedding", [])
     return []

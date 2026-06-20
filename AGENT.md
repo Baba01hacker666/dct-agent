@@ -38,6 +38,7 @@ dct/
 │   ├── probe.py      # Parallel health checking/probing of registered endpoints.
 │   ├── memory.py     # Pure-Python vector store for RAG archival memory.
 │   ├── mcp.py        # MCP (Model Context Protocol) client over stdio.
+│   ├── logging.py    # Structured file logging (~/.config/dct/dct.log).
 │   └── theme.py      # `rich` theme configurations.
 ├── skills/           # Agent Personas & Specialized Instructions
 │   ├── notebook.py   # Skill definition for Jupyter notebook interaction.
