@@ -683,15 +683,7 @@ class Shell:
             }
         )
 
-        # One-time security advisory
-        has_keys = any(s.api_key for s in self.registry.servers if hasattr(s, "api_key"))
-        if has_keys and not self.config.get("api_key_warned"):
-            con.print(
-                f"  [{C['warn']}]⚠ API keys stored in plaintext at "
-                f"~/.config/dct/servers.json[/{C['warn']}]"
-            )
-            self.config.set("api_key_warned", True)
-            self.config.save()
+
 
         while True:
             try:
