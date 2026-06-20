@@ -1144,18 +1144,18 @@ class CodeAgent:
             if not path or not line_str:
                 return f"[TOOL ERROR] <path> and <line> are required for {tool}."
             try:
-                line = int(line_str)
-                col = int(col_str)
+                lint = int(line_str)
+                cint = int(col_str)
             except ValueError:
                 return "[TOOL ERROR] <line> and <column> must be integers."
-                
+
             from dct.tools.lsp import goto_definition, find_references
             import json
-            
+
             if tool == "goto_definition":
-                res = goto_definition(path, line, col)
+                res = goto_definition(path, lint, cint)
             else:
-                res = find_references(path, line, col)
+                res = find_references(path, lint, cint)
                 
             if not res.ok:
                 return f"[TOOL ERROR] {res.message}"
@@ -1399,9 +1399,9 @@ class CodeAgent:
             if not results:
                 return "[web_search] no results"
             lines = [f"[web_search: {query!r}]"]
-            for i, res in enumerate(results, 1):
+            for i, item in enumerate(results, 1):
                 lines.append(
-                    f"{i}. {res['title']}\n   {res['url']}\n   {res['snippet']}"
+                    f"{i}. {item['title']}\n   {item['url']}\n   {item['snippet']}"
                 )
             return "\n".join(lines)
 

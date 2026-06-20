@@ -471,7 +471,7 @@ class Shell:
         # Collect available models dynamically
         available_models = set()
         for s in self.registry.servers:
-            if s.online:
+            if s.status == "online":
                 available_models.update(s.models)
         models_str = ", ".join(sorted(available_models)) or self.model
 
@@ -611,7 +611,7 @@ class Shell:
                 task_model = t["model"] or self.model
                 server_to_use = self.active
                 for s in self.registry.servers:
-                    if s.online and task_model in s.models:
+                    if s.status == "online" and task_model in s.models:
                         server_to_use = s
                         break
 
