@@ -61,8 +61,8 @@ def _post_stream(
 
 # ── Chat ─────────────────────────────────────────────────────────────────────
 def chat_stream(
-    srv: "Server", model: str, messages: list[dict]
-) -> Iterator[str]:
+    srv: "Server", model: str, messages: list[dict], tools: list[dict] | None = None
+) -> Iterator[str | dict]:
     """
     Yield text chunks from OpenAI-compatible /chat/completions (streaming).
     Raises on HTTP error.
@@ -82,16 +82,39 @@ def chat_stream(
         "top_p": cfg.get("top_p", 0.9),
         "max_tokens": cfg.get("max_tokens", 4096),
     }
+    if tools:
+        payload["tools"] = tools
+
+    tool_calls_buffer = {}
 
     for chunk in _post_stream(url, headers, payload, CHAT_TIMEOUT):
         if "choices" in chunk and len(chunk["choices"]) > 0:
             delta = chunk["choices"][0].get("delta", {})
+            
+            if "tool_calls" in delta:
+                for tc in delta["tool_calls"]:
+                    idx = tc.get("index", 0)
+                    if idx not in tool_calls_buffer:
+                        tool_calls_buffer[idx] = {
+                            "id": tc.get("id"),
+                            "function": {
+                                "name": tc.get("function", {}).get("name", ""),
+                                "arguments": tc.get("function", {}).get("arguments", "")
+                            }
+                        }
+                    else:
+                        if tc.get("function", {}).get("arguments"):
+                            tool_calls_buffer[idx]["function"]["arguments"] += tc["function"]["arguments"]
+            
             content = _extract_stream_text(delta)
             if content:
                 yield content
 
+    if tool_calls_buffer:
+        yield {"tool_calls": list(tool_calls_buffer.values())}
 
-def chat_once(srv: "Server", model: str, messages: list[dict]) -> str:
+
+def chat_once(srv: "Server", model: str, messages: list[dict], tools: list[dict] | None = None) -> str | dict:
     """Non-streaming chat — returns full reply as string."""
     url = f"{srv.base_url()}/chat/completions"
     headers = {"Authorization": f"Bearer {srv.api_key}"}
@@ -99,6 +122,8 @@ def chat_once(srv: "Server", model: str, messages: list[dict]) -> str:
         headers["HTTP-Referer"] = "https://github.com/doraemon-cyber-team/dct"
         headers["X-Title"] = "DCT Agent"
     payload = {"model": model, "messages": messages, "stream": False}
+    if tools:
+        payload["tools"] = tools
 
     r = http.client.post(
         url, headers=headers, json=payload, timeout=CHAT_TIMEOUT
@@ -106,7 +131,10 @@ def chat_once(srv: "Server", model: str, messages: list[dict]) -> str:
     r.raise_for_status()
     data = r.json()
     if "choices" in data and len(data["choices"]) > 0:
-        return data["choices"][0].get("message", {}).get("content", "")
+        msg = data["choices"][0].get("message", {})
+        if "tool_calls" in msg and msg["tool_calls"]:
+            return {"tool_calls": msg["tool_calls"], "content": msg.get("content", "")}
+        return msg.get("content", "")
     return ""
 
 

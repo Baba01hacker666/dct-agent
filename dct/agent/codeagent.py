@@ -214,7 +214,19 @@ AVAILABLE TOOLS:
   <tool>skill_list</tool>                        — List available built-in and custom skills
   <tool>skill_load</tool><name>...</name>        — Apply a skill (persona/prompt) to your current session
   <tool>skill_create</tool><name>...</name><description>...</description><prompt>...</prompt> — Create or update a custom skill autonomously
+"""
 
+    if conf.get("use_native_tools", True):
+        prompt += """
+TOOL CALL FORMAT:
+- You must use the provided native function/tool call capabilities (e.g. `dct_tool`).
+- Do NOT output XML tags like <tool>...</tool> anymore! Use the tool_call API format instead.
+- For `dct_tool`, pass the `tool_name` (e.g. 'run_shell', 'read_file') and map the arguments into the `kwargs` object matching the available tags described above.
+- Always output exactly one tool call at a time when calling tools.
+- Finish only when truly done by calling `dct_tool` with `tool_name='DONE'`.
+"""
+    else:
+        prompt += """
 TOOL CALL FORMAT:
 - Always output exactly one tool call at a time when calling tools.
 - Use this shape:
@@ -242,7 +254,9 @@ TOOL CALL FORMAT:
   <selector>main</selector>
 - Finish only when truly done:
   <tool>DONE</tool>
+"""
 
+    prompt += """
 WORKFLOW:
 1) Understand the user goal and constraints.
 2) If information is missing, use read/search tools first.
@@ -1525,6 +1539,26 @@ class CodeAgent:
         except Exception as e:
             return f"(Summary failed: {e})"
 
+    def _get_native_tools(self) -> list[dict] | None:
+        from dct.core.config import Config
+        if not Config().get("use_native_tools", True):
+            return None
+        return [{
+            "type": "function",
+            "function": {
+                "name": "dct_tool",
+                "description": "Execute a DCT Agent tool. Check the AVAILABLE TOOLS list in system prompt for valid names and parameters.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "tool_name": {"type": "string", "description": "Name of the tool (e.g. run_shell, read_file, DONE)"},
+                        "kwargs": {"type": "object", "description": "Key-value arguments mapping directly to the XML tags described in the prompt. Do not use XML in strings."}
+                    },
+                    "required": ["tool_name", "kwargs"]
+                }
+            }
+        }]
+
     def run(self, messages: list[dict]) -> str:
         """
         Run agentic loop. `messages` should already include system prompt + user message.
@@ -1580,6 +1614,7 @@ class CodeAgent:
             )
 
             response_text = ""
+            native_tool_calls = []
             status = con.status(
                 f"[{C['dim']}]{get_funny_thinking_msg()}[/{C['dim']}]",
                 spinner="dots",
@@ -1587,7 +1622,10 @@ class CodeAgent:
             status.start()
             first_chunk = True
             try:
-                for chunk in self.stream_fn(self.server, self.model, msgs):
+                for chunk in self.stream_fn(self.server, self.model, msgs, tools=self._get_native_tools()):
+                    if isinstance(chunk, dict) and "tool_calls" in chunk:
+                        native_tool_calls = chunk["tool_calls"]
+                        continue
                     if first_chunk:
                         status.stop()
                         first_chunk = False
@@ -1597,10 +1635,80 @@ class CodeAgent:
                 status.stop()
 
             final_text = response_text
-            msgs.append({"role": "assistant", "content": response_text})
+            assistant_msg = {"role": "assistant", "content": response_text}
+            if native_tool_calls:
+                assistant_msg["tool_calls"] = native_tool_calls
+            msgs.append(assistant_msg)
             write_trace_entry(
-                self.session, "model_response", {"content": response_text}
+                self.session, "model_response", {"content": response_text, "tool_calls": native_tool_calls}
             )
+
+            if native_tool_calls:
+                # Handle native function calling sequentially
+                for tc in native_tool_calls:
+                    tc_id = tc.get("id")
+                    func = tc.get("function", {})
+                    name = func.get("name")
+                    try:
+                        import json
+                        args = json.loads(func.get("arguments", "{}"))
+                    except BaseException:
+                        args = {}
+                    
+                    if name == "dct_tool":
+                        tool_name = args.get("tool_name", "")
+                        kwargs = args.get("kwargs", {})
+                        call = {"tool": tool_name, "raw_text": "", **kwargs}
+                    else:
+                        call = {"tool": name, "raw_text": "", **args}
+                    
+                    if call["tool"] == "DONE":
+                        return final_text
+                    
+                    tool_name = call["tool"]
+                    write_trace_entry(
+                        self.session,
+                        "tool_call",
+                        {
+                            "tool": tool_name,
+                            "arguments": {k: v for k, v in call.items() if k != "raw_text"},
+                        },
+                    )
+                    if self.on_tool:
+                        self.on_tool(tool_name, str(call))
+
+                    exec_status = con.status(
+                        f"[{C['yellow']}]{get_funny_exec_msg(tool_name)}[/{C['yellow']}]",
+                        spinner="bouncingBar",
+                    )
+                    exec_status.start()
+                    try:
+                        result = self._execute_tool(call)
+                        if (msgs and msgs[0].get("role") == "system" and self.session.system_prompt):
+                            msgs[0]["content"] = self.session.system_prompt
+                    finally:
+                        exec_status.stop()
+
+                    write_trace_entry(
+                        self.session,
+                        "tool_result",
+                        {"tool": tool_name, "result": result},
+                    )
+                    if self.on_result:
+                        self.on_result(tool_name, result)
+
+                    if result == "__DONE__":
+                        return final_text
+
+                    safe_result = _sanitize_tool_result(result)
+                    msgs.append({
+                        "role": "tool",
+                        "tool_call_id": tc_id,
+                        "content": f"[TOOL RESULT: {tool_name}]\n{safe_result}"
+                    })
+                
+                # Continue the multi-turn conversation with the tool responses appended
+                continue
 
             if not _has_tool_call(response_text):
                 break

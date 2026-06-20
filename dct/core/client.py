@@ -18,11 +18,12 @@ def chat_stream(
     model: str,
     messages: list[dict],
     images: list[str] | None = None,
-) -> Iterator[str]:
+    tools: list[dict] | None = None,
+) -> Iterator[str | dict]:
     if srv.provider in ("openrouter", "openai"):
-        yield from openrouter.chat_stream(srv, model, messages)
+        yield from openrouter.chat_stream(srv, model, messages, tools=tools)
     else:
-        yield from ollama.chat_stream(srv, model, messages, images)
+        yield from ollama.chat_stream(srv, model, messages, images, tools=tools)
 
 
 def chat_once(
@@ -30,10 +31,11 @@ def chat_once(
     model: str,
     messages: list[dict],
     images: list[str] | None = None,
-) -> str:
+    tools: list[dict] | None = None,
+) -> str | dict:
     if srv.provider in ("openrouter", "openai"):
-        return openrouter.chat_once(srv, model, messages)
-    return ollama.chat_once(srv, model, messages, images)
+        return openrouter.chat_once(srv, model, messages, tools=tools)
+    return ollama.chat_once(srv, model, messages, images, tools=tools)
 
 
 def list_models(srv: "Server") -> list[dict]:

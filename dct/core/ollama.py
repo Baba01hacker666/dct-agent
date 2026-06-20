@@ -77,6 +77,8 @@ def chat_stream(
             "num_predict": cfg.get("max_tokens", 4096),
         },
     }
+    if tools:
+        payload["tools"] = tools
     if images:
         # Attach images to the last user message (Ollama convention)
         for i in range(len(payload["messages"]) - 1, -1, -1):
@@ -98,6 +100,7 @@ def chat_once(
     model: str,
     messages: list[dict],
     images: list[str] | None = None,
+    tools: list[dict] | None = None,
 ) -> str:
     """Non-streaming chat — returns full reply as string."""
     url = f"{srv.base_url()}/api/chat"
@@ -106,6 +109,8 @@ def chat_once(
         "messages": list(messages),
         "stream": False,
     }
+    if tools:
+        payload["tools"] = tools
     if images:
         for i in range(len(payload["messages"]) - 1, -1, -1):
             if payload["messages"][i]["role"] == "user":
