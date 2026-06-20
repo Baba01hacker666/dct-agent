@@ -76,7 +76,7 @@ PROVIDER_PRESETS: dict[str, dict] = {
         "note": "DeepSeek",
     },
     "qwen": {
-        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "base_url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
         "note": "Alibaba Qwen (DashScope)",
     },
     "zai": {

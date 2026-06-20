@@ -36,6 +36,8 @@ dct/
 │   ├── ollama.py     # Streaming HTTP clients specific to Ollama APIs.
 │   ├── openrouter.py # OpenRouter-specific integration.
 │   ├── probe.py      # Parallel health checking/probing of registered endpoints.
+│   ├── memory.py     # Pure-Python vector store for RAG archival memory.
+│   ├── mcp.py        # MCP (Model Context Protocol) client over stdio.
 │   └── theme.py      # `rich` theme configurations.
 ├── skills/           # Agent Personas & Specialized Instructions
 │   ├── notebook.py   # Skill definition for Jupyter notebook interaction.
@@ -44,6 +46,7 @@ dct/
 │   ├── executor.py   # Runs Python/Bash locally via `subprocess`. Auto-handles pip installs.
 │   ├── files.py      # File system tools (read, write, patch, tree, ripgrep).
 │   ├── image.py      # Vision handling (read_image).
+│   ├── lsp.py        # Jedi-based LSP tools (goto_definition, find_references, repo_map).
 │   ├── tasks.py      # Structured task and goal tracking logic.
 │   └── web.py        # HTTP fetching, DuckDuckGo search, CSS selectors.
 ├── __main__.py       # Module entry point (`python -m dct`).
@@ -73,7 +76,14 @@ When writing code or debugging, follow these workflows:
 1. **Agent Tool Execution (`dct/tools/`)**:
    Tools are the actions the agent can perform. They are defined primarily in `files.py`, `executor.py`, and `web.py`. When modifying how the agent interacts with the world, look here.
 2. **The Shell REPL (`dct/cli/shell.py`)**:
-   All user slash commands (e.g., `/use`, `/models`, `/squad`) are handled here. If adding a new slash command, add the handler here.
+   All user slash commands are handled here. Key command categories include:
+   - **Server & Model**: `/servers`, `/add`, `/add-openai`, `/add-provider`, `/remove`, `/probe`, `/use`, `/models`, `/allmodels`, `/model`, `/pull`, `/delete`, `/show`
+   - **Chat & Session**: `/clear`, `/history`, `/system`, `/prompts`, `/prompt`, `/skills`, `/skill`, `/fork`, `/new` (`/chat new`), `/chat switch`, `/compact`, `/save`, `/load`, `/status`
+   - **Agent Control**: `/agent`, `/rewind` (`/back`), `/rewindto`, `/retry`, `/editai`, `/commit`, `/goal`, `/learn`
+   - **Multi-Agent**: `/squad list|create|add|remove|show|run`, `/orchestrate`
+   - **Vision & Direct Tools**: `/vision` (`/image`), `/run python|bash`, `/read`, `/write`, `/fetch`, `/search`
+   - **Other**: `/broadcast` (`/bc`), `/btw`, `/config`, `/trace`, `/copy`
+   If adding a new slash command, add the handler here.
 3. **Model Router & Registry (`dct/core/registry.py`)**:
    When implementing new provider integrations or tweaking how models are selected during failover, modify the registry.
 4. **State Persistence**:
