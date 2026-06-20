@@ -71,7 +71,9 @@ def _run(
         return "", str(e), -1, False
 
 
-def run_python(code: str, timeout: int = 30, cwd: str | None = None) -> ExecResult:
+def run_python(
+    code: str, timeout: int = 30, cwd: str | None = None
+) -> ExecResult:
     """Execute Python code in a dedicated virtual environment with auto-pip installation."""
     code = textwrap.dedent(code)
     t0 = time.time()
@@ -85,12 +87,16 @@ def run_python(code: str, timeout: int = 30, cwd: str | None = None) -> ExecResu
     try:
         if not os.path.exists(venv_python):
             os.makedirs(os.path.dirname(venv_dir), exist_ok=True)
-            subprocess.run([sys.executable, "-m", "venv", venv_dir], check=True)
+            subprocess.run(
+                [sys.executable, "-m", "venv", venv_dir], check=True
+            )
     except Exception:
         use_venv = False
 
     python_bin = (
-        venv_python if (use_venv and os.path.exists(venv_python)) else sys.executable
+        venv_python
+        if (use_venv and os.path.exists(venv_python))
+        else sys.executable
     )
 
     # Allow up to 3 auto-install retries for cases where code requires multiple missing packages
@@ -130,11 +136,14 @@ def run_python(code: str, timeout: int = 30, cwd: str | None = None) -> ExecResu
             import re
 
             m = re.search(
-                r"ModuleNotFoundError:\s*No\s*module\s*named\s*'([^']+)'", stderr
+                r"ModuleNotFoundError:\s*No\s*module\s*named\s*'([^']+)'",
+                stderr,
             )
             if m:
                 missing_module = m.group(1)
-                package_name = MODULE_MAPPING.get(missing_module, missing_module)
+                package_name = MODULE_MAPPING.get(
+                    missing_module, missing_module
+                )
 
                 # Prevent infinite loops installing the same package
                 if package_name in installed_packages:
@@ -170,7 +179,9 @@ def run_python(code: str, timeout: int = 30, cwd: str | None = None) -> ExecResu
     )
 
 
-def run_bash(code: str, timeout: int = 30, cwd: str | None = None) -> ExecResult:
+def run_bash(
+    code: str, timeout: int = 30, cwd: str | None = None
+) -> ExecResult:
     """Execute bash script."""
     code = textwrap.dedent(code)
     with tempfile.NamedTemporaryFile(
@@ -251,7 +262,9 @@ def prepare_background_command(
         try:
             if not os.path.exists(venv_python):
                 os.makedirs(os.path.dirname(venv_dir), exist_ok=True)
-                subprocess.run([sys.executable, "-m", "venv", venv_dir], check=True)
+                subprocess.run(
+                    [sys.executable, "-m", "venv", venv_dir], check=True
+                )
         except Exception:
             use_venv = False
 

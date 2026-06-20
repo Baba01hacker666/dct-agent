@@ -10,7 +10,9 @@ import json
 import threading
 from typing import Optional
 
-REGISTRY_FILE = os.path.join(os.path.expanduser("~"), ".config", "dct", "servers.json")
+REGISTRY_FILE = os.path.join(
+    os.path.expanduser("~"), ".config", "dct", "servers.json"
+)
 
 
 class Server:
@@ -106,7 +108,9 @@ class Server:
         )
 
     def has_model(self, model: str) -> bool:
-        return any(m == model or m.startswith(model + ":") for m in self.models)
+        return any(
+            m == model or m.startswith(model + ":") for m in self.models
+        )
 
     def best_model(self, preferred: str = "") -> str:
         if preferred and self.has_model(preferred):
@@ -236,7 +240,9 @@ class ServerRegistry:
         if not candidates:
             return None
         # Sort by latency (lower = better), unknowns last
-        candidates.sort(key=lambda s: s.latency_ms if s.latency_ms >= 0 else 99999)
+        candidates.sort(
+            key=lambda s: s.latency_ms if s.latency_ms >= 0 else 99999
+        )
         return candidates[0]
 
     def route(

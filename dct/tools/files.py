@@ -293,7 +293,9 @@ def run_glob(
 
         out = proc.stdout.strip()
         if not out:
-            return FileResult(ok=True, path=path, content="(no matching files found)")
+            return FileResult(
+                ok=True, path=path, content="(no matching files found)"
+            )
 
         return FileResult(ok=True, path=path, content=out)
     except Exception as e:

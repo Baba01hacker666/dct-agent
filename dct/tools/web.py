@@ -130,7 +130,9 @@ def _strip_html(html: str) -> str:
             text = re.sub(
                 r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.I
             )
-            text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.I)
+            text = re.sub(
+                r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.I
+            )
             text = re.sub(r"<[^>]+>", " ", text)
 
     # Decode HTML entities

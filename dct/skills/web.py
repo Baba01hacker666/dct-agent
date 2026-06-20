@@ -31,7 +31,9 @@ def fetch_and_extract(url: str, selector: str | None = None) -> WebResult:
         if selector:
             elements = soup.select(selector)
             if not elements:
-                return WebResult(False, url, "", f"Selector '{selector}' not found")
+                return WebResult(
+                    False, url, "", f"Selector '{selector}' not found"
+                )
             text = "\n\n".join(
                 el.get_text(strip=True, separator="\n") for el in elements
             )

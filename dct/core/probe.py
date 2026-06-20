@@ -49,7 +49,9 @@ def probe_server(srv: "Server") -> dict:
                 models_data = data.get("data", [])
                 srv.models = [m.get("id") for m in models_data]
                 srv.version = (
-                    "OpenRouter v1" if srv.provider == "openrouter" else "OpenAI API"
+                    "OpenRouter v1"
+                    if srv.provider == "openrouter"
+                    else "OpenAI API"
                 )
                 return {
                     "ok": True,
@@ -88,7 +90,8 @@ def probe_server(srv: "Server") -> dict:
                             tr = requests.get(f"{base}/api/tags", **req_kwargs)
                             if tr.ok:
                                 srv.models = [
-                                    m["name"] for m in tr.json().get("models", [])
+                                    m["name"]
+                                    for m in tr.json().get("models", [])
                                 ]
                         except Exception:
                             pass

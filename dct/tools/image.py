@@ -41,7 +41,9 @@ def read_image(path: str) -> ImageResult:
         return ImageResult(False, "", f"invalid path: {path}", path, "")
 
     if not os.path.isfile(abs_path):
-        return ImageResult(False, "", f"file not found: {abs_path}", abs_path, "")
+        return ImageResult(
+            False, "", f"file not found: {abs_path}", abs_path, ""
+        )
 
     ext = os.path.splitext(abs_path)[1].lower()
     if ext not in SUPPORTED_EXTENSIONS:

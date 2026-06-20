@@ -60,7 +60,9 @@ def _post_stream(
 
 
 # ── Chat ─────────────────────────────────────────────────────────────────────
-def chat_stream(srv: "Server", model: str, messages: list[dict]) -> Iterator[str]:
+def chat_stream(
+    srv: "Server", model: str, messages: list[dict]
+) -> Iterator[str]:
     """
     Yield text chunks from OpenAI-compatible /chat/completions (streaming).
     Raises on HTTP error.
@@ -89,7 +91,9 @@ def chat_once(srv: "Server", model: str, messages: list[dict]) -> str:
         headers["X-Title"] = "DCT Agent"
     payload = {"model": model, "messages": messages, "stream": False}
 
-    r = http.client.post(url, headers=headers, json=payload, timeout=CHAT_TIMEOUT)
+    r = http.client.post(
+        url, headers=headers, json=payload, timeout=CHAT_TIMEOUT
+    )
     r.raise_for_status()
     data = r.json()
     if "choices" in data and len(data["choices"]) > 0:

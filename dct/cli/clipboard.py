@@ -10,7 +10,9 @@ import subprocess
 
 def _copy_with(cmd: list[str], text: str) -> bool:
     try:
-        subprocess.run(cmd, input=text, text=True, check=True, capture_output=True)
+        subprocess.run(
+            cmd, input=text, text=True, check=True, capture_output=True
+        )
         return True
     except Exception:
         return False

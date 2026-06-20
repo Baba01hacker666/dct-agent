@@ -8,7 +8,9 @@ import os
 import json
 import threading
 
-CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".config", "dct", "config.json")
+CONFIG_FILE = os.path.join(
+    os.path.expanduser("~"), ".config", "dct", "config.json"
+)
 
 DEFAULTS = {
     "default_server": "",

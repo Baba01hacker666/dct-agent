@@ -55,14 +55,21 @@ def _post_stream(
 
 # ── Chat ─────────────────────────────────────────────────────────────────────
 def chat_stream(
-    srv: "Server", model: str, messages: list[dict], images: list[str] | None = None
+    srv: "Server",
+    model: str,
+    messages: list[dict],
+    images: list[str] | None = None,
 ) -> Iterator[str]:
     """
     Yield text chunks from /api/chat (streaming).
     Raises on HTTP error.
     """
     url = f"{srv.base_url()}/api/chat"
-    payload: dict = {"model": model, "messages": list(messages), "stream": True}
+    payload: dict = {
+        "model": model,
+        "messages": list(messages),
+        "stream": True,
+    }
     if images:
         # Attach images to the last user message (Ollama convention)
         for i in range(len(payload["messages"]) - 1, -1, -1):
@@ -80,11 +87,18 @@ def chat_stream(
 
 
 def chat_once(
-    srv: "Server", model: str, messages: list[dict], images: list[str] | None = None
+    srv: "Server",
+    model: str,
+    messages: list[dict],
+    images: list[str] | None = None,
 ) -> str:
     """Non-streaming chat — returns full reply as string."""
     url = f"{srv.base_url()}/api/chat"
-    payload: dict = {"model": model, "messages": list(messages), "stream": False}
+    payload: dict = {
+        "model": model,
+        "messages": list(messages),
+        "stream": False,
+    }
     if images:
         for i in range(len(payload["messages"]) - 1, -1, -1):
             if payload["messages"][i]["role"] == "user":
@@ -112,7 +126,9 @@ def list_models(srv: "Server") -> list[dict]:
 def show_model(srv: "Server", model: str) -> dict:
     r = http.client.post(
         f"{srv.base_url()}/api/show",
-        **_request_kwargs(srv, {"json": {"name": model}, "timeout": DEFAULT_TIMEOUT}),
+        **_request_kwargs(
+            srv, {"json": {"name": model}, "timeout": DEFAULT_TIMEOUT}
+        ),
     )
     r.raise_for_status()
     return r.json()
@@ -121,14 +137,17 @@ def show_model(srv: "Server", model: str) -> dict:
 def delete_model(srv: "Server", model: str) -> bool:
     r = http.client.delete(
         f"{srv.base_url()}/api/delete",
-        **_request_kwargs(srv, {"json": {"name": model}, "timeout": DEFAULT_TIMEOUT}),
+        **_request_kwargs(
+            srv, {"json": {"name": model}, "timeout": DEFAULT_TIMEOUT}
+        ),
     )
     return r.ok
 
 
 def running_models(srv: "Server") -> list[dict]:
     r = http.client.get(
-        f"{srv.base_url()}/api/ps", **_request_kwargs(srv, {"timeout": DEFAULT_TIMEOUT})
+        f"{srv.base_url()}/api/ps",
+        **_request_kwargs(srv, {"timeout": DEFAULT_TIMEOUT}),
     )
     r.raise_for_status()
     return r.json().get("models", [])

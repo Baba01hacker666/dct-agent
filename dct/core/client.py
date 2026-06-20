@@ -14,7 +14,10 @@ if TYPE_CHECKING:
 
 
 def chat_stream(
-    srv: "Server", model: str, messages: list[dict], images: list[str] | None = None
+    srv: "Server",
+    model: str,
+    messages: list[dict],
+    images: list[str] | None = None,
 ) -> Iterator[str]:
     if srv.provider in ("openrouter", "openai"):
         yield from openrouter.chat_stream(srv, model, messages)
@@ -23,7 +26,10 @@ def chat_stream(
 
 
 def chat_once(
-    srv: "Server", model: str, messages: list[dict], images: list[str] | None = None
+    srv: "Server",
+    model: str,
+    messages: list[dict],
+    images: list[str] | None = None,
 ) -> str:
     if srv.provider in ("openrouter", "openai"):
         return openrouter.chat_once(srv, model, messages)
