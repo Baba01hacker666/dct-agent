@@ -1173,6 +1173,25 @@ class Shell:
                 self.session.clear()
                 ok("history cleared")
 
+            # ── learn ────────────────────────────────────────────────────
+            elif lo == "/learn":
+                if not self.active:
+                    err("no active server to run reflection")
+                    continue
+                prompt = (
+                    "Please review our entire conversation history. "
+                    "Reflect on what tasks you completed, what strategies succeeded, and which failed. "
+                    "Your goal is recursive self-improvement. "
+                    "Extract reusable workflows, rules, and crucial insights to prevent repeating past mistakes. "
+                    "Use `<tool>core_memory_manage</tool>` to save these insights to 'project.md' (if they are specific to this codebase) "
+                    "or 'memory.md'/'user.md' (if they are general knowledge or preferences). "
+                    "Do NOT invent insights, only reflect on what actually happened."
+                )
+                con.print(f"  [{C['dim']}]triggering autonomous recursive learning...[/{C['dim']}]")
+                self.session.add("user", prompt)
+                self._run_agent(self.session.messages, prompt)
+                continue
+
             # ── history ──────────────────────────────────────────────────
             elif lo == "/history":
                 hist_turns = self.session.user_turns

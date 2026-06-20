@@ -72,6 +72,11 @@ HELP_SECTIONS = {
   [{C["fg"]}]/clear[/{C["fg"]}]
       [{C["dim"]}]Clear conversation history. Keeps system prompt if set.[/{C["dim"]}]
 
+  [{C["fg"]}]/learn[/{C["fg"]}]
+      [{C["dim"]}]Trigger autonomous reflection. The agent will review history,
+      identify mistakes/successes, and save workflows to memory
+      for recursive self-improvement.[/{C["dim"]}]
+
   [{C["fg"]}]/history[/{C["fg"]}]
       [{C["dim"]}]Show turn count and token estimate.[/{C["dim"]}]
 
