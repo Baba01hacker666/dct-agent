@@ -11,6 +11,7 @@ from prompt_toolkit.history import FileHistory
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.styles import Style
 import os
+
 import threading
 from typing import Optional
 
@@ -1727,7 +1728,7 @@ class Shell:
                 )
 
             elif lo == "/chats":
-                import os
+
                 import json
 
                 chats_dir = os.path.expanduser("~/.config/dct/chats")
@@ -1774,7 +1775,7 @@ class Shell:
 
             elif lo.startswith("/chat switch "):
                 idx_str = raw[13:].strip()
-                import os
+
 
                 chats_dir = os.path.expanduser("~/.config/dct/chats")
                 os.makedirs(chats_dir, exist_ok=True)
