@@ -22,6 +22,7 @@ DEFAULTS = {
     "squads": {},
     "mcp_servers": {},
     "enable_tracing": False,
+    "enable_persona": True,
 }
 
 

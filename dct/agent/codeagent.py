@@ -175,8 +175,14 @@ AVAILABLE TOOLS:
   <tool>mcp_list</tool>                          — List all connected MCP servers and their available tools
   <tool>mcp_call</tool><server>...</server><name>...</name><args>{{...json...}}</args> — Call an MCP server tool
   <tool>memory_store</tool><text>...</text>      — Store important facts, decisions, or user preferences in permanent long-term vector memory
-  <tool>memory_search</tool><query>...</query>   — Semantically search long-term memory for past facts
-  <tool>core_memory_append</tool><text>...</text> — Append a critical fact to your core memory.md (always visible in context)
+  <tool>memory_search</tool><query>...</query>   — Semantically search long-term memory for past facts"""
+    
+    from dct.core.config import Config
+    conf = Config()
+    if conf.get("enable_persona", True):
+        prompt += "\n  <tool>core_memory_append</tool><text>...</text> — Append a critical fact to your core memory.md (always visible in context)"
+
+    prompt += """
   <tool>bg_status</tool><id>...</id>             — check status and logs of background tasks/sub-agents (id optional)
   <tool>bg_kill</tool><id>...</id>               — kill a running background task
   <tool>bg_send_input</tool><id>...</id><input>...</input> — send input (stdin) to a running background task
@@ -238,11 +244,12 @@ You are currently in PLAN mode.
 - Once the user approves the plan, use <tool>exit_plan_mode</tool> to return to execution mode.
 """
 
-    soul_content = load_persona_file("soul.md", "You are DCT Agent, an autonomous and elite developer AI.\\nYou prioritize clean code, user autonomy, and security.")
-    user_content = load_persona_file("user.md", "The user is a developer using DCT Agent. They prefer concise and direct answers.")
-    memory_content = load_persona_file("memory.md", "- Initialized memory.\\n- Use <tool>core_memory_append</tool> to add important facts here.")
-    
-    prompt += f"""
+    if conf.get("enable_persona", True):
+        soul_content = load_persona_file("soul.md", "You are DCT Agent, an autonomous and elite developer AI.\\nYou prioritize clean code, user autonomy, and security.")
+        user_content = load_persona_file("user.md", "The user is a developer using DCT Agent. They prefer concise and direct answers.")
+        memory_content = load_persona_file("memory.md", "- Initialized memory.\\n- Use <tool>core_memory_append</tool> to add important facts here.")
+        
+        prompt += f"""
 <soul>
 {soul_content}
 </soul>
@@ -607,6 +614,10 @@ class CodeAgent:
             return "\n".join(lines)
             
         elif tool == "core_memory_append":
+            from dct.core.config import Config
+            if not Config().get("enable_persona", True):
+                return "[TOOL ERROR] Persona feature is disabled in config. Cannot append to memory.md."
+                
             m_text = call.get("text")
             if not m_text:
                 return "[TOOL ERROR] <text> is required."
