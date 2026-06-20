@@ -145,11 +145,21 @@ def get_version(srv: "Server") -> str:
 
 # ── Pull ─────────────────────────────────────────────────────────────────────
 def pull_stream(srv: "Server", model: str) -> Iterator[dict]:
-    """
-    Yield progress dicts from /api/pull:
-    {"status": str, "total": int, "completed": int, "done": bool}
-    """
+    """Yield pull progress dictionaries."""
     url = f"{srv.base_url()}/api/pull"
     payload = {"name": model, "stream": True}
-    for chunk in _post_stream(url, payload, PULL_TIMEOUT, srv):
-        yield chunk
+    yield from _post_stream(url, payload, PULL_TIMEOUT, srv)
+
+
+def get_embeddings(srv: "Server", text: str, model: str = "nomic-embed-text") -> list[float]:
+    kwargs = _request_kwargs(srv)
+    kwargs["json"] = {"model": model, "prompt": text}
+    kwargs["timeout"] = 15
+    url = f"{srv.base_url()}/api/embeddings"
+    try:
+        r = http.client.post(url, **kwargs)
+        if r.status_code == 200:
+            return r.json().get("embedding", [])
+    except Exception:
+        pass
+    return []

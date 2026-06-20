@@ -1,0 +1,75 @@
+"""
+dct.core.memory
+Lightweight Vector Database for Long-Term Memory using pure Python cosine similarity.
+"""
+
+import os
+import json
+import math
+import uuid
+import time
+from typing import List, Dict, Any
+
+MEMORY_FILE = os.path.join(os.path.expanduser("~"), ".config", "dct", "memory.json")
+
+class VectorStore:
+    def __init__(self, path: str = MEMORY_FILE):
+        self.path = path
+        self.memories: List[Dict[str, Any]] = []
+        self.load()
+        
+    def load(self) -> None:
+        if os.path.exists(self.path):
+            try:
+                with open(self.path, "r", encoding="utf-8") as f:
+                    self.memories = json.load(f)
+            except Exception:
+                self.memories = []
+                
+    def save(self) -> None:
+        os.makedirs(os.path.dirname(self.path), exist_ok=True)
+        with open(self.path, "w", encoding="utf-8") as f:
+            json.dump(self.memories, f)
+            
+    def store(self, text: str, vector: List[float]) -> str:
+        if not vector:
+            return "Failed to store memory: Invalid vector."
+        
+        mem_id = str(uuid.uuid4())
+        doc = {
+            "id": mem_id,
+            "text": text,
+            "vector": vector,
+            "timestamp": time.time()
+        }
+        self.memories.append(doc)
+        self.save()
+        return f"Memory stored. ID: {mem_id}"
+        
+    def search(self, query_vector: List[float], top_k: int = 3) -> List[Dict[str, Any]]:
+        if not query_vector or not self.memories:
+            return []
+            
+        def cosine_similarity(v1: List[float], v2: List[float]) -> float:
+            dot = sum(a * b for a, b in zip(v1, v2))
+            norm1 = math.sqrt(sum(a * a for a in v1))
+            norm2 = math.sqrt(sum(b * b for b in v2))
+            if norm1 == 0 or norm2 == 0:
+                return 0.0
+            return dot / (norm1 * norm2)
+            
+        scored = []
+        for mem in self.memories:
+            sim = cosine_similarity(query_vector, mem["vector"])
+            scored.append((sim, mem))
+            
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [m[1] for m in scored[:top_k]]
+
+_global_store = None
+
+def get_store() -> VectorStore:
+    global _global_store
+    if _global_store is None:
+        _global_store = VectorStore()
+    return _global_store

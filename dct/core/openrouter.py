@@ -137,3 +137,20 @@ def pull_stream(srv: "Server", model: str) -> Iterator[dict]:
     Yield a single success status.
     """
     yield {"status": "success"}
+
+def get_embeddings(srv: "Server", text: str, model: str = "text-embedding-3-small") -> list[float]:
+    url = f"{srv.base_url()}/api/v1/embeddings"
+    headers = {"Authorization": f"Bearer {srv.api_key}"}
+    if srv.provider == "openrouter":
+        headers["HTTP-Referer"] = "https://github.com/doraemon-cyber-team/dct"
+        headers["X-Title"] = "DCT Agent"
+    payload = {"model": model, "input": text}
+    try:
+        r = http.client.post(url, headers=headers, json=payload, timeout=15)
+        if r.status_code == 200:
+            data = r.json().get("data", [])
+            if data:
+                return data[0].get("embedding", [])
+    except Exception:
+        pass
+    return []

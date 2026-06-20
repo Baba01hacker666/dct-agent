@@ -162,6 +162,8 @@ AVAILABLE TOOLS:
   <tool>run_swarm</tool><instruction>...</instruction><members>role | model | server_alias | skill</members> — spawn a parallel swarm of agents across different servers. Format <members> with one member per line.
   <tool>mcp_list</tool>                          — List all connected MCP servers and their available tools
   <tool>mcp_call</tool><server>...</server><name>...</name><args>{{...json...}}</args> — Call an MCP server tool
+  <tool>memory_store</tool><text>...</text>      — Store important facts, decisions, or user preferences in permanent long-term vector memory
+  <tool>memory_search</tool><query>...</query>   — Semantically search long-term memory for past facts
   <tool>bg_status</tool><id>...</id>             — check status and logs of background tasks/sub-agents (id optional)
   <tool>bg_kill</tool><id>...</id>               — kill a running background task
   <tool>bg_send_input</tool><id>...</id><input>...</input> — send input (stdin) to a running background task
@@ -296,6 +298,7 @@ def _parse_tool_call(text: str) -> Optional[dict]:
         "members": _extract_tag(text, "members"),
         "server": _extract_tag(text, "server"),
         "args": _extract_tag(text, "args"),
+        "text": _extract_tag(text, "text"),
         "patches": (
             _parse_multi_patch(text) if tool.strip() == "multi_patch_file" else None
         ),
@@ -543,6 +546,34 @@ class CodeAgent:
                     mgr.add_server(s_server, mcp_servers[s_server])
             
             return mgr.call_tool(s_server, t_name, t_args)
+
+        elif tool == "memory_store":
+            m_text = call.get("text")
+            if not m_text:
+                return "[TOOL ERROR] <text> is required."
+            from dct.core.client import get_embeddings
+            from dct.core.memory import get_store
+            vec = get_embeddings(self.server, m_text)
+            if not vec:
+                return "[TOOL ERROR] Failed to generate embedding vector from the API."
+            return get_store().store(m_text, vec)
+            
+        elif tool == "memory_search":
+            m_query = call.get("query")
+            if not m_query:
+                return "[TOOL ERROR] <query> is required."
+            from dct.core.client import get_embeddings
+            from dct.core.memory import get_store
+            vec = get_embeddings(self.server, m_query)
+            if not vec:
+                return "[TOOL ERROR] Failed to generate embedding vector for query."
+            results = get_store().search(vec, top_k=3)
+            if not results:
+                return "No matching memories found."
+            lines = ["[MEMORY RESULTS]"]
+            for mem_res in results:
+                lines.append(f"- {mem_res['text']}")
+            return "\n".join(lines)
 
         elif tool == "run_subagent":
             instruction = (
