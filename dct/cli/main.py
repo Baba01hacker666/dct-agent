@@ -367,14 +367,27 @@ def main():
     # Cleanup old telemetry transcripts (> 7 days)
     import os, time
 
+    now = time.time()
     log_dir = os.path.expanduser("~/.config/dct/transcripts")
     if os.path.isdir(log_dir):
-        now = time.time()
         for f in os.listdir(log_dir):
             if not f.endswith(".jsonl"):
                 continue
             p = os.path.join(log_dir, f)
             if os.path.isfile(p) and now - os.path.getmtime(p) > 7 * 86400:
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
+
+    # Cleanup old chat sessions (> 30 days)
+    chats_dir = os.path.expanduser("~/.config/dct/chats")
+    if os.path.isdir(chats_dir):
+        for f in os.listdir(chats_dir):
+            if not f.endswith(".json"):
+                continue
+            p = os.path.join(chats_dir, f)
+            if os.path.isfile(p) and now - os.path.getmtime(p) > 30 * 86400:
                 try:
                     os.remove(p)
                 except Exception:
