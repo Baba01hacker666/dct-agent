@@ -364,6 +364,22 @@ def main():
             sys.exit(1)
         return
 
+    # Cleanup old telemetry transcripts (> 7 days)
+    import os, time
+
+    log_dir = os.path.expanduser("~/.config/dct/transcripts")
+    if os.path.isdir(log_dir):
+        now = time.time()
+        for f in os.listdir(log_dir):
+            if not f.endswith(".jsonl"):
+                continue
+            p = os.path.join(log_dir, f)
+            if os.path.isfile(p) and now - os.path.getmtime(p) > 7 * 86400:
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
+
     # ── Interactive shell ───────────────────────────────────────────────────
     init_alias = ""
     if args.host:

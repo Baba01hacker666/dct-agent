@@ -106,6 +106,9 @@ HELP_SECTIONS = {
   [{C["fg"]}]/fork [n][/{C["fg"]}]
       [{C["dim"]}]Branch off the current session. Optionally rewind 'n' turns to clean up history.[/{C["dim"]}]
 
+  [{C["fg"]}]/compact[/{C["fg"]}]
+      [{C["dim"]}]Strip all intermediate raw tool outputs from the current session's history to save context space.[/{C["dim"]}]
+
   [{C["fg"]}]/chats[/{C["fg"]}]
       [{C["dim"]}]List all saved chat sessions.[/{C["dim"]}]
 

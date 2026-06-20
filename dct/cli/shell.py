@@ -1654,6 +1654,56 @@ class Shell:
                 else:
                     ok(f"forked session -> {self.session.name}")
 
+            elif lo == "/compact":
+                import re
+
+                new_msgs = []
+                for m in self.session.messages:
+                    if m.get("role") == "system":
+                        new_msgs.append(m)
+                        continue
+
+                    content = m.get("content", "")
+
+                    # Drop raw tool return values
+                    if m.get("role") == "user" and (
+                        content.startswith("[✓")
+                        or content.startswith("[✗")
+                        or content.startswith("[TOOL ERROR]")
+                        or content.startswith("[image:")
+                    ):
+                        continue
+
+                    # Strip tool calls from assistant messages to keep just reasoning
+                    if m.get("role") == "assistant" and "<tool>" in content:
+                        cleaned = re.sub(
+                            r"<tool>.*?</tool>",
+                            "[TOOL COMPACTED]",
+                            content,
+                            flags=re.DOTALL,
+                        )
+                        cleaned = re.sub(
+                            r"<code>.*?</code>", "", cleaned, flags=re.DOTALL
+                        )
+                        cleaned = re.sub(
+                            r"<path>.*?</path>", "", cleaned, flags=re.DOTALL
+                        )
+                        cleaned = re.sub(
+                            r"<query>.*?</query>", "", cleaned, flags=re.DOTALL
+                        )
+                        new_msgs.append(
+                            {"role": "assistant", "content": cleaned.strip()}
+                        )
+                    else:
+                        new_msgs.append(m)
+
+                dropped = len(self.session.messages) - len(new_msgs)
+                self.session.messages = new_msgs
+                self.session._autosave()
+                ok(
+                    f"compacted context window (stripped {dropped} tool results & compress tools)"
+                )
+
             elif lo == "/chats":
                 import os, json
 
