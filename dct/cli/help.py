@@ -103,6 +103,9 @@ HELP_SECTIONS = {
   [{C["fg"]}]/new[/{C["fg"]}]
       [{C["dim"]}]Start a new, blank chat session (auto-saves current).[/{C["dim"]}]
 
+  [{C["fg"]}]/fork [n][/{C["fg"]}]
+      [{C["dim"]}]Branch off the current session. Optionally rewind 'n' turns to clean up history.[/{C["dim"]}]
+
   [{C["fg"]}]/chats[/{C["fg"]}]
       [{C["dim"]}]List all saved chat sessions.[/{C["dim"]}]
 

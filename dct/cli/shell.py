@@ -1629,6 +1629,31 @@ class Shell:
                 self.session.name = f"chat_{int(time.time())}"
                 ok("started new chat session")
 
+            elif lo.startswith("/fork"):
+                import time
+                import copy
+
+                parts = raw.split()
+                rewind_count = 0
+                if len(parts) > 1 and parts[1].isdigit():
+                    rewind_count = int(parts[1])
+
+                new_session = copy.deepcopy(self.session)
+                new_session.name = f"chat_{int(time.time())}"
+
+                for _ in range(rewind_count):
+                    new_session.rewind()
+
+                self.session = new_session
+                self.session._autosave()
+
+                if rewind_count > 0:
+                    ok(
+                        f"forked and rewound {rewind_count} turns -> {self.session.name}"
+                    )
+                else:
+                    ok(f"forked session -> {self.session.name}")
+
             elif lo == "/chats":
                 import os, json
 
