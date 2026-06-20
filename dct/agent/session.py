@@ -27,8 +27,21 @@ class Session:
         )
 
     # ── Messages ─────────────────────────────────────────────────────────────
+    def _autosave(self):
+        import os
+
+        chats_dir = os.path.expanduser("~/.config/dct/chats")
+        os.makedirs(chats_dir, exist_ok=True)
+        if not self.name:
+            self.name = f"chat_{int(self.created_at)}"
+        try:
+            self.save(os.path.join(chats_dir, f"{self.name}.json"))
+        except Exception:
+            pass
+
     def add(self, role: str, content: str):
         self.messages.append({"role": role, "content": content})
+        self._autosave()
 
     def clear(self, keep_system: bool = True):
         self.messages = []
@@ -36,6 +49,7 @@ class Session:
             self.messages.append(
                 {"role": "system", "content": self.system_prompt}
             )
+        self._autosave()
 
     def set_system(self, prompt: str):
         self.system_prompt = prompt
@@ -53,6 +67,7 @@ class Session:
         for i in range(len(self.messages) - 1, -1, -1):
             if self.messages[i].get("role") == "user":
                 self.messages = self.messages[:i]
+                self._autosave()
                 return True
         return False
 

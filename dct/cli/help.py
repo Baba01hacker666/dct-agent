@@ -98,7 +98,16 @@ HELP_SECTIONS = {
       Example: /save session_2024.json[/{C["dim"]}]
 
   [{C["fg"]}]/load <file>[/{C["fg"]}]
-      [{C["dim"]}]Load and resume a saved conversation.[/{C["dim"]}]
+      [{C["dim"]}]Load a previously saved JSON conversation.[/{C["dim"]}]
+
+  [{C["fg"]}]/new[/{C["fg"]}]
+      [{C["dim"]}]Start a new, blank chat session (auto-saves current).[/{C["dim"]}]
+
+  [{C["fg"]}]/chats[/{C["fg"]}]
+      [{C["dim"]}]List all saved chat sessions.[/{C["dim"]}]
+
+  [{C["fg"]}]/chat switch <id>[/{C["fg"]}]
+      [{C["dim"]}]Switch to a saved chat session by ID from /chats.[/{C["dim"]}]
 
   [{C["fg"]}]/btw <question>[/{C["fg"]}]
       [{C["dim"]}]Ask the AI a side question utilizing the current context,

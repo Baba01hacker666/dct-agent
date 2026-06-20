@@ -1621,6 +1621,83 @@ class Shell:
                 except Exception as e:
                     err(str(e))
 
+            # ── chat multiplexer ─────────────────────────────────────────
+            elif lo == "/new" or lo == "/chat new":
+                self.session = Session()
+                import time
+
+                self.session.name = f"chat_{int(time.time())}"
+                ok("started new chat session")
+
+            elif lo == "/chats":
+                import os, json
+
+                chats_dir = os.path.expanduser("~/.config/dct/chats")
+                os.makedirs(chats_dir, exist_ok=True)
+                files = sorted(
+                    [f for f in os.listdir(chats_dir) if f.endswith(".json")],
+                    reverse=True,
+                )
+                if not files:
+                    con.print(
+                        f"  [{C['dim']}]no saved chats found[/{C['dim']}]"
+                    )
+                    continue
+                section("saved chats")
+                for i, f in enumerate(files):
+                    p = os.path.join(chats_dir, f)
+                    try:
+                        with open(p) as fh:
+                            d = json.load(fh)
+                            title = d.get("name", f)
+                            msgs = d.get("messages", [])
+                            # Find first user message for preview
+                            preview = "<empty>"
+                            for m in msgs:
+                                if m.get("role") == "user":
+                                    preview = m["content"][:60] + (
+                                        "..." if len(m["content"]) > 60 else ""
+                                    )
+                                    break
+
+                            if self.session.name == title:
+                                con.print(
+                                    f"  [{C['ok']}]* {i}[/{C['ok']}]  [{C['fg']}]{title}[/{C['fg']}]  [{C['dim']}]{preview}[/{C['dim']}]"
+                                )
+                            else:
+                                con.print(
+                                    f"  [{C['accent']}]{i}[/{C['accent']}]  {title}  [{C['dim']}]{preview}[/{C['dim']}]"
+                                )
+                    except Exception:
+                        pass
+                con.print(
+                    f"  [{C['dim']}]use /chat switch <id> to load[/{C['dim']}]"
+                )
+
+            elif lo.startswith("/chat switch "):
+                idx_str = raw[13:].strip()
+                import os
+
+                chats_dir = os.path.expanduser("~/.config/dct/chats")
+                os.makedirs(chats_dir, exist_ok=True)
+                files = sorted(
+                    [f for f in os.listdir(chats_dir) if f.endswith(".json")],
+                    reverse=True,
+                )
+                try:
+                    idx = int(idx_str)
+                    if idx < 0 or idx >= len(files):
+                        err("invalid chat id")
+                        continue
+
+                    fname = files[idx]
+                    self.session = Session.load(os.path.join(chats_dir, fname))
+                    ok(
+                        f"loaded chat: {fname} ({self.session.user_turns} turns)"
+                    )
+                except Exception as e:
+                    err(f"failed to switch chat: {e}")
+
             # ── agent mode ───────────────────────────────────────────────
             elif lo in ("/agent", "/agent toggle"):
                 self.agent_mode = not self.agent_mode
