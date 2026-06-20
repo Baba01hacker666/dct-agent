@@ -370,7 +370,7 @@ def test_append_log_safe_truncates():
 
 
 def test_config_defaults(tmp_path):
-    from dct.core.config import Config, DEFAULTS
+    from dct.core.config import Config
     cfg_path = tmp_path / "config.json"
     cfg = Config(str(cfg_path))
     assert cfg.get("agent_enabled") is True
@@ -389,7 +389,6 @@ def test_config_defaults(tmp_path):
 
 
 def test_auto_probe_thread_lifecycle():
-    import time
     from dct.cli.shell import Shell
     from dct.core.registry import ServerRegistry
     import tempfile

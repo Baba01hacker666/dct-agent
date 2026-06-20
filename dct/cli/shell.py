@@ -1705,7 +1705,8 @@ class Shell:
                 )
 
             elif lo == "/chats":
-                import os, json
+                import os
+                import json
 
                 chats_dir = os.path.expanduser("~/.config/dct/chats")
                 os.makedirs(chats_dir, exist_ok=True)

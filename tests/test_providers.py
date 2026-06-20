@@ -23,7 +23,8 @@ def test_ollama_auth_headers():
 
 
 def test_read_image():
-    import tempfile, os
+    import tempfile
+    import os
     from dct.tools.image import read_image
 
     # Non-existent file
@@ -44,7 +45,8 @@ def test_read_image():
         os.unlink(tmp_path)
 
     # Valid PNG (1x1 pixel)
-    import struct, zlib
+    import struct
+    import zlib
     def make_png():
         # Minimal valid PNG: 1x1 red pixel
         raw_data = b"\x00" + b"\xff\x00\x00"  # filter=0, R=255, G=0, B=0

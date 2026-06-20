@@ -701,13 +701,15 @@ class CodeAgent:
                 path = os.path.join(os.path.expanduser("~"), ".config", "dct", f"{m_section}.md")
             
             if m_action == "append":
-                if not m_new: return "[TOOL ERROR] <new_text> is required for append."
+                if not m_new:
+                    return "[TOOL ERROR] <new_text> is required for append."
                 with open(path, "a", encoding="utf-8") as f:
                     f.write(f"\n{m_new}")
                 return f"[Success] Appended to {m_section}.md. It will be visible next turn."
             
             elif m_action == "replace":
-                if not m_old or not m_new: return "[TOOL ERROR] <old_text> and <new_text> required."
+                if not m_old or not m_new:
+                    return "[TOOL ERROR] <old_text> and <new_text> required."
                 with open(path, "r", encoding="utf-8") as f:
                     content = f.read()
                 if m_old not in content:
@@ -718,7 +720,8 @@ class CodeAgent:
                 return f"[Success] Replaced text in {m_section}.md."
                 
             elif m_action == "rewrite":
-                if not m_new: return "[TOOL ERROR] <new_text> required for rewrite."
+                if not m_new:
+                    return "[TOOL ERROR] <new_text> required for rewrite."
                 with open(path, "w", encoding="utf-8") as f:
                     f.write(m_new)
                 return f"[Success] Rewrote entire {m_section}.md."
@@ -1144,7 +1147,7 @@ class CodeAgent:
                 line = int(line_str)
                 col = int(col_str)
             except ValueError:
-                return f"[TOOL ERROR] <line> and <column> must be integers."
+                return "[TOOL ERROR] <line> and <column> must be integers."
                 
             from dct.tools.lsp import goto_definition, find_references
             import json

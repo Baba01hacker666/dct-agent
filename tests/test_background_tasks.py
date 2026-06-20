@@ -26,7 +26,7 @@ def test_background_task_lifecycle():
     mock_proc.wait.return_value = 0
     mock_proc.stdin = MagicMock()
 
-    with patch("subprocess.Popen", return_value=mock_proc) as mock_popen, \
+    with patch("subprocess.Popen", return_value=mock_proc) as _mock_popen, \
          patch("dct.tools.executor.prepare_background_command", return_value=(["python"], None)):
 
         # 1. Run Python command in background

@@ -365,7 +365,8 @@ def main():
         return
 
     # Cleanup old telemetry transcripts (> 7 days)
-    import os, time
+    import os
+    import time
 
     now = time.time()
     log_dir = os.path.expanduser("~/.config/dct/transcripts")
