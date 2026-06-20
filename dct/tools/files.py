@@ -13,6 +13,44 @@ import difflib
 from pathlib import Path
 from dataclasses import dataclass
 
+_HOME = os.path.expanduser("~")
+
+
+def _safe_path(p: str) -> str:
+    """Replace home directory with ~ for privacy in error messages."""
+    if p.startswith(_HOME):
+        return "~" + p[len(_HOME):]
+    return p
+
+# Default sandbox root — resolved at first call to stay current
+_sandbox_root: Path | None = None
+
+
+def _get_sandbox_root() -> Path | None:
+    """Return the project root used for path sandboxing, or None if disabled."""
+    global _sandbox_root
+    if _sandbox_root is None:
+        from dct.core.config import Config
+        cfg = Config()
+        root = cfg.get("project_root") or ""
+        _sandbox_root = Path(root).resolve() if root else None
+    return _sandbox_root
+
+
+def _check_path(path: str | Path) -> Path:
+    """Resolve path and raise if sandbox is enabled and path escapes."""
+    resolved = Path(path).expanduser().resolve()
+    sandbox = _get_sandbox_root()
+    if sandbox is not None:
+        try:
+            resolved.relative_to(sandbox)
+        except ValueError:
+            raise PermissionError(
+                f"Path {str(resolved)!r} is outside the project root "
+                f"{str(sandbox)!r}. File operations are sandboxed."
+            )
+    return resolved
+
 
 @dataclass
 class FileResult:
@@ -31,7 +69,7 @@ WRITE_MAX_BYTES = 50 * 1024 * 1024  # 50 MB
 
 def read_file(path: str, max_bytes: int = 512_000) -> FileResult:
     try:
-        p = Path(path).expanduser().resolve()
+        p = _check_path(path)
         if not p.exists():
             return FileResult(ok=False, path=str(p), message="file not found")
         if p.stat().st_size > max_bytes:
@@ -41,14 +79,14 @@ def read_file(path: str, max_bytes: int = 512_000) -> FileResult:
                 message=f"file too large (>{max_bytes // 1024}KB)",
             )
         content = p.read_text(errors="replace")
-        return FileResult(ok=True, path=str(p), content=content)
+        return FileResult(ok=True, path=_safe_path(str(p)), content=content)
     except Exception as e:
-        return FileResult(ok=False, path=path, message=str(e))
+        return FileResult(ok=False, path=_safe_path(path), message=str(e))
 
 
 def write_file(path: str, content: str, backup: bool = True) -> FileResult:
     try:
-        p = Path(path).expanduser().resolve()
+        p = _check_path(path)
 
         content_bytes = len(content.encode("utf-8", errors="replace"))
         if content_bytes > WRITE_MAX_BYTES:
@@ -92,13 +130,13 @@ def write_file(path: str, content: str, backup: bool = True) -> FileResult:
             ok=True, path=str(p), content=content, message="written", diff=diff
         )
     except Exception as e:
-        return FileResult(ok=False, path=path, message=str(e))
+        return FileResult(ok=False, path=_safe_path(path), message=str(e))
 
 
 def patch_file(path: str, old: str, new: str) -> FileResult:
     """Replace first occurrence of `old` with `new` in file."""
     try:
-        p = Path(path).expanduser().resolve()
+        p = _check_path(path)
         if not p.exists():
             return FileResult(ok=False, path=str(p), message="file not found")
         content = p.read_text(errors="replace")
@@ -138,12 +176,12 @@ def patch_file(path: str, old: str, new: str) -> FileResult:
             diff=diff,
         )
     except Exception as e:
-        return FileResult(ok=False, path=path, message=str(e))
+        return FileResult(ok=False, path=_safe_path(path), message=str(e))
 
 
 def list_dir(path: str, max_entries: int = 200) -> FileResult:
     try:
-        p = Path(path).expanduser().resolve()
+        p = _check_path(path)
         if not p.exists():
             return FileResult(ok=False, path=str(p), message="path not found")
         all_entries = sorted(p.iterdir())
@@ -162,7 +200,7 @@ def list_dir(path: str, max_entries: int = 200) -> FileResult:
             entries.append(f"… (+{len(all_entries) - max_entries} more)")
         return FileResult(ok=True, path=str(p), content="\n".join(entries))
     except Exception as e:
-        return FileResult(ok=False, path=path, message=str(e))
+        return FileResult(ok=False, path=_safe_path(path), message=str(e))
 
 
 def tree(path: str, max_depth: int = 3, max_entries: int = 300) -> FileResult:
@@ -185,14 +223,14 @@ def tree(path: str, max_depth: int = 3, max_entries: int = 300) -> FileResult:
                 _walk(entry, depth + 1, prefix + extension)
 
     try:
-        p = Path(path).expanduser().resolve()
+        p = _check_path(path)
         if not p.exists():
             return FileResult(ok=False, path=str(p), message="path not found")
         lines.append(str(p))
         _walk(p, 1, "")
         return FileResult(ok=True, path=str(p), content="\n".join(lines))
     except Exception as e:
-        return FileResult(ok=False, path=path, message=str(e))
+        return FileResult(ok=False, path=_safe_path(path), message=str(e))
 
 
 def run_grep(
@@ -258,7 +296,7 @@ def run_grep(
             message="rg (ripgrep) binary not found on the system. Please install it.",
         )
     except Exception as e:
-        return FileResult(ok=False, path=path, message=str(e))
+        return FileResult(ok=False, path=_safe_path(path), message=str(e))
 
 
 def _run_grep_fallback(
@@ -300,7 +338,7 @@ def _run_grep_fallback(
             ok=False, path=path, message="Neither rg nor grep found on PATH."
         )
     except Exception as e:
-        return FileResult(ok=False, path=path, message=str(e))
+        return FileResult(ok=False, path=_safe_path(path), message=str(e))
 
 
 def _make_diff(old: str, new: str, fname: str) -> str:
@@ -352,7 +390,7 @@ def run_glob(
 
         return FileResult(ok=True, path=path, content=out)
     except Exception as e:
-        return FileResult(ok=False, path=path, message=str(e))
+        return FileResult(ok=False, path=_safe_path(path), message=str(e))
 
 
 def _run_glob_fallback(pattern: str, path: str = ".") -> FileResult:
@@ -369,7 +407,7 @@ def _run_glob_fallback(pattern: str, path: str = ".") -> FileResult:
         finally:
             _os.chdir(cwd)
     except Exception as e:
-        return FileResult(ok=False, path=path, message=str(e))
+        return FileResult(ok=False, path=_safe_path(path), message=str(e))
 
     matches.sort()
     if not matches:

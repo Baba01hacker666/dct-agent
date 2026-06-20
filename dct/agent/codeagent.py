@@ -86,6 +86,25 @@ BG_CLEANUP_TTL = 300
 # Max chars per background log
 BG_LOG_MAX_CHARS = 10000
 
+
+def _sanitize_tool_result(result: str) -> str:
+    """Escape XML-like content in tool results to prevent prompt injection.
+
+    If a fetched URL or read file contains <tool> tags, the regex-based
+    tool-call parser could interpret them as real tool calls.  We replace
+    '<' with its HTML entity in content that looks like an XML tag.
+    """
+    import re as _re
+    # Replace opening <word...> and closing </word> tags
+    safe = _re.sub(
+        r"</?(\w+)(\s[^>]*)?>",
+        lambda m: f"&lt;{'/' if m.group(0).startswith('</') else ''}"
+                  f"{m.group(1)}{m.group(2) or ''}&gt;",
+        result,
+    )
+    return safe
+
+
 def load_persona_file(filename: str, default_content: str) -> str:
     import os
     path = os.path.join(os.path.expanduser("~"), ".config", "dct", filename)
@@ -1636,10 +1655,14 @@ class CodeAgent:
             if result == "__DONE__":
                 break
 
+            # Sanitize tool result to guard against prompt injection:
+            # if the result contains XML-like <tool> tags, they could be
+            # parsed as real tool calls by the regex-based extractor.
+            safe_result = _sanitize_tool_result(result)
             msgs.append(
                 {
                     "role": "user",
-                    "content": f"[TOOL RESULT: {tool_name}]\n{result}",
+                    "content": f"[TOOL RESULT: {tool_name}]\n{safe_result}",
                 }
             )
 

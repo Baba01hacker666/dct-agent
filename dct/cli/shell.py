@@ -682,6 +682,16 @@ class Shell:
             }
         )
 
+        # One-time security advisory
+        has_keys = any(s.api_key for s in self.registry.servers if hasattr(s, "api_key"))
+        if has_keys and not self.config.get("api_key_warned"):
+            con.print(
+                f"  [{C['warn']}]⚠ API keys stored in plaintext at "
+                f"~/.config/dct/servers.json[/{C['warn']}]"
+            )
+            self.config.set("api_key_warned", True)
+            self.config.save()
+
         while True:
             try:
                 con.print()
@@ -1410,6 +1420,18 @@ class Shell:
                 self.config.save()
                 ok(f"removed custom skill: {name}")
 
+            elif lo.startswith("/skill show "):
+                name = raw[12:].strip().lower()
+                custom = self.config.get("custom_skills", {})
+                skill = custom.get(name) or SKILL_PRESETS.get(name)
+                if not skill:
+                    warn(f"unknown skill: {name}")
+                    continue
+                section(f"skill: {name}")
+                con.print(f"  [{C['dim']}]description:[/{C['dim']}] {skill['desc']}")
+                con.print(f"  [{C['dim']}]prompt:[/{C['dim']}]")
+                con.print(f"  [{C['fg']}]{skill['prompt']}[/{C['fg']}]")
+
             elif lo.startswith("/skill "):
                 name = raw[7:].strip().lower()
                 custom = self.config.get("custom_skills", {})
@@ -1805,8 +1827,13 @@ class Shell:
                     "no_probe_on_start",
                     "auto_probe_interval",
                     "enable_tracing",
+                    "enable_persona",
+                    "temperature",
+                    "top_p",
+                    "max_tokens",
                     "custom_skills",
                     "squads",
+                    "mcp_servers",
                 ]:
                     v = self.config.get(k)
                     con.print(

@@ -51,6 +51,12 @@ class VectorStore:
         if not vector:
             return "Failed to store memory: Invalid vector."
 
+        # Dedup: skip if identical text already stored
+        with self._lock:
+            for mem in self.memories:
+                if mem["text"] == text:
+                    return f"Memory already stored. ID: {mem['id']}"
+
         mem_id = str(uuid.uuid4())
         doc = {
             "id": mem_id,
@@ -59,6 +65,9 @@ class VectorStore:
             "timestamp": time.time()
         }
         with self._lock:
+            # TTL: drop entries older than 30 days
+            cutoff = time.time() - 30 * 86400
+            self.memories = [m for m in self.memories if m.get("timestamp", 0) > cutoff]
             self.memories.append(doc)
         self.save()
         return f"Memory stored. ID: {mem_id}"

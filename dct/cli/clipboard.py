@@ -39,6 +39,11 @@ def copy_text(text: str) -> bool:
     if os.name == "nt" and _copy_with(["clip"], text):
         return True
 
+    # WSL (Windows Subsystem for Linux)
+    wsl_clip = "/mnt/c/Windows/System32/clip.exe"
+    if os.path.exists(wsl_clip) and _copy_with([wsl_clip], text):
+        return True
+
     # OSC52 fallback (some terminals support this)
     try:
         import base64
