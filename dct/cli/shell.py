@@ -1178,20 +1178,7 @@ class Shell:
                 if not self.active:
                     err("no active server to run reflection")
                     continue
-                prompt = (
-                    "Please review our entire conversation history. "
-                    "Reflect on what tasks you completed, what strategies succeeded, and which failed. "
-                    "Your goal is recursive self-improvement. Extract reusable workflows, rules, and crucial insights to prevent repeating past mistakes.\n\n"
-                    "CRITICALLY: Categorize your findings and save them appropriately using `<tool>core_memory_manage</tool>`:\n"
-                    "1. <section>project</section>: For codebase-specific mistakes, repo architecture, local build commands, or folder structures.\n"
-                    "2. <section>user</section>: For my personal preferences, how I like code written, or communication styles.\n"
-                    "3. <section>memory</section>: For general software engineering lessons or cross-project facts you learned.\n"
-                    "4. <section>soul</section>: If you need to change your core behavioral directives.\n\n"
-                    "Do NOT invent insights, only reflect on what actually happened."
-                )
-                con.print(f"  [{C['dim']}]triggering autonomous recursive learning...[/{C['dim']}]")
-                self.session.add("user", prompt)
-                self._run_agent(self.session.messages, prompt)
+                self._trigger_learn()
                 continue
 
             # ── history ──────────────────────────────────────────────────
@@ -1886,6 +1873,24 @@ class Shell:
             con.print()
             err(str(e))
 
+    def _trigger_learn(self):
+        """Run autonomous reflection and recursive learning."""
+        from dct.core.theme import con, C
+        prompt = (
+            "Please review our entire conversation history. "
+            "Reflect on what tasks you completed, what strategies succeeded, and which failed. "
+            "Your goal is recursive self-improvement. Extract reusable workflows, rules, and crucial insights to prevent repeating past mistakes.\n\n"
+            "CRITICALLY: Categorize your findings and save them appropriately using `<tool>core_memory_manage</tool>`:\n"
+            "1. <section>project</section>: For codebase-specific mistakes, repo architecture, local build commands, or folder structures.\n"
+            "2. <section>user</section>: For my personal preferences, how I like code written, or communication styles.\n"
+            "3. <section>memory</section>: For general software engineering lessons or cross-project facts you learned.\n"
+            "4. <section>soul</section>: If you need to change your core behavioral directives.\n\n"
+            "Do NOT invent insights, only reflect on what actually happened."
+        )
+        con.print(f"  [{C['dim']}]triggering autonomous recursive learning...[/{C['dim']}]")
+        self.session.add("user", prompt)
+        self._run_agent(self.session.messages, prompt)
+
     def _run_goal_mode(self, goal_text: str):
         """Run agent continuously until it is finished."""
         if not self.active:
@@ -1983,6 +1988,9 @@ class Shell:
             except Exception as e:
                 con.print(f"\n  [{C['err']}][GOAL ERROR]: {str(e)}[/{C['err']}]")
                 break
+        
+        # After goal finishes, explicitly run the learning loop
+        self._trigger_learn()
 
     def _btw(self, msg_txt: str):
         """Ask a side question using current context without modifying session history."""
