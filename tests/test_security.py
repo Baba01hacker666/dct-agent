@@ -1,6 +1,5 @@
 """Tests for security hardening: URL validation, path sandboxing, prompt injection."""
 import pytest
-from pathlib import Path
 
 
 class TestUrlValidator:
@@ -83,7 +82,7 @@ class TestPathSandbox:
         with pytest.raises(PermissionError, match="outside the project root"):
             _check_path("/etc/passwd")
 
-    def test_check_path_bypasses_when_no_sandbox(self, monkeypatch):
+    def test_check_path_bypasses_when_no_sandbox(self, monkeypatch, tmp_path):
         from dct.tools.files import _check_path
 
         monkeypatch.setattr(
@@ -91,8 +90,10 @@ class TestPathSandbox:
             lambda: None,
         )
         # Should not raise when sandbox is disabled
-        p = _check_path("/etc/passwd")
-        assert p == Path("/etc/passwd")
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("hello")
+        p = _check_path(str(test_file))
+        assert p == test_file
 
 
 class TestPromptInjection:
