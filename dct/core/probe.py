@@ -36,14 +36,14 @@ def probe_server(srv: "Server") -> dict:
     headers = {}
     if srv.api_key:
         headers["Authorization"] = f"Bearer {srv.api_key}"
-    req_kwargs: dict[str, Any] = {"timeout": PROBE_TIMEOUT, "headers": headers}
+    req_kwargs: dict[str, Any] = {"headers": headers}
     if not srv.tls_verify:
         req_kwargs["verify"] = False
 
     if srv.provider in ("openrouter", "openai"):
         try:
             t0 = time.time()
-            r = requests.get(f"{base}/api/v1/models", **req_kwargs)
+            r = requests.get(f"{base}/api/v1/models", timeout=PROBE_TIMEOUT, **req_kwargs)
             ms = int((time.time() - t0) * 1000)
             if r.status_code == 200:
                 data = r.json()
@@ -74,7 +74,7 @@ def probe_server(srv: "Server") -> dict:
             tried_tags = True
         try:
             t0 = time.time()
-            r = requests.get(f"{base}{path}", **req_kwargs)
+            r = requests.get(f"{base}{path}", timeout=PROBE_TIMEOUT, **req_kwargs)
             ms = int((time.time() - t0) * 1000)
             if r.status_code == 200:
                 try:
@@ -90,7 +90,7 @@ def probe_server(srv: "Server") -> dict:
                 else:
                     if not tried_tags:
                         try:
-                            tr = requests.get(f"{base}/api/tags", **req_kwargs)
+                            tr = requests.get(f"{base}/api/tags", timeout=PROBE_TIMEOUT, **req_kwargs)
                             if tr.ok:
                                 srv.models = [
                                     m["name"]
@@ -100,7 +100,7 @@ def probe_server(srv: "Server") -> dict:
                             logger.debug("Failed to fetch tags from %s", base, exc_info=True)
 
                 try:
-                    vr = requests.get(f"{base}/api/version", **req_kwargs)
+                    vr = requests.get(f"{base}/api/version", timeout=PROBE_TIMEOUT, **req_kwargs)
                     if vr.ok:
                         srv.version = vr.json().get("version", "")
                 except Exception:
@@ -162,7 +162,7 @@ def probe_endpoints_detail(srv: "Server") -> list[dict]:
     for path in PROBE_ORDER:
         try:
             t0 = time.time()
-            r = requests.get(f"{base}{path}", **req_kwargs)
+            r = requests.get(f"{base}{path}", timeout=PROBE_TIMEOUT, **req_kwargs)
             ms = int((time.time() - t0) * 1000)
             try:
                 snippet = str(r.json())[:72] + "…"
