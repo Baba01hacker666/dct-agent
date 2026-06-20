@@ -52,17 +52,23 @@ def write_file(path: str, content: str, backup: bool = True) -> FileResult:
         content_bytes = len(content.encode("utf-8", errors="replace"))
         if content_bytes > WRITE_MAX_BYTES:
             return FileResult(
-                ok=False, path=str(p),
+                ok=False,
+                path=str(p),
                 message=f"content too large ({content_bytes / 1024 / 1024:.1f} MB, max {WRITE_MAX_BYTES / 1024 / 1024:.0f} MB)",
             )
 
         # Auto-Linter: prevent writing broken python syntax
         if p.suffix == ".py":
             import ast
+
             try:
                 ast.parse(content)
             except SyntaxError as e:
-                return FileResult(ok=False, path=str(p), message=f"SyntaxError: {e.msg} at line {e.lineno}")
+                return FileResult(
+                    ok=False,
+                    path=str(p),
+                    message=f"SyntaxError: {e.msg} at line {e.lineno}",
+                )
 
         old_content = ""
         was_new = not p.exists()
@@ -104,10 +110,15 @@ def patch_file(path: str, old: str, new: str) -> FileResult:
         # Auto-Linter: prevent writing broken python syntax
         if p.suffix == ".py":
             import ast
+
             try:
                 ast.parse(new_content)
             except SyntaxError as e:
-                return FileResult(ok=False, path=str(p), message=f"SyntaxError after patch: {e.msg} at line {e.lineno}")
+                return FileResult(
+                    ok=False,
+                    path=str(p),
+                    message=f"SyntaxError after patch: {e.msg} at line {e.lineno}",
+                )
 
         shutil.copy2(p, str(p) + ".dct.bak")
         p.write_text(new_content)

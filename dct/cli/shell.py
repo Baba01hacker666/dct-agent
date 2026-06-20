@@ -54,7 +54,6 @@ from dct.cli.display import (
 from dct.cli.help import show_help
 from dct.cli.clipboard import copy_text
 
-
 PROMPT_PRESETS: dict[str, str] = {
     "coder": (
         "You are a senior software engineer. Be precise, propose minimal safe changes, "
@@ -239,6 +238,7 @@ class Shell:
         self.active: Optional[Server] = None
         self.model: str = ""
         from dct.core.config import Config
+
         self.config = Config()
         self.agent_mode: bool = self.config.get("agent_enabled", True)
         self._probe_stop = threading.Event()
@@ -313,6 +313,7 @@ class Shell:
 
     def _auto_probe_loop(self, interval: int):
         from dct.core.probe import probe_all
+
         while not self._probe_stop.wait(interval):
             try:
                 probe_all(self.registry)  # silent background refresh
@@ -371,13 +372,18 @@ class Shell:
             # Create session and agent
             session = Session()
             session.set_system(system_prompt)
-            session.add("user", f"Squad task: {task}\n\nAs the {role} specialist, complete your part of this task. Be thorough and produce actionable output.")
+            session.add(
+                "user",
+                f"Squad task: {task}\n\nAs the {role} specialist, complete your part of this task. Be thorough and produce actionable output.",
+            )
 
             def stream_fn(srv_, mdl_, msgs_):
                 yield from client_chat_stream(srv_, mdl_, msgs_)
 
             agent = CodeAgent(
-                server=srv, model=model, session=session,
+                server=srv,
+                model=model,
+                session=session,
                 stream_fn=stream_fn,
                 on_text=lambda c: None,
                 max_turns=8,
@@ -400,11 +406,19 @@ class Shell:
                         errors[r_role] = r_text
                     else:
                         results[r_role] = r_text
-                    status = f"[{C['err']}]✗[/{C['err']}]" if r_role in errors else f"[{C['ok']}]✓[/{C['ok']}]"
-                    con.print(f"  {status} [{C['accent']}]{r_role}[/{C['accent']}] completed")
+                    status = (
+                        f"[{C['err']}]✗[/{C['err']}]"
+                        if r_role in errors
+                        else f"[{C['ok']}]✓[/{C['ok']}]"
+                    )
+                    con.print(
+                        f"  {status} [{C['accent']}]{r_role}[/{C['accent']}] completed"
+                    )
                 except Exception as e:
                     errors[role] = str(e)
-                    con.print(f"  [{C['err']}]✗[/{C['err']}] [{C['accent']}]{role}[/{C['accent']}] failed: {e}")
+                    con.print(
+                        f"  [{C['err']}]✗[/{C['err']}] [{C['accent']}]{role}[/{C['accent']}] failed: {e}"
+                    )
 
         con.print(f"  [{C['dim']}]{'─' * 66}[/{C['dim']}]")
 
@@ -443,9 +457,9 @@ class Shell:
             "You are an expert task orchestrator. Decompose the user's goal into "
             "parallelizable subtasks. Output them in this EXACT XML format:\n\n"
             "<plan>\n"
-            "<task id=\"1\" desc=\"short label\" deps=\"\">detailed instructions for this subtask</task>\n"
-            "<task id=\"2\" desc=\"short label\" deps=\"1\">instructions (runs after task 1)</task>\n"
-            "<task id=\"3\" desc=\"short label\" deps=\"1\">instructions (runs parallel with task 2)</task>\n"
+            '<task id="1" desc="short label" deps="">detailed instructions for this subtask</task>\n'
+            '<task id="2" desc="short label" deps="1">instructions (runs after task 1)</task>\n'
+            '<task id="3" desc="short label" deps="1">instructions (runs parallel with task 2)</task>\n'
             "</plan>\n\n"
             "Rules:\n"
             "- Every task needs an id (number), desc (3-5 word label), and deps (comma-separated ids of tasks it depends on, or empty)\n"
@@ -459,11 +473,15 @@ class Shell:
 
         planner_session = Session()
         planner_session.set_system(planner_prompt)
-        planner_session.add("user", f"Goal: {goal}\n\nDecompose this into parallel subtasks.")
+        planner_session.add(
+            "user", f"Goal: {goal}\n\nDecompose this into parallel subtasks."
+        )
 
         plan_text = ""
         try:
-            for chunk in client_chat_stream(self.active, self.model, planner_session.as_messages()):
+            for chunk in client_chat_stream(
+                self.active, self.model, planner_session.as_messages()
+            ):
                 plan_text += chunk
                 con.print(f"[{C['dim']}]{chunk}[/{C['dim']}]", end="")
             con.print()
@@ -474,9 +492,11 @@ class Shell:
         # ── Phase 2: Parse plan ─────────────────────────────────────────
         tasks: dict[str, dict] = {}
         import re
+
         for match in re.finditer(
             r'<task\s+id="(\d+)"\s+desc="([^"]*)"\s+deps="([^"]*)"\s*>(.*?)</task>',
-            plan_text, re.DOTALL
+            plan_text,
+            re.DOTALL,
         ):
             tid = match.group(1)
             tasks[tid] = {
@@ -494,11 +514,13 @@ class Shell:
         con.print(f"  [{C['ok']}]parsed {len(tasks)} subtasks[/{C['ok']}]")
         for tid in sorted(tasks.keys(), key=int):
             t = tasks[tid]
-            deps_str = f" ← {', '.join(t['deps'])}" if t['deps'] else ""
+            deps_str = f" ← {', '.join(t['deps'])}" if t["deps"] else ""
             acc = C["accent"]
             fg = C["fg"]
             dim = C["dim"]
-            con.print(f"  [{acc}]{tid}.[/{acc}] [{fg}]{t['desc']}[/{fg}][{dim}]{deps_str}[/{dim}]")
+            con.print(
+                f"  [{acc}]{tid}.[/{acc}] [{fg}]{t['desc']}[/{fg}][{dim}]{deps_str}[/{dim}]"
+            )
 
         # ── Phase 3: Execute in waves ───────────────────────────────────
         completed: set = set()
@@ -508,7 +530,8 @@ class Shell:
             wave_num += 1
             # Find tasks whose deps are all complete
             ready = [
-                tid for tid, t in tasks.items()
+                tid
+                for tid, t in tasks.items()
                 if tid not in completed and all(d in completed for d in t["deps"])
             ]
             if not ready:
@@ -533,17 +556,21 @@ class Shell:
                     "Focus ONLY on your assigned task. Produce complete, actionable output. "
                     "Use tools (write_file, run_bash, etc.) to create real deliverables."
                 )
-                worker_session.add("user",
-                    f"Subtask {tid}: {t['desc']}\n\n{t['body']}{dep_results}"
+                worker_session.add(
+                    "user", f"Subtask {tid}: {t['desc']}\n\n{t['body']}{dep_results}"
                 )
 
                 def stream_fn(srv_, mdl_, msgs_):
                     yield from client_chat_stream(srv_, mdl_, msgs_)
 
+                assert self.active is not None
                 agent = CodeAgent(
-                    server=self.active, model=self.model,
-                    session=worker_session, stream_fn=stream_fn,
-                    on_text=lambda c: None, max_turns=10,
+                    server=self.active,
+                    model=self.model,
+                    session=worker_session,
+                    stream_fn=stream_fn,
+                    on_text=lambda c: None,
+                    max_turns=10,
                 )
                 try:
                     return tid, agent.run(worker_session.as_messages())
@@ -577,7 +604,9 @@ class Shell:
         if len(summary) > 4000:
             info(f"… ({len(summary)} chars total)")
 
-        ok(f"orchestration complete: {len(completed)}/{len(tasks)} tasks in {wave_num} waves")
+        ok(
+            f"orchestration complete: {len(completed)}/{len(tasks)} tasks in {wave_num} waves"
+        )
 
     def run(self):
         history_file = os.path.join(
@@ -628,7 +657,11 @@ class Shell:
                 show_help(topic)
 
             # ── rewind ───────────────────────────────────────────────────
-            elif lo.startswith("/rewind") or lo.startswith("/rewindto") or lo in ("/back", "/undo"):
+            elif (
+                lo.startswith("/rewind")
+                or lo.startswith("/rewindto")
+                or lo in ("/back", "/undo")
+            ):
                 parts = raw.split()
                 user_msgs = [
                     (idx, msg["content"])
@@ -648,11 +681,19 @@ class Shell:
                         warn("usage: /rewind [message_index]")
                         continue
 
-                if target_idx is None and len(user_msgs) > 1 and (lo.startswith("/rewind") or lo.startswith("/rewindto")):
-                    con.print(f"\n  [{C['accent']}]Select a message to rewind and resume from:[/{C['accent']}]")
+                if (
+                    target_idx is None
+                    and len(user_msgs) > 1
+                    and (lo.startswith("/rewind") or lo.startswith("/rewindto"))
+                ):
+                    con.print(
+                        f"\n  [{C['accent']}]Select a message to rewind and resume from:[/{C['accent']}]"
+                    )
                     for display_idx, (orig_idx, content) in enumerate(user_msgs, 1):
                         truncated = content.replace("\n", " ")[:60]
-                        con.print(f"    [{C['yellow']}]{display_idx}[/{C['yellow']}]: {truncated}...")
+                        con.print(
+                            f"    [{C['yellow']}]{display_idx}[/{C['yellow']}]: {truncated}..."
+                        )
 
                     try:
                         ans = input("\n  Rewind to index › ").strip()
@@ -671,7 +712,9 @@ class Shell:
                 else:
                     if target_idx is not None:
                         if target_idx < 1 or target_idx > len(user_msgs):
-                            warn(f"invalid message index. must be between 1 and {len(user_msgs)}")
+                            warn(
+                                f"invalid message index. must be between 1 and {len(user_msgs)}"
+                            )
                             continue
                         orig_idx = user_msgs[target_idx - 1][0]
                         raw_prompt = user_msgs[target_idx - 1][1]
@@ -685,7 +728,6 @@ class Shell:
                 self._chat(raw)
                 continue
 
-
             # ── editai ───────────────────────────────────────────────────
             elif lo == "/editai":
                 last_ai_idx = -1
@@ -698,7 +740,9 @@ class Shell:
                     warn("no AI response found to edit")
                     continue
 
-                con.print(f"  [{C['dim']}]editing last AI response (press Esc then Enter to save)[/{C['dim']}]")
+                con.print(
+                    f"  [{C['dim']}]editing last AI response (press Esc then Enter to save)[/{C['dim']}]"
+                )
                 try:
                     edited = session.prompt(
                         "edit> ",
@@ -728,18 +772,22 @@ class Shell:
                 self._chat(raw)
                 continue
 
-
             # ── commit ───────────────────────────────────────────────────
             elif lo == "/commit":
                 import subprocess
+
                 if not os.path.exists(".git"):
                     warn("not a git repository")
                     continue
-                diff = subprocess.run(["git", "diff", "--cached"], capture_output=True, text=True).stdout
+                diff = subprocess.run(
+                    ["git", "diff", "--cached"], capture_output=True, text=True
+                ).stdout
                 if not diff:
                     warn("no staged changes. staging all modified tracked files...")
                     subprocess.run(["git", "add", "-u"])
-                    diff = subprocess.run(["git", "diff", "--cached"], capture_output=True, text=True).stdout
+                    diff = subprocess.run(
+                        ["git", "diff", "--cached"], capture_output=True, text=True
+                    ).stdout
                 if not diff:
                     warn("no changes to commit")
                     continue
@@ -754,15 +802,26 @@ class Shell:
                 con.print(f"  [{C['dim']}]generating commit message...[/{C['dim']}]")
                 try:
                     from dct.core.client import chat_once
-                    msg = chat_once(self.active, self.model, [{"role": "user", "content": prompt}]).strip()
+
+                    msg = chat_once(
+                        self.active, self.model, [{"role": "user", "content": prompt}]
+                    ).strip()
                     if msg.startswith("```"):
                         msg = "\n".join(msg.split("\n")[1:-1]).strip()
-                    con.print(f"\n[{C['accent']}]Generated Message:[/{C['accent']}]\n{msg}\n")
-                    confirm = session.prompt("Commit with this message? [Y/n/e(dit)]> ").strip().lower()
-                    if confirm == 'e':
-                        msg = session.prompt("edit> ", default=msg, multiline=True).strip()
-                        confirm = 'y'
-                    if confirm in ('y', '', 'yes'):
+                    con.print(
+                        f"\n[{C['accent']}]Generated Message:[/{C['accent']}]\n{msg}\n"
+                    )
+                    confirm = (
+                        session.prompt("Commit with this message? [Y/n/e(dit)]> ")
+                        .strip()
+                        .lower()
+                    )
+                    if confirm == "e":
+                        msg = session.prompt(
+                            "edit> ", default=msg, multiline=True
+                        ).strip()
+                        confirm = "y"
+                    if confirm in ("y", "", "yes"):
                         subprocess.run(["git", "commit", "-m", msg])
                         ok("committed successfully")
                     else:
@@ -827,7 +886,9 @@ class Shell:
                 toks = positional
 
                 if len(toks) < 2:
-                    warn("usage: /add <host> <port> [alias] [note] [--api-key KEY] [--tls] [--no-tls-verify]")
+                    warn(
+                        "usage: /add <host> <port> [alias] [note] [--api-key KEY] [--tls] [--no-tls-verify]"
+                    )
                     continue
                 host = toks[0]
                 try:
@@ -838,7 +899,10 @@ class Shell:
                 alias = toks[2] if len(toks) > 2 else ""
                 note = " ".join(toks[3:]) if len(toks) > 3 else ""
                 srv = self.registry.add(
-                    host, port, alias, note,
+                    host,
+                    port,
+                    alias,
+                    note,
                     api_key=api_key,
                     tls=use_tls,
                     tls_verify=not no_tls_verify,
@@ -865,11 +929,20 @@ class Shell:
                     continue
                 base_url = toks[0]
                 api_key = toks[1]
-                alias = toks[2] if len(toks) > 2 else base_url.split("://")[-1].split("/")[0].split(".")[0]
+                alias = (
+                    toks[2]
+                    if len(toks) > 2
+                    else base_url.split("://")[-1].split("/")[0].split(".")[0]
+                )
                 note = " ".join(toks[3:]) if len(toks) > 3 else base_url
                 srv = self.registry.add(
-                    "api", 443, alias, note,
-                    provider="openai", api_key=api_key, base_url=base_url,
+                    "api",
+                    443,
+                    alias,
+                    note,
+                    provider="openai",
+                    api_key=api_key,
+                    base_url=base_url,
                 )
                 con.print(f"  [{C['dim']}]probing {srv.alias}…[/{C['dim']}]", end=" ")
                 res = probe_server(srv)
@@ -883,18 +956,24 @@ class Shell:
                         ok(f"auto-selected as active server  ·  model: {self.model}")
                 else:
                     con.print(f"[{C['err']}]offline[/{C['err']}]")
-                    warn(f"added {srv.alias} but might be unreachable — saved for later")
+                    warn(
+                        f"added {srv.alias} but might be unreachable — saved for later"
+                    )
 
             # ── add-provider (convenience) ──────────────────────────────
             elif lo.startswith("/add-provider "):
                 toks = raw[14:].strip().split()
                 if not toks:
-                    warn("usage: /add-provider <name> <api_key> [alias]  —  /add-provider --list")
+                    warn(
+                        "usage: /add-provider <name> <api_key> [alias]  —  /add-provider --list"
+                    )
                     continue
                 if toks[0] == "--list":
                     info("built-in provider presets:")
                     for name, p in PROVIDER_PRESETS.items():
-                        con.print(f"  [{C['accent']}]{name:12}[/{C['accent']}] [{C['dim']}]{p['base_url']}[/{C['dim']}]  ({p['note']})")
+                        con.print(
+                            f"  [{C['accent']}]{name:12}[/{C['accent']}] [{C['dim']}]{p['base_url']}[/{C['dim']}]  ({p['note']})"
+                        )
                     continue
                 name = toks[0].lower()
                 if name not in PROVIDER_PRESETS:
@@ -909,10 +988,18 @@ class Shell:
                 api_key = toks[1]
                 alias = toks[2] if len(toks) > 2 else name
                 srv = self.registry.add(
-                    "api", 443, alias, preset["note"],
-                    provider="openai", api_key=api_key, base_url=preset["base_url"],
+                    "api",
+                    443,
+                    alias,
+                    preset["note"],
+                    provider="openai",
+                    api_key=api_key,
+                    base_url=preset["base_url"],
                 )
-                con.print(f"  [{C['dim']}]probing {srv.alias} ({preset['note']})…[/{C['dim']}]", end=" ")
+                con.print(
+                    f"  [{C['dim']}]probing {srv.alias} ({preset['note']})…[/{C['dim']}]",
+                    end=" ",
+                )
                 res = probe_server(srv)
                 self.registry.save()
                 if res["ok"]:
@@ -924,7 +1011,9 @@ class Shell:
                         ok(f"auto-selected as active server  ·  model: {self.model}")
                 else:
                     con.print(f"[{C['err']}]offline[/{C['err']}]")
-                    warn(f"added {srv.alias} but might be unreachable — saved for later")
+                    warn(
+                        f"added {srv.alias} but might be unreachable — saved for later"
+                    )
 
             # ── remove ───────────────────────────────────────────────────
             elif lo.startswith("/remove "):
@@ -1097,9 +1186,7 @@ class Shell:
                     warn("nothing to copy yet")
                     continue
                 if copy_text(content):
-                    ok(
-                        f"copied {len(content)} chars to clipboard (session transcript)"
-                    )
+                    ok(f"copied {len(content)} chars to clipboard (session transcript)")
                 else:
                     warn("clipboard unavailable — printing transcript instead")
                     con.print(content)
@@ -1133,7 +1220,9 @@ class Shell:
             elif lo == "/skills":
                 custom = self.config.get("custom_skills", {})
                 section("agent skill presets")
-                all_names = sorted(set(list(SKILL_PRESETS.keys()) + list(custom.keys())))
+                all_names = sorted(
+                    set(list(SKILL_PRESETS.keys()) + list(custom.keys()))
+                )
                 for key in all_names:
                     if key in custom:
                         s = custom[key]
@@ -1144,7 +1233,9 @@ class Shell:
                     con.print(
                         f"  [{C['accent']}]{tag} {key:12}[/{C['accent']}] [{C['dim']}]{s['desc']}[/{C['dim']}]"
                     )
-                hint("use: /skill <name>  |  /skill add <name> <desc>  |  /skill remove <name>")
+                hint(
+                    "use: /skill <name>  |  /skill add <name> <desc>  |  /skill remove <name>"
+                )
                 if custom:
                     hint("[*] = custom skill")
 
@@ -1158,7 +1249,9 @@ class Shell:
                 if name in SKILL_PRESETS:
                     warn(f"'{name}' is a built-in skill name — choose a different name")
                     continue
-                con.print(f"  [{C['dim']}]enter system prompt (end with a line containing only ///)[/{C['dim']}]")
+                con.print(
+                    f"  [{C['dim']}]enter system prompt (end with a line containing only ///)[/{C['dim']}]"
+                )
                 lines = []
                 while True:
                     try:
@@ -1197,7 +1290,11 @@ class Shell:
                 if not skill:
                     warn(f"unknown skill: {name}")
                     hint(f"built-in: {', '.join(SKILL_PRESETS.keys())}")
-                    hint(f"custom: {', '.join(custom.keys())}" if custom else "no custom skills yet — use /skill add")
+                    hint(
+                        f"custom: {', '.join(custom.keys())}"
+                        if custom
+                        else "no custom skills yet — use /skill add"
+                    )
                     hint("use /skills to see all")
                     continue
                 self.session.set_system(skill["prompt"])
@@ -1212,13 +1309,17 @@ class Shell:
                 squads = self.config.get("squads", {})
                 if not squads:
                     info("no squads defined yet")
-                    hint("/squad create <name>  |  /squad add <name> <role> <model> [--provider <alias>] [--skill <name>]")
+                    hint(
+                        "/squad create <name>  |  /squad add <name> <role> <model> [--provider <alias>] [--skill <name>]"
+                    )
                     continue
                 section("agent squads")
                 for name, sq in squads.items():
                     members = sq.get("members", [])
                     m_str = ", ".join(f"{m['role']}({m['model']})" for m in members)
-                    con.print(f"  [{C['accent']}]{name}[/{C['accent']}]  [{C['dim']}]{len(members)} agents: {m_str}[/{C['dim']}]")
+                    con.print(
+                        f"  [{C['accent']}]{name}[/{C['accent']}]  [{C['dim']}]{len(members)} agents: {m_str}[/{C['dim']}]"
+                    )
 
             elif lo.startswith("/squad create "):
                 name = raw[14:].strip().lower()
@@ -1237,7 +1338,9 @@ class Shell:
             elif lo.startswith("/squad add "):
                 toks = raw[11:].strip().split()
                 if len(toks) < 3:
-                    warn("usage: /squad add <squad_name> <role_label> <model> [--provider <alias>] [--skill <name>]")
+                    warn(
+                        "usage: /squad add <squad_name> <role_label> <model> [--provider <alias>] [--skill <name>]"
+                    )
                     continue
                 squad_name = toks[0].lower()
                 squads = dict(self.config.get("squads", {}))
@@ -1259,10 +1362,14 @@ class Shell:
                         i += 2
                     else:
                         i += 1
-                squads[squad_name]["members"].append({
-                    "role": role, "model": model,
-                    "provider": provider, "skill": skill,
-                })
+                squads[squad_name]["members"].append(
+                    {
+                        "role": role,
+                        "model": model,
+                        "provider": provider,
+                        "skill": skill,
+                    }
+                )
                 self.config.set("squads", squads)
                 self.config.save()
                 extras = []
@@ -1285,7 +1392,9 @@ class Shell:
                     err(f"squad not found: {squad_name}")
                     continue
                 members = squads[squad_name]["members"]
-                squads[squad_name]["members"] = [m for m in members if m["role"] != role]
+                squads[squad_name]["members"] = [
+                    m for m in members if m["role"] != role
+                ]
                 self.config.set("squads", squads)
                 self.config.save()
                 ok(f"removed {role} from {squad_name}")
@@ -1305,7 +1414,9 @@ class Shell:
                     if m.get("skill"):
                         extras.append(f"skill={m['skill']}")
                     extra_str = f" ({', '.join(extras)})" if extras else ""
-                    con.print(f"  [{C['accent']}]{m['role']:16}[/{C['accent']}] [{C['fg']}]{m['model']}[/{C['fg']}]{extra_str}")
+                    con.print(
+                        f"  [{C['accent']}]{m['role']:16}[/{C['accent']}] [{C['fg']}]{m['model']}[/{C['fg']}]{extra_str}"
+                    )
                 con.print()
                 hint(f"/squad run {name} <task>")
 
@@ -1343,7 +1454,9 @@ class Shell:
                 hint("  /squad list              — list all squads")
                 hint("  /squad create <name>     — create a squad")
                 hint("  /squad show <name>       — show squad members")
-                hint("  /squad add <name> <role> <model> [--provider <a>] [--skill <s>]")
+                hint(
+                    "  /squad add <name> <role> <model> [--provider <a>] [--skill <s>]"
+                )
                 hint("  /squad remove <name> <role>")
                 hint("  /squad run <name> <task> — execute task with all squad members")
 
@@ -1391,12 +1504,22 @@ class Shell:
             # ── config ──────────────────────────────────────────────────
             elif lo == "/config":
                 info("config (~/.config/dct/config.json):")
-                for k in ["default_server", "default_model", "agent_enabled",
-                          "max_agent_turns", "history_limit", "no_probe_on_start",
-                          "auto_probe_interval", "enable_tracing",
-                          "custom_skills", "squads"]:
+                for k in [
+                    "default_server",
+                    "default_model",
+                    "agent_enabled",
+                    "max_agent_turns",
+                    "history_limit",
+                    "no_probe_on_start",
+                    "auto_probe_interval",
+                    "enable_tracing",
+                    "custom_skills",
+                    "squads",
+                ]:
                     v = self.config.get(k)
-                    con.print(f"  [{C['dim']}]{k}[/{C['dim']}] = [{C['fg']}]{v!r}[/{C['fg']}]")
+                    con.print(
+                        f"  [{C['dim']}]{k}[/{C['dim']}] = [{C['fg']}]{v!r}[/{C['fg']}]"
+                    )
 
             elif lo.startswith("/config set "):
                 rest = raw[12:].strip()
@@ -1429,12 +1552,15 @@ class Shell:
                 self.config.save()
                 state_str = "ON" if new_val else "OFF"
                 color = C["ok"] if new_val else C["warn"]
-                con.print(f"  [{color}]tracing {state_str}[/{color}]  "
-                          f"[{C['dim']}](logs: ~/.config/dct/transcripts/)[/{C['dim']}]")
+                con.print(
+                    f"  [{color}]tracing {state_str}[/{color}]  "
+                    f"[{C['dim']}](logs: ~/.config/dct/transcripts/)[/{C['dim']}]"
+                )
 
             # ── tasks ─────────────────────────────────────────────────────
             elif lo == "/tasks":
                 from dct.tools.tasks import get_tracker
+
                 summary = get_tracker().summary()
                 con.print(f"\n[{C['accent']}]{summary}[/{C['accent']}]\n")
 
@@ -1463,11 +1589,12 @@ class Shell:
                     warn("usage: /vision <image_path> <prompt>")
                     continue
                 img_path = rest[1].split(None, 1)[0]
-                prompt = rest[1][len(img_path):].strip()
+                prompt = rest[1][len(img_path) :].strip()
                 if not prompt:
                     warn("usage: /vision <image_path> <prompt>")
                     continue
                 from dct.tools.image import read_image
+
                 img = read_image(img_path)
                 if not img.ok:
                     err(img.message)
@@ -1475,11 +1602,15 @@ class Shell:
                 if not self.active:
                     err("no active server — /use <alias> first")
                     continue
-                con.print(f"  [{C['dim']}]image: {img.path} ({img.mime_type})[/{C['dim']}]")
+                con.print(
+                    f"  [{C['dim']}]image: {img.path} ({img.mime_type})[/{C['dim']}]"
+                )
                 con.print(f"  [{C['dim']}]asking {self.model}…[/{C['dim']}]")
                 msgs = [{"role": "user", "content": prompt}]
                 try:
-                    for chunk in chat_stream(self.active, self.model, msgs, images=[img.data_url]):
+                    for chunk in chat_stream(
+                        self.active, self.model, msgs, images=[img.data_url]
+                    ):
                         con.print(f"[{C['fg']}]{chunk}[/{C['fg']}]", end="")
                     con.print()
                 except Exception as e:
@@ -1623,7 +1754,9 @@ class Shell:
         full = ""
 
         while True:
-            status = con.status(f"[{C['dim']}]{get_funny_thinking_msg()}[/{C['dim']}]", spinner="dots")
+            status = con.status(
+                f"[{C['dim']}]{get_funny_thinking_msg()}[/{C['dim']}]", spinner="dots"
+            )
             status.start()
             first_chunk = True
             try:
@@ -1819,7 +1952,7 @@ class Shell:
                     self.session.add(
                         "user",
                         "[GOAL MODE CONTINUE] You have not yet called <tool>DONE</tool>. "
-                        "Please continue working on the goal until it is fully finished."
+                        "Please continue working on the goal until it is fully finished.",
                     )
                 else:
                     warn("Reached maximum goal iterations safety limit. Stopping.")
@@ -1847,7 +1980,9 @@ class Shell:
 
         full = ""
         while True:
-            status = con.status(f"[{C['dim']}]{get_funny_thinking_msg()}[/{C['dim']}]", spinner="dots")
+            status = con.status(
+                f"[{C['dim']}]{get_funny_thinking_msg()}[/{C['dim']}]", spinner="dots"
+            )
             status.start()
             first_chunk = True
             try:
@@ -1865,6 +2000,7 @@ class Shell:
             except Exception as e:
                 status.stop()
                 import requests
+
                 if isinstance(e, requests.exceptions.RequestException):
                     warn(f"\nConnection to {self.active.alias} lost mid-stream.")
                     # Re-probe and find a fallback
@@ -1936,7 +2072,7 @@ class Shell:
 
     # ── Pull with progress ───────────────────────────────────────────────────
     def _pull(self, srv: Server, model_name: str):
-        fg = C['fg']
+        fg = C["fg"]
         con.print(
             f"\n  [{C['accent']}]pull[/{C['accent']}] [{fg}]{model_name}[/{fg}] → {server_tag(srv)}\n"
         )

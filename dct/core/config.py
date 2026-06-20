@@ -20,6 +20,7 @@ DEFAULTS = {
     "auto_probe_interval": 60,
     "custom_skills": {},
     "squads": {},
+    "mcp_servers": {},
     "enable_tracing": False,
 }
 

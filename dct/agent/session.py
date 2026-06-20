@@ -115,6 +115,7 @@ def _get_cfg():
     if _cfg is None:
         try:
             from dct.core.config import Config
+
             _cfg = Config()
         except Exception:
             pass
@@ -145,7 +146,7 @@ def write_trace_entry(session: "Session", entry_type: str, data: dict):
         "timestamp": time.time(),
         "type": entry_type,
         "session_name": session.name,
-        **data
+        **data,
     }
 
     try:

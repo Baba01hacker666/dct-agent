@@ -6,7 +6,7 @@ Handles streaming chat, generate, pull, delete, show, ps, version.
 
 from __future__ import annotations
 import json
-from typing import Iterator, TYPE_CHECKING
+from typing import Iterator, TYPE_CHECKING, Any
 from dct.core import http
 
 if TYPE_CHECKING:
@@ -27,7 +27,7 @@ def _auth_headers(srv: "Server") -> dict:
 
 def _request_kwargs(srv: "Server", extra: dict | None = None) -> dict:
     """Merge auth headers and TLS verify into request kwargs."""
-    kwargs = {"headers": _auth_headers(srv)}
+    kwargs: dict[str, Any] = {"headers": _auth_headers(srv)}
     if not srv.tls_verify:
         kwargs["verify"] = False
     if extra:
@@ -35,7 +35,9 @@ def _request_kwargs(srv: "Server", extra: dict | None = None) -> dict:
     return kwargs
 
 
-def _post_stream(url: str, payload: dict, timeout: int, srv: "Server" = None) -> Iterator[dict]:
+def _post_stream(
+    url: str, payload: dict, timeout: int, srv: "Server" | None = None
+) -> Iterator[dict]:
     """POST with stream=True, yield parsed JSON lines."""
     kwargs = _request_kwargs(srv) if srv else {}
     kwargs["json"] = payload
@@ -52,7 +54,9 @@ def _post_stream(url: str, payload: dict, timeout: int, srv: "Server" = None) ->
 
 
 # ── Chat ─────────────────────────────────────────────────────────────────────
-def chat_stream(srv: "Server", model: str, messages: list[dict], images: list[str] | None = None) -> Iterator[str]:
+def chat_stream(
+    srv: "Server", model: str, messages: list[dict], images: list[str] | None = None
+) -> Iterator[str]:
     """
     Yield text chunks from /api/chat (streaming).
     Raises on HTTP error.
@@ -75,7 +79,9 @@ def chat_stream(srv: "Server", model: str, messages: list[dict], images: list[st
             return
 
 
-def chat_once(srv: "Server", model: str, messages: list[dict], images: list[str] | None = None) -> str:
+def chat_once(
+    srv: "Server", model: str, messages: list[dict], images: list[str] | None = None
+) -> str:
     """Non-streaming chat — returns full reply as string."""
     url = f"{srv.base_url()}/api/chat"
     payload: dict = {"model": model, "messages": list(messages), "stream": False}
@@ -86,14 +92,19 @@ def chat_once(srv: "Server", model: str, messages: list[dict], images: list[str]
                 msg["images"] = images
                 payload["messages"][i] = msg
                 break
-    r = http.client.post(url, **_request_kwargs(srv, {"json": payload, "timeout": CHAT_TIMEOUT}))
+    r = http.client.post(
+        url, **_request_kwargs(srv, {"json": payload, "timeout": CHAT_TIMEOUT})
+    )
     r.raise_for_status()
     return r.json().get("message", {}).get("content", "")
 
 
 # ── Models ───────────────────────────────────────────────────────────────────
 def list_models(srv: "Server") -> list[dict]:
-    r = http.client.get(f"{srv.base_url()}/api/tags", **_request_kwargs(srv, {"timeout": DEFAULT_TIMEOUT}))
+    r = http.client.get(
+        f"{srv.base_url()}/api/tags",
+        **_request_kwargs(srv, {"timeout": DEFAULT_TIMEOUT}),
+    )
     r.raise_for_status()
     return r.json().get("models", [])
 
@@ -116,13 +127,18 @@ def delete_model(srv: "Server", model: str) -> bool:
 
 
 def running_models(srv: "Server") -> list[dict]:
-    r = http.client.get(f"{srv.base_url()}/api/ps", **_request_kwargs(srv, {"timeout": DEFAULT_TIMEOUT}))
+    r = http.client.get(
+        f"{srv.base_url()}/api/ps", **_request_kwargs(srv, {"timeout": DEFAULT_TIMEOUT})
+    )
     r.raise_for_status()
     return r.json().get("models", [])
 
 
 def get_version(srv: "Server") -> str:
-    r = http.client.get(f"{srv.base_url()}/api/version", **_request_kwargs(srv, {"timeout": DEFAULT_TIMEOUT}))
+    r = http.client.get(
+        f"{srv.base_url()}/api/version",
+        **_request_kwargs(srv, {"timeout": DEFAULT_TIMEOUT}),
+    )
     r.raise_for_status()
     return r.json().get("version", "?")
 

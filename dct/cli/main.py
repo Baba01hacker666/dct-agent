@@ -80,7 +80,9 @@ Inside the shell type /help for all commands.
     pa.add_argument("note", nargs="?", default="")
     pa.add_argument("--api-key", default="", help="API key for auth (Bearer)")
     pa.add_argument("--tls", action="store_true", help="use HTTPS")
-    pa.add_argument("--no-tls-verify", action="store_true", help="skip TLS cert verification")
+    pa.add_argument(
+        "--no-tls-verify", action="store_true", help="skip TLS cert verification"
+    )
 
     # add-openrouter
     po = sub.add_parser("add-openrouter", help="register OpenRouter")
@@ -88,7 +90,9 @@ Inside the shell type /help for all commands.
     po.add_argument("alias", nargs="?", default="openrouter")
 
     # add-openai
-    pai = sub.add_parser("add-openai", help="register OpenAI-compatible provider (DeepSeek, Qwen, etc.)")
+    pai = sub.add_parser(
+        "add-openai", help="register OpenAI-compatible provider (DeepSeek, Qwen, etc.)"
+    )
     pai.add_argument("base_url", help="API base URL (e.g. https://api.deepseek.com)")
     pai.add_argument("key", help="API key")
     pai.add_argument("alias", nargs="?", default="")
@@ -209,6 +213,7 @@ def main():
 
     if args.cmd == "add-provider":
         from dct.cli.shell import PROVIDER_PRESETS
+
         name = args.name.lower()
         if name not in PROVIDER_PRESETS:
             err(f"unknown provider: {name}")
@@ -217,8 +222,13 @@ def main():
         preset = PROVIDER_PRESETS[name]
         alias = args.alias or name
         srv = registry.add(
-            "api", 443, alias, preset["note"],
-            provider="openai", api_key=args.key, base_url=preset["base_url"],
+            "api",
+            443,
+            alias,
+            preset["note"],
+            provider="openai",
+            api_key=args.key,
+            base_url=preset["base_url"],
         )
         con.print(f"  [{C['dim']}]probing {name}…[/{C['dim']}]", end=" ")
         res = probe_server(srv)

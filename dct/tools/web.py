@@ -109,13 +109,27 @@ def _strip_html(html: str) -> str:
             soup = BeautifulSoup(html, "html.parser")
 
             # Decompose non-content / UI / layout elements
-            for element in soup(["script", "style", "nav", "footer", "header", "noscript", "iframe", "aside", "form"]):
+            for element in soup(
+                [
+                    "script",
+                    "style",
+                    "nav",
+                    "footer",
+                    "header",
+                    "noscript",
+                    "iframe",
+                    "aside",
+                    "form",
+                ]
+            ):
                 element.decompose()
 
             text = soup.get_text(separator="\n")
         except Exception:
             # Fallback to regex-based extraction
-            text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.I)
+            text = re.sub(
+                r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.I
+            )
             text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.I)
             text = re.sub(r"<[^>]+>", " ", text)
 
@@ -140,6 +154,7 @@ def _extract_title(html: str) -> str:
         return ""
     try:
         from bs4 import BeautifulSoup
+
         soup = BeautifulSoup(html, "html.parser")
         if soup.title:
             title_text = soup.title.get_text()

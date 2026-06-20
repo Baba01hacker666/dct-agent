@@ -89,7 +89,9 @@ def run_python(code: str, timeout: int = 30, cwd: str | None = None) -> ExecResu
     except Exception:
         use_venv = False
 
-    python_bin = venv_python if (use_venv and os.path.exists(venv_python)) else sys.executable
+    python_bin = (
+        venv_python if (use_venv and os.path.exists(venv_python)) else sys.executable
+    )
 
     # Allow up to 3 auto-install retries for cases where code requires multiple missing packages
     max_retries = 3
@@ -126,7 +128,10 @@ def run_python(code: str, timeout: int = 30, cwd: str | None = None) -> ExecResu
 
         if rc != 0 and not timed_out:
             import re
-            m = re.search(r"ModuleNotFoundError:\s*No\s*module\s*named\s*'([^']+)'", stderr)
+
+            m = re.search(
+                r"ModuleNotFoundError:\s*No\s*module\s*named\s*'([^']+)'", stderr
+            )
             if m:
                 missing_module = m.group(1)
                 package_name = MODULE_MAPPING.get(missing_module, missing_module)
@@ -250,7 +255,11 @@ def prepare_background_command(
         except Exception:
             use_venv = False
 
-        python_bin = venv_python if (use_venv and os.path.exists(venv_python)) else sys.executable
+        python_bin = (
+            venv_python
+            if (use_venv and os.path.exists(venv_python))
+            else sys.executable
+        )
 
         with tempfile.NamedTemporaryFile(
             suffix=".py", mode="w", delete=False, dir=cwd

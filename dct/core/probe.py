@@ -7,7 +7,7 @@ Supports single and parallel (threaded) probing.
 from __future__ import annotations
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import requests
 from requests.exceptions import (
@@ -33,7 +33,7 @@ def probe_server(srv: "Server") -> dict:
     headers = {}
     if srv.api_key:
         headers["Authorization"] = f"Bearer {srv.api_key}"
-    req_kwargs = {"timeout": PROBE_TIMEOUT, "headers": headers}
+    req_kwargs: dict[str, Any] = {"timeout": PROBE_TIMEOUT, "headers": headers}
     if not srv.tls_verify:
         req_kwargs["verify"] = False
 
@@ -47,10 +47,10 @@ def probe_server(srv: "Server") -> dict:
                 srv.latency_ms = ms
                 srv.status = "online"
                 models_data = data.get("data", [])
-                srv.models = [
-                    m.get("id") for m in models_data
-                ]
-                srv.version = "OpenRouter v1" if srv.provider == "openrouter" else "OpenAI API"
+                srv.models = [m.get("id") for m in models_data]
+                srv.version = (
+                    "OpenRouter v1" if srv.provider == "openrouter" else "OpenAI API"
+                )
                 return {
                     "ok": True,
                     "endpoint": "/api/v1/models",
@@ -149,7 +149,7 @@ def probe_endpoints_detail(srv: "Server") -> list[dict]:
     headers = {}
     if srv.api_key:
         headers["Authorization"] = f"Bearer {srv.api_key}"
-    req_kwargs = {"timeout": PROBE_TIMEOUT, "headers": headers}
+    req_kwargs: dict[str, Any] = {"timeout": PROBE_TIMEOUT, "headers": headers}
     if not srv.tls_verify:
         req_kwargs["verify"] = False
     rows = []

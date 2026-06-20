@@ -8,7 +8,9 @@ import base64
 import os
 from collections import namedtuple
 
-ImageResult = namedtuple("ImageResult", ["ok", "data_url", "message", "path", "mime_type"])
+ImageResult = namedtuple(
+    "ImageResult", ["ok", "data_url", "message", "path", "mime_type"]
+)
 
 MAX_IMAGE_BYTES = 20 * 1024 * 1024  # 20 MB
 SUPPORTED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
@@ -44,17 +46,21 @@ def read_image(path: str) -> ImageResult:
     ext = os.path.splitext(abs_path)[1].lower()
     if ext not in SUPPORTED_EXTENSIONS:
         return ImageResult(
-            False, "",
+            False,
+            "",
             f"unsupported image format: {ext}. Supported: {', '.join(sorted(SUPPORTED_EXTENSIONS))}",
-            abs_path, "",
+            abs_path,
+            "",
         )
 
     file_size = os.path.getsize(abs_path)
     if file_size > MAX_IMAGE_BYTES:
         return ImageResult(
-            False, "",
+            False,
+            "",
             f"image too large: {file_size / 1024 / 1024:.1f} MB (max {MAX_IMAGE_BYTES / 1024 / 1024:.0f} MB)",
-            abs_path, "",
+            abs_path,
+            "",
         )
 
     try:
