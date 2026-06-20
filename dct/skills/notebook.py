@@ -18,7 +18,10 @@ class NotebookResult:
 
 
 def edit_notebook_cell(
-    notebook_path: str, cell_index: int, new_source: str, edit_mode: str = "replace"
+    notebook_path: str,
+    cell_index: int,
+    new_source: str,
+    edit_mode: str = "replace",
 ) -> NotebookResult:
     if not os.path.exists(notebook_path):
         return NotebookResult(False, f"Notebook {notebook_path} not found.")
@@ -38,7 +41,9 @@ def edit_notebook_cell(
             cells[cell_index]["source"] = [
                 line + "\n" for line in new_source.split("\n")
             ]
-            cells[cell_index]["source"][-1] = cells[cell_index]["source"][-1].rstrip(
+            cells[cell_index]["source"][-1] = cells[cell_index]["source"][
+                -1
+            ].rstrip(
                 "\n"
             )  # fixing last newline
 
@@ -59,7 +64,9 @@ def edit_notebook_cell(
 
         elif edit_mode == "delete":
             if cell_index < 0 or cell_index >= len(cells):
-                return NotebookResult(False, f"Cell index {cell_index} out of bounds.")
+                return NotebookResult(
+                    False, f"Cell index {cell_index} out of bounds."
+                )
             cells.pop(cell_index)
 
         else:

@@ -242,7 +242,9 @@ def _extract_tag(text: str, tag: str) -> Optional[str]:
 
 def _has_tool_call(text: str) -> bool:
     return bool(
-        re.search(r"<tool(?:\s+[^>]*)?>(.+?)</tool>", text, re.DOTALL | re.IGNORECASE)
+        re.search(
+            r"<tool(?:\s+[^>]*)?>(.+?)</tool>", text, re.DOTALL | re.IGNORECASE
+        )
     )
 
 
@@ -297,7 +299,9 @@ def _parse_tool_call(text: str) -> Optional[dict]:
         "server": _extract_tag(text, "server"),
         "args": _extract_tag(text, "args"),
         "patches": (
-            _parse_multi_patch(text) if tool.strip() == "multi_patch_file" else None
+            _parse_multi_patch(text)
+            if tool.strip() == "multi_patch_file"
+            else None
         ),
     }
 
@@ -345,6 +349,7 @@ class CodeAgent:
 
         elif tool == "skill_list":
             from dct.core.config import Config
+
             try:
                 from dct.cli.shell import SKILL_PRESETS
             except ImportError:
@@ -365,6 +370,7 @@ class CodeAgent:
             if not name:
                 return "[TOOL ERROR] <name> is required."
             from dct.core.config import Config
+
             try:
                 from dct.cli.shell import SKILL_PRESETS
             except ImportError:
@@ -383,15 +389,16 @@ class CodeAgent:
             prompt_text = call.get("prompt")
             if not name or not desc or not prompt_text:
                 return "[TOOL ERROR] <name>, <description>, and <prompt> are required."
-            
+
             from dct.core.config import Config
+
             try:
                 from dct.cli.shell import SKILL_PRESETS
             except ImportError:
                 SKILL_PRESETS = {}
             if name in SKILL_PRESETS:
                 return f"[TOOL ERROR] '{name}' is a built-in skill. Choose a different name."
-            
+
             conf = Config()
             custom = dict(conf.get("custom_skills", {}))
             custom[name] = {"desc": desc, "prompt": prompt_text.strip()}
@@ -404,15 +411,17 @@ class CodeAgent:
             members_text = call.get("members") or ""
             if not instruction or not members_text:
                 return "[TOOL ERROR] <instruction> and <members> are required."
-            
+
             lines = [L.strip() for L in members_text.splitlines() if L.strip()]
             if not lines:
                 return "[TOOL ERROR] No members defined."
-            
+
             from dct.core.registry import ServerRegistry
+
             registry = ServerRegistry()
 
             from dct.core.config import Config
+
             try:
                 from dct.cli.shell import SKILL_PRESETS
             except ImportError:
@@ -424,8 +433,12 @@ class CodeAgent:
             for line in lines:
                 parts = [p.strip() for p in line.split("|")]
                 role = parts[0] if len(parts) > 0 else "member"
-                s_model = parts[1] if len(parts) > 1 and parts[1] else self.model
-                s_server_alias = parts[2] if len(parts) > 2 and parts[2] else ""
+                s_model = (
+                    parts[1] if len(parts) > 1 and parts[1] else self.model
+                )
+                s_server_alias = (
+                    parts[2] if len(parts) > 2 and parts[2] else ""
+                )
                 s_skill = parts[3] if len(parts) > 3 and parts[3] else ""
 
                 target_server = self.server
@@ -444,13 +457,18 @@ class CodeAgent:
 
                 sub_system = f"Your role in this swarm: {role}\n"
                 if s_skill:
-                    skill_data = custom_skills.get(s_skill) or SKILL_PRESETS.get(s_skill)
+                    skill_data = custom_skills.get(
+                        s_skill
+                    ) or SKILL_PRESETS.get(s_skill)
                     if skill_data:
                         sub_system += skill_data["prompt"] + "\n\n"
-                
-                from dct.agent.session import Session
-                sub_session = Session(mode=self.session.mode)
-                sub_dynamic = get_system_prompt(sub_session, user_system_prompt=sub_system)
+
+                from dct.agent.session import Session as SubSession
+
+                sub_session = SubSession(mode=self.session.mode)
+                sub_dynamic = get_system_prompt(
+                    sub_session, user_system_prompt=sub_system
+                )
                 sub_session.set_system(sub_dynamic)
                 sub_session.add("user", instruction)
 
@@ -466,16 +484,28 @@ class CodeAgent:
                         "log": [],
                         "completed_at": 0,
                     }
-                
+
                 bg_sub_data = BACKGROUND_SUBAGENTS[bg_id]
 
                 def _make_callbacks(data):
-                    def on_text(chunk): _append_log_safe(data, chunk)
-                    def on_tool(t_name, t_call): _append_log_safe(data, f"\n⚡ tool: {t_name}\nCall: {t_call}\n")
-                    def on_result(t_name, t_res): _append_log_safe(data, f"\nresult: {t_name}\n{t_res}\n")
+                    def on_text(chunk):
+                        _append_log_safe(data, chunk)
+
+                    def on_tool(t_name, t_call):
+                        _append_log_safe(
+                            data, f"\n⚡ tool: {t_name}\nCall: {t_call}\n"
+                        )
+
+                    def on_result(t_name, t_res):
+                        _append_log_safe(
+                            data, f"\nresult: {t_name}\n{t_res}\n"
+                        )
+
                     return on_text, on_tool, on_result
-                
-                bg_on_text, bg_on_tool, bg_on_result = _make_callbacks(bg_sub_data)
+
+                bg_on_text, bg_on_tool, bg_on_result = _make_callbacks(
+                    bg_sub_data
+                )
 
                 sub_agent = CodeAgent(
                     server=target_server,
@@ -494,12 +524,16 @@ class CodeAgent:
                         with BACKGROUND_SUBAGENTS_LOCK:
                             BACKGROUND_SUBAGENTS[b_id]["status"] = "completed"
                             BACKGROUND_SUBAGENTS[b_id]["result"] = res
-                            BACKGROUND_SUBAGENTS[b_id]["completed_at"] = time.time()
+                            BACKGROUND_SUBAGENTS[b_id][
+                                "completed_at"
+                            ] = time.time()
                     except Exception as e:
                         with BACKGROUND_SUBAGENTS_LOCK:
                             BACKGROUND_SUBAGENTS[b_id]["status"] = "failed"
                             BACKGROUND_SUBAGENTS[b_id]["result"] = str(e)
-                            BACKGROUND_SUBAGENTS[b_id]["completed_at"] = time.time()
+                            BACKGROUND_SUBAGENTS[b_id][
+                                "completed_at"
+                            ] = time.time()
 
                 sub_thread = threading.Thread(
                     target=run_subagent_bg,
@@ -507,20 +541,23 @@ class CodeAgent:
                     daemon=True,
                 )
                 sub_thread.start()
-                spawned.append(f"Role: {role} | Task ID: {bg_id} | Model: {s_model} | Server: {target_server.alias}")
+                spawned.append(
+                    f"Role: {role} | Task ID: {bg_id} | Model: {s_model} | Server: {target_server.alias}"
+                )
 
             return "[Swarm started in background]\n" + "\n".join(spawned)
 
         elif tool == "mcp_list":
             from dct.core.mcp import get_mcp_manager
             from dct.core.config import Config
+
             conf = Config()
             mcp_servers = conf.get("mcp_servers", {})
             mgr = get_mcp_manager()
             for sname, scmd in mcp_servers.items():
                 mgr.add_server(sname, scmd)
             return mgr.list_all_tools()
-            
+
         elif tool == "mcp_call":
             s_server = call.get("server")
             t_name = call.get("name")
@@ -529,24 +566,29 @@ class CodeAgent:
                 return "[TOOL ERROR] <server> and <name> are required."
             try:
                 import json
+
                 t_args = json.loads(t_args_str)
             except json.JSONDecodeError:
                 return "[TOOL ERROR] <args> must be valid JSON."
-            
+
             from dct.core.mcp import get_mcp_manager
             from dct.core.config import Config
+
             mgr = get_mcp_manager()
             conf = Config()
             if s_server not in mgr.clients:
                 mcp_servers = conf.get("mcp_servers", {})
                 if s_server in mcp_servers:
                     mgr.add_server(s_server, mcp_servers[s_server])
-            
+
             return mgr.call_tool(s_server, t_name, t_args)
 
         elif tool == "run_subagent":
             instruction = (
-                call.get("instruction") or call.get("prompt") or call.get("code") or ""
+                call.get("instruction")
+                or call.get("prompt")
+                or call.get("code")
+                or ""
             )
             if not instruction:
                 return "[TOOL ERROR] <instruction> is required."
@@ -558,21 +600,24 @@ class CodeAgent:
 
             if sub_skill:
                 from dct.core.config import Config
+
                 try:
                     from dct.cli.shell import SKILL_PRESETS
                 except ImportError:
                     SKILL_PRESETS = {}
                 conf = Config()
                 custom = conf.get("custom_skills", {})
-                skill_data = custom.get(sub_skill) or SKILL_PRESETS.get(sub_skill)
+                skill_data = custom.get(sub_skill) or SKILL_PRESETS.get(
+                    sub_skill
+                )
                 if skill_data:
                     sub_system = skill_data["prompt"] + "\n\n" + sub_system
                 else:
                     return f"[TOOL ERROR] Skill '{sub_skill}' not found."
 
-            from dct.agent.session import Session
+            from dct.agent.session import Session as AgentSession
 
-            sub_session = Session(mode=self.session.mode)
+            sub_session = AgentSession(mode=self.session.mode)
 
             sub_dynamic_prompt = get_system_prompt(
                 sub_session, user_system_prompt=sub_system
@@ -607,7 +652,8 @@ class CodeAgent:
 
                 def bg_on_result(sub_tool_name: str, sub_result: str):
                     _append_log_safe(
-                        bg_sub_data, f"\nresult: {sub_tool_name}\n{sub_result}\n"
+                        bg_sub_data,
+                        f"\nresult: {sub_tool_name}\n{sub_result}\n",
                     )
 
                 sub_agent = CodeAgent(
@@ -627,12 +673,16 @@ class CodeAgent:
                         with BACKGROUND_SUBAGENTS_LOCK:
                             BACKGROUND_SUBAGENTS[b_id]["status"] = "completed"
                             BACKGROUND_SUBAGENTS[b_id]["result"] = res
-                            BACKGROUND_SUBAGENTS[b_id]["completed_at"] = time.time()
+                            BACKGROUND_SUBAGENTS[b_id][
+                                "completed_at"
+                            ] = time.time()
                     except Exception as e:
                         with BACKGROUND_SUBAGENTS_LOCK:
                             BACKGROUND_SUBAGENTS[b_id]["status"] = "failed"
                             BACKGROUND_SUBAGENTS[b_id]["result"] = str(e)
-                            BACKGROUND_SUBAGENTS[b_id]["completed_at"] = time.time()
+                            BACKGROUND_SUBAGENTS[b_id][
+                                "completed_at"
+                            ] = time.time()
 
                 sub_thread = threading.Thread(
                     target=run_subagent_bg,
@@ -654,11 +704,15 @@ class CodeAgent:
                 con.print(
                     f"\n  [{C['purple']}][SUB-AGENT STARTING][/{C['purple']}] Model: {sub_model} | Mode: {sub_session.mode.upper()}"
                 )
-                con.print(f"  [{C['dim']}]Instruction: {instruction}[/{C['dim']}]")
+                con.print(
+                    f"  [{C['dim']}]Instruction: {instruction}[/{C['dim']}]"
+                )
                 con.print(f"  [{C['dim']}]{'─' * 66}[/{C['dim']}]")
 
                 def sub_on_text(chunk: str):
-                    con.print(f"[{C['purple']}]{chunk}[/{C['purple']}]", end="")
+                    con.print(
+                        f"[{C['purple']}]{chunk}[/{C['purple']}]", end=""
+                    )
 
                 def sub_on_tool(sub_tool_name: str, sub_call_str: str):
                     con.print()
@@ -669,12 +723,16 @@ class CodeAgent:
                 def sub_on_result(sub_tool_name: str, sub_result: str):
                     section(f"sub-agent result: {sub_tool_name}")
                     if len(sub_result) > 2000:
-                        con.print(f"[{C['code']}]{sub_result[:2000]}[/{C['code']}]")
+                        con.print(
+                            f"[{C['code']}]{sub_result[:2000]}[/{C['code']}]"
+                        )
                         info(f"… ({len(sub_result)} chars total)")
                     else:
                         con.print(f"[{C['code']}]{sub_result}[/{C['code']}]")
                     con.print()
-                    con.print(f"  [{C['dim']}]continuing sub-agent…[/{C['dim']}]")
+                    con.print(
+                        f"  [{C['dim']}]continuing sub-agent…[/{C['dim']}]"
+                    )
                     con.print("  ", end="")
 
                 sub_agent = CodeAgent(
@@ -793,18 +851,29 @@ class CodeAgent:
                         proc.stdin.write(input_text)
                         proc.stdin.flush()
                         bg_task["log"].append(f"[Input sent: {input_text}]")
-                        return f"[Success] Sent input to background task {tid}."
+                        return (
+                            f"[Success] Sent input to background task {tid}."
+                        )
                     except Exception as e:
                         return f"[TOOL ERROR] Failed to write to task stdin: {str(e)}"
 
             return f"[TOOL ERROR] Background task with ID {tid} not found."
 
-        if tool in ("run_python", "run_bash", "run_shell", "python", "bash", "shell"):
+        if tool in (
+            "run_python",
+            "run_bash",
+            "run_shell",
+            "python",
+            "bash",
+            "shell",
+        ):
             if mode == "plan":
                 return "[TOOL ERROR] Execution is blocked in PLAN mode. You must use <tool>exit_plan_mode</tool> first."
 
             lang = (
-                "python" if "python" in tool else "bash" if "bash" in tool else "shell"
+                "python"
+                if "python" in tool
+                else "bash" if "bash" in tool else "shell"
             )
             code = call.get("code") or ""
             if not code:
@@ -868,7 +937,9 @@ class CodeAgent:
                                 break
                             with BACKGROUND_TASKS_LOCK:
                                 if t_id in BACKGROUND_TASKS:
-                                    _append_log_safe(BACKGROUND_TASKS[t_id], line)
+                                    _append_log_safe(
+                                        BACKGROUND_TASKS[t_id], line
+                                    )
                     except Exception as e:
                         with BACKGROUND_TASKS_LOCK:
                             if t_id in BACKGROUND_TASKS:
@@ -941,7 +1012,11 @@ class CodeAgent:
                     lines_to_show = lines[start_idx:]
                 else:
                     start_idx = max(0, int(start_str) - 1) if start_str else 0
-                    end_idx = min(total_lines, int(end_str)) if end_str else total_lines
+                    end_idx = (
+                        min(total_lines, int(end_str))
+                        if end_str
+                        else total_lines
+                    )
                     lines_to_show = lines[start_idx:end_idx]
             except ValueError:
                 return "[TOOL ERROR] start_line, end_line, and tail must be integers."
@@ -973,9 +1048,7 @@ class CodeAgent:
             write_res = write_file(path, content)
             if not write_res.ok:
                 return f"[TOOL ERROR] {write_res.message}"
-            size_info = (
-                f"  {len(content.encode('utf-8', errors='replace')) / 1024:.1f} KB"
-            )
+            size_info = f"  {len(content.encode('utf-8', errors='replace')) / 1024:.1f} KB"
             return f"[written: {write_res.path}{size_info}]\n{write_res.diff[:1200] if write_res.diff else '(new file)'}"
 
         elif tool == "patch_file":
@@ -1067,9 +1140,7 @@ class CodeAgent:
                     )
                 )
                 diff_str = "".join(diff_lines)
-                size_info = (
-                    f"  {len(content.encode('utf-8', errors='replace')) / 1024:.1f} KB"
-                )
+                size_info = f"  {len(content.encode('utf-8', errors='replace')) / 1024:.1f} KB"
                 return f"[multi-patched: {path}{size_info}]\n{diff_str[:1200]}"
             except Exception as e:
                 return f"[TOOL ERROR] Failed to write file: {str(e)}"
@@ -1085,7 +1156,9 @@ class CodeAgent:
 
             context_str = call.get("context")
             context = (
-                int(context_str) if context_str and context_str.isdigit() else None
+                int(context_str)
+                if context_str and context_str.isdigit()
+                else None
             )
 
             head_limit_str = call.get("head_limit")
@@ -1095,7 +1168,9 @@ class CodeAgent:
                 else 250
             )
 
-            r = run_grep(pattern, path, glob_pattern, output_mode, context, head_limit)
+            r = run_grep(
+                pattern, path, glob_pattern, output_mode, context, head_limit
+            )
             if not r.ok:
                 return f"[TOOL ERROR] {r.message}"
             return f"[grep: {pattern!r} in {r.path}]\n{r.content}"
@@ -1128,9 +1203,7 @@ class CodeAgent:
             r_web = fetch_url(url)
             if not r_web.ok:
                 return f"[TOOL ERROR] {r_web.message}"
-            return (
-                f"[fetched: {r_web.url}  title={r_web.title!r}]\n{r_web.content[:6000]}"
-            )
+            return f"[fetched: {r_web.url}  title={r_web.title!r}]\n{r_web.content[:6000]}"
 
         elif tool == "web_extract":
             url = _extract_tag(call["raw_text"], "url")
@@ -1171,7 +1244,9 @@ class CodeAgent:
             if choices_str:
                 from prompt_toolkit.shortcuts import radiolist_dialog
 
-                choices = [c.strip() for c in choices_str.split(",") if c.strip()]
+                choices = [
+                    c.strip() for c in choices_str.split(",") if c.strip()
+                ]
                 if choices:
                     try:
                         dialog_res = radiolist_dialog(
@@ -1274,7 +1349,9 @@ class CodeAgent:
             total_chars = sum(len(m.get("content", "")) for m in msgs)
             if total_chars > 120000:  # Roughly 30k tokens
                 # Collect non-system message indices oldest-first
-                non_sys = [i for i, m in enumerate(msgs) if m.get("role") != "system"]
+                non_sys = [
+                    i for i, m in enumerate(msgs) if m.get("role") != "system"
+                ]
                 dropped: list[dict] = []
                 for i in sorted(non_sys):
                     if total_chars <= 80000 or len(msgs) - len(dropped) <= 3:
@@ -1291,7 +1368,9 @@ class CodeAgent:
                         "\n\n[System] Context limit reached. Summarizing older interactions...\n"
                     )
                     summary = self._summarize_dropped(dropped)
-                    insert_idx = 1 if msgs and msgs[0].get("role") == "system" else 0
+                    insert_idx = (
+                        1 if msgs and msgs[0].get("role") == "system" else 0
+                    )
                     msgs.insert(
                         insert_idx,
                         {
@@ -1309,7 +1388,8 @@ class CodeAgent:
 
             response_text = ""
             status = con.status(
-                f"[{C['dim']}]{get_funny_thinking_msg()}[/{C['dim']}]", spinner="dots"
+                f"[{C['dim']}]{get_funny_thinking_msg()}[/{C['dim']}]",
+                spinner="dots",
             )
             status.start()
             first_chunk = True
@@ -1345,7 +1425,9 @@ class CodeAgent:
                 "tool_call",
                 {
                     "tool": tool_name,
-                    "arguments": {k: v for k, v in call.items() if k != "raw_text"},
+                    "arguments": {
+                        k: v for k, v in call.items() if k != "raw_text"
+                    },
                 },
             )
             if self.on_tool:
@@ -1358,15 +1440,21 @@ class CodeAgent:
             exec_status.start()
             try:
                 result = self._execute_tool(call)
-                
+
                 # Sync system prompt in case a tool (like skill_load) mutated it mid-loop
-                if msgs and msgs[0].get("role") == "system" and self.session.system_prompt:
+                if (
+                    msgs
+                    and msgs[0].get("role") == "system"
+                    and self.session.system_prompt
+                ):
                     msgs[0]["content"] = self.session.system_prompt
             finally:
                 exec_status.stop()
 
             write_trace_entry(
-                self.session, "tool_result", {"tool": tool_name, "result": result}
+                self.session,
+                "tool_result",
+                {"tool": tool_name, "result": result},
             )
             if self.on_result:
                 self.on_result(tool_name, result)

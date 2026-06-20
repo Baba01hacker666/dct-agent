@@ -54,7 +54,9 @@ def info(msg: str):
 
 
 def warn(msg: str):
-    con.print(f"  [{C['warn']}]![/{C['warn']}]  [{C['warn']}]{msg}[/{C['warn']}]")
+    con.print(
+        f"  [{C['warn']}]![/{C['warn']}]  [{C['warn']}]{msg}[/{C['warn']}]"
+    )
 
 
 def hint(msg: str):

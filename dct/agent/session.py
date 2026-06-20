@@ -33,7 +33,9 @@ class Session:
     def clear(self, keep_system: bool = True):
         self.messages = []
         if keep_system and self.system_prompt:
-            self.messages.append({"role": "system", "content": self.system_prompt})
+            self.messages.append(
+                {"role": "system", "content": self.system_prompt}
+            )
 
     def set_system(self, prompt: str):
         self.system_prompt = prompt
@@ -139,7 +141,9 @@ def write_trace_entry(session: "Session", entry_type: str, data: dict):
 
     session_id = session.name or f"session_{int(session.created_at)}"
     # Sanitize filename
-    session_id = "".join(c for c in session_id if c.isalnum() or c in ("-", "_"))
+    session_id = "".join(
+        c for c in session_id if c.isalnum() or c in ("-", "_")
+    )
     log_file = os.path.join(log_dir, f"{session_id}.jsonl")
 
     trace_data = {
