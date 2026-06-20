@@ -151,6 +151,7 @@ python -m dct add-openrouter sk-or-xxx
 | `/editai` | Open the last AI response in an interactive editor to manually steer the agent |
 | `/commit` | Generate a conventional Git commit message for staged files using the AI model |
 | `/goal <description>` | Enter goal mode — agent autonomously works toward a high-level objective |
+| `/learn` | Trigger autonomous recursive reflection to extract workflows and rules from history |
 
 ### Agent Mode
 | Command | Description |
@@ -194,8 +195,10 @@ When agent mode is ON, the model autonomously calls tools:
 - `ask_user` — ask the user a question (optional `<choices>` for radiolist dialog)
 - `enter_plan_mode` / `exit_plan_mode` — structured planning before execution
 
-**Task tracking:**
+**Task tracking & Memory:**
 - `task_create` / `task_update` / `task_list` — manage structured task lists
+- `core_memory_manage` — Deep CRUD persona/project management (append/replace/rewrite)
+- `memory_store` / `memory_search` — Infinite vector RAG memory
 
 ### Vision
 | Command | Description |
@@ -300,6 +303,26 @@ Wave 1 (parallel): [1. Scaffold] [2. DB schema]
 Wave 2 (parallel): [3. Auth API ← 2] [4. Frontend ← 1]
 Wave 3 (serial):   [5. Integration ← 3,4]
 ```
+
+## Autonomous Memory & Recursive Learning
+
+DCT Agent features a state-of-the-art hybrid memory system heavily inspired by **MemGPT (Letta)**, **OpenHands**, and **NousResearch Hermes**:
+
+1. **Global Persona (MemGPT Style):**
+   - Maintained in `~/.config/dct/soul.md` (Core Persona), `user.md` (Human Profile), and `memory.md` (Global Context).
+   - The agent uses `<tool>core_memory_manage</tool>` to autonomously `append`, `replace`, and even `rewrite` these blocks to compress data when it grows too large.
+
+2. **Project-Level Context (OpenHands Style):**
+   - Automatically loads and maintains `.dct/project.md` in the current working directory.
+   - The agent actively learns repository-specific workflows, build commands, and architectural patterns and caches them here to share across sessions.
+
+3. **Infinite RAG Archival Memory:**
+   - Powered by an embedded pure-Python vector database (`~/.config/dct/memory.json`).
+   - The agent uses `<tool>memory_store</tool>` and `<tool>memory_search</tool>` for deep codebase and historical lookups.
+
+4. **Recursive Self-Improvement (`/learn`):**
+   - When you type `/learn` (or when `/goal` mode finishes), the agent reads its entire conversation history and reflects on what tasks succeeded and which strategies failed.
+   - It extracts the reusable lessons and uses its memory tools to permanently rewrite `.dct/project.md` or `user.md` so that it **never repeats the same mistakes twice**.
 
 ## Reliability & Resilience
 
