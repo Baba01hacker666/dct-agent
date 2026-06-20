@@ -1181,10 +1181,12 @@ class Shell:
                 prompt = (
                     "Please review our entire conversation history. "
                     "Reflect on what tasks you completed, what strategies succeeded, and which failed. "
-                    "Your goal is recursive self-improvement. "
-                    "Extract reusable workflows, rules, and crucial insights to prevent repeating past mistakes. "
-                    "Use `<tool>core_memory_manage</tool>` to save these insights to 'project.md' (if they are specific to this codebase) "
-                    "or 'memory.md'/'user.md' (if they are general knowledge or preferences). "
+                    "Your goal is recursive self-improvement. Extract reusable workflows, rules, and crucial insights to prevent repeating past mistakes.\n\n"
+                    "CRITICALLY: Categorize your findings and save them appropriately using `<tool>core_memory_manage</tool>`:\n"
+                    "1. <section>project</section>: For codebase-specific mistakes, repo architecture, local build commands, or folder structures.\n"
+                    "2. <section>user</section>: For my personal preferences, how I like code written, or communication styles.\n"
+                    "3. <section>memory</section>: For general software engineering lessons or cross-project facts you learned.\n"
+                    "4. <section>soul</section>: If you need to change your core behavioral directives.\n\n"
                     "Do NOT invent insights, only reflect on what actually happened."
                 )
                 con.print(f"  [{C['dim']}]triggering autonomous recursive learning...[/{C['dim']}]")
