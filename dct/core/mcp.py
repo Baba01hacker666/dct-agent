@@ -28,6 +28,7 @@ class MCPClient:
         self.reader_thread.start()
         
     def _read_stdout(self):
+        assert self.process.stdout is not None
         for line in self.process.stdout:
             if not line.strip():
                 continue
@@ -51,10 +52,11 @@ class MCPClient:
             "params": params or {}
         }
         try:
+            assert self.process.stdin is not None
             self.process.stdin.write(json.dumps(req) + "\n")
             self.process.stdin.flush()
         except Exception as e:
-            return {"error": {"message": f"Write error: {str(e)}"}]
+            return {"error": {"message": f"Write error: {str(e)}"}}
         
         for _ in range(100):  # 10s timeout
             with self.lock:

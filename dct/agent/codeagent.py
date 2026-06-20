@@ -161,7 +161,7 @@ AVAILABLE TOOLS:
   <tool>run_subagent</tool><instruction>...</instruction><model>...</model><skill>...</skill><system_prompt>...</system_prompt><background>true|false</background> — spawn a sub-agent to perform a sub-task (skill, background, model, and system_prompt are optional)
   <tool>run_swarm</tool><instruction>...</instruction><members>role | model | server_alias | skill</members> — spawn a parallel swarm of agents across different servers. Format <members> with one member per line.
   <tool>mcp_list</tool>                          — List all connected MCP servers and their available tools
-  <tool>mcp_call</tool><server>...</server><name>...</name><args>{...json...}</args> — Call an MCP server tool
+  <tool>mcp_call</tool><server>...</server><name>...</name><args>{{...json...}}</args> — Call an MCP server tool
   <tool>bg_status</tool><id>...</id>             — check status and logs of background tasks/sub-agents (id optional)
   <tool>bg_kill</tool><id>...</id>               — kill a running background task
   <tool>bg_send_input</tool><id>...</id><input>...</input> — send input (stdin) to a running background task
@@ -330,6 +330,7 @@ class CodeAgent:
 
     def _execute_tool(self, call: dict) -> str:
         """Dispatch tool call, return result string for model."""
+        global next_bg_id
         tool = call["tool"]
         mode = self.session.mode
         plan_file = self.session.agent_plan_file
@@ -454,7 +455,6 @@ class CodeAgent:
                 sub_session.add("user", instruction)
 
                 _cleanup_background_state()
-                global next_bg_id
                 with BACKGROUND_SUBAGENTS_LOCK:
                     bg_id = f"swarm_{role}_{next_bg_id}"
                     next_bg_id += 1
@@ -582,7 +582,6 @@ class CodeAgent:
 
             if is_bg:
                 _cleanup_background_state()
-                global next_bg_id
                 with BACKGROUND_SUBAGENTS_LOCK:
                     bg_id = f"subagent_{next_bg_id}"
                     next_bg_id += 1
