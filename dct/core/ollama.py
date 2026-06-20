@@ -65,10 +65,17 @@ def chat_stream(
     Raises on HTTP error.
     """
     url = f"{srv.base_url()}/api/chat"
+    from dct.core.config import Config
+    cfg = Config()
     payload: dict = {
         "model": model,
         "messages": list(messages),
         "stream": True,
+        "options": {
+            "temperature": cfg.get("temperature", 0.7),
+            "top_p": cfg.get("top_p", 0.9),
+            "num_predict": cfg.get("max_tokens", 4096),
+        },
     }
     if images:
         # Attach images to the last user message (Ollama convention)

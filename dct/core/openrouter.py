@@ -72,7 +72,16 @@ def chat_stream(
     if srv.provider == "openrouter":
         headers["HTTP-Referer"] = "https://github.com/doraemon-cyber-team/dct"
         headers["X-Title"] = "DCT Agent"
-    payload = {"model": model, "messages": messages, "stream": True}
+    from dct.core.config import Config
+    cfg = Config()
+    payload = {
+        "model": model,
+        "messages": messages,
+        "stream": True,
+        "temperature": cfg.get("temperature", 0.7),
+        "top_p": cfg.get("top_p", 0.9),
+        "max_tokens": cfg.get("max_tokens", 4096),
+    }
 
     for chunk in _post_stream(url, headers, payload, CHAT_TIMEOUT):
         if "choices" in chunk and len(chunk["choices"]) > 0:

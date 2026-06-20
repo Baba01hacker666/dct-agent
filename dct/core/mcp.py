@@ -167,8 +167,14 @@ class MCPManager:
         )
 
 
-_global_mcp = MCPManager()
+_global_mcp = None
+_mcp_lock = threading.Lock()
 
 
 def get_mcp_manager() -> MCPManager:
+    global _global_mcp
+    if _global_mcp is None:
+        with _mcp_lock:
+            if _global_mcp is None:
+                _global_mcp = MCPManager()
     return _global_mcp

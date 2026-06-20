@@ -151,8 +151,8 @@ class ServerRegistry:
         try:
             with self._lock:
                 data = {"servers": [s.to_dict() for s in self.servers]}
-            with open(self._path, "w") as f:
-                json.dump(data, f, indent=2)
+                with open(self._path, "w") as f:
+                    json.dump(data, f, indent=2)
         except Exception:
             logger.exception("Failed to save servers to %s", self._path)
 

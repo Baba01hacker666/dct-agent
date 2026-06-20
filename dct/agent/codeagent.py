@@ -47,6 +47,7 @@ from __future__ import annotations
 import re
 import threading
 import time
+from itertools import count
 from typing import Callable, Optional, TYPE_CHECKING
 
 from dct.tools.executor import dispatch, ExecResult
@@ -74,11 +75,11 @@ MAX_AGENT_TURNS = 12  # safety cap on autonomous iterations
 
 BACKGROUND_TASKS: dict[str, dict] = {}
 BACKGROUND_TASKS_LOCK = threading.Lock()
-next_task_id = 1
+_task_id_counter = count(1)
 
 BACKGROUND_SUBAGENTS: dict[str, dict] = {}
 BACKGROUND_SUBAGENTS_LOCK = threading.Lock()
-next_bg_id = 1
+_bg_id_counter = count(1)
 
 # Cleanup: remove completed/failed entries older than this (seconds)
 BG_CLEANUP_TTL = 300
@@ -398,7 +399,6 @@ class CodeAgent:
 
     def _execute_tool(self, call: dict) -> str:
         """Dispatch tool call, return result string for model."""
-        global next_bg_id
         tool = call["tool"]
         mode = self.session.mode
         plan_file = self.session.agent_plan_file
@@ -538,8 +538,7 @@ class CodeAgent:
 
                 _cleanup_background_state()
                 with BACKGROUND_SUBAGENTS_LOCK:
-                    bg_id = f"swarm_{role}_{next_bg_id}"
-                    next_bg_id += 1
+                    bg_id = f"swarm_{role}_{next(_bg_id_counter)}"
                     BACKGROUND_SUBAGENTS[bg_id] = {
                         "instruction": f"[SWARM: {role}] {instruction}",
                         "model": s_model,
@@ -774,8 +773,7 @@ class CodeAgent:
             if is_bg:
                 _cleanup_background_state()
                 with BACKGROUND_SUBAGENTS_LOCK:
-                    bg_id = f"subagent_{next_bg_id}"
-                    next_bg_id += 1
+                    bg_id = f"subagent_{next(_bg_id_counter)}"
                     BACKGROUND_SUBAGENTS[bg_id] = {
                         "instruction": instruction,
                         "model": sub_model,
@@ -1028,14 +1026,12 @@ class CodeAgent:
             is_bg = (call.get("background") or "").strip().lower() == "true"
             if is_bg:
                 _cleanup_background_state()
-                global next_task_id
                 import subprocess
                 import os
                 from dct.tools.executor import prepare_background_command
 
                 with BACKGROUND_TASKS_LOCK:
-                    task_id = f"task_{next_task_id}"
-                    next_task_id += 1
+                    task_id = f"task_{next(_task_id_counter)}"
                     BACKGROUND_TASKS[task_id] = {
                         "command": code,
                         "lang": lang,

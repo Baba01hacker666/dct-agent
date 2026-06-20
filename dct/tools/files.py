@@ -6,6 +6,7 @@ Used by the coding agent to inspect and modify files.
 
 from __future__ import annotations
 import os
+import glob as _pyglob
 import shutil
 import subprocess
 import difflib
@@ -202,7 +203,13 @@ def run_grep(
     context: int | None = None,
     head_limit: int = 250,
 ) -> FileResult:
-    """Run ripgrep (rg) to search file contents."""
+    """Run ripgrep (rg) to search file contents. Falls back to system grep."""
+    try:
+        subprocess.run(["rg", "--version"], capture_output=True, check=True)
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return _run_grep_fallback(
+            pattern, path, glob_pattern, output_mode, context, head_limit
+        )
     cmd = ["rg"]
 
     # Map output_mode to rg flags
@@ -254,6 +261,48 @@ def run_grep(
         return FileResult(ok=False, path=path, message=str(e))
 
 
+def _run_grep_fallback(
+    pattern: str,
+    path: str = ".",
+    glob_pattern: str | None = None,
+    output_mode: str = "files_with_matches",
+    context: int | None = None,
+    head_limit: int = 250,
+) -> FileResult:
+    """Fallback using system grep when rg is unavailable."""
+    cmd = ["grep", "-r"]
+    if output_mode == "files_with_matches":
+        cmd.append("-l")
+    elif output_mode == "content":
+        cmd.append("-n")
+        if context is not None:
+            cmd.extend(["-C", str(context)])
+    if glob_pattern:
+        cmd.extend(["--include", glob_pattern])
+    cmd.extend(["--", pattern, path])
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        if proc.returncode not in (0, 1):
+            return FileResult(
+                ok=False, path=path,
+                message=f"grep error: {proc.stderr.strip() or 'unknown error'}",
+            )
+        out = proc.stdout.strip()
+        if not out:
+            return FileResult(ok=True, path=path, content="(no matches found)")
+        lines = out.splitlines()
+        if len(lines) > head_limit:
+            lines = lines[:head_limit]
+            lines.append(f"... (output truncated to {head_limit} lines)")
+        return FileResult(ok=True, path=path, content="\n".join(lines))
+    except FileNotFoundError:
+        return FileResult(
+            ok=False, path=path, message="Neither rg nor grep found on PATH."
+        )
+    except Exception as e:
+        return FileResult(ok=False, path=path, message=str(e))
+
+
 def _make_diff(old: str, new: str, fname: str) -> str:
     diff = difflib.unified_diff(
         old.splitlines(keepends=True),
@@ -277,7 +326,11 @@ def run_glob(
     pattern: str,
     path: str = ".",
 ) -> FileResult:
-    """Fast file pattern matching using ripgrep --files."""
+    """Fast file pattern matching using ripgrep --files. Falls back to Python glob."""
+    try:
+        subprocess.run(["rg", "--version"], capture_output=True, check=True)
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return _run_glob_fallback(pattern, path)
     cmd = ["rg", "--files", "--glob", pattern, path]
 
     try:
@@ -300,3 +353,25 @@ def run_glob(
         return FileResult(ok=True, path=path, content=out)
     except Exception as e:
         return FileResult(ok=False, path=path, message=str(e))
+
+
+def _run_glob_fallback(pattern: str, path: str = ".") -> FileResult:
+    """Fallback using Python's glob module when rg is unavailable."""
+    try:
+        matches = _pyglob.glob(pattern, root_dir=path, recursive=True)
+    except TypeError:
+        # Python < 3.10 doesn't support root_dir
+        import os as _os
+        cwd = _os.getcwd()
+        try:
+            _os.chdir(path)
+            matches = _pyglob.glob(pattern, recursive=True)
+        finally:
+            _os.chdir(cwd)
+    except Exception as e:
+        return FileResult(ok=False, path=path, message=str(e))
+
+    matches.sort()
+    if not matches:
+        return FileResult(ok=True, path=path, content="(no matches found)")
+    return FileResult(ok=True, path=path, content="\n".join(matches))

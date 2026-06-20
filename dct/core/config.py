@@ -28,6 +28,9 @@ DEFAULTS = {
     "mcp_servers": {},
     "enable_tracing": False,
     "enable_persona": True,
+    "temperature": 0.7,
+    "top_p": 0.9,
+    "max_tokens": 4096,
 }
 
 
@@ -59,8 +62,8 @@ class Config:
         try:
             with self._lock:
                 data = dict(self._data)
-            with open(self._path, "w") as f:
-                json.dump(data, f, indent=2)
+                with open(self._path, "w") as f:
+                    json.dump(data, f, indent=2)
         except Exception:
             logger.exception("Failed to save config to %s", self._path)
 

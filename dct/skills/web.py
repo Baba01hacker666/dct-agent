@@ -8,17 +8,22 @@ import requests
 from bs4 import BeautifulSoup
 from dataclasses import dataclass
 
+from dct.tools.url_validator import validate_url
+
 
 @dataclass
-class WebResult:
+class SkillWebResult:
     ok: bool
     url: str
     content: str
     message: str = ""
 
 
-def fetch_and_extract(url: str, selector: str | None = None) -> WebResult:
+def fetch_and_extract(url: str, selector: str | None = None) -> SkillWebResult:
     """Fetch URL and extract main content or specific CSS selector."""
+    err = validate_url(url)
+    if err:
+        return SkillWebResult(False, url, "", err)
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -31,7 +36,7 @@ def fetch_and_extract(url: str, selector: str | None = None) -> WebResult:
         if selector:
             elements = soup.select(selector)
             if not elements:
-                return WebResult(
+                return SkillWebResult(
                     False, url, "", f"Selector '{selector}' not found"
                 )
             text = "\n\n".join(
@@ -47,6 +52,6 @@ def fetch_and_extract(url: str, selector: str | None = None) -> WebResult:
         if len(text) > 100000:
             text = text[:100000] + "\n...[TRUNCATED]..."
 
-        return WebResult(True, url, text)
+        return SkillWebResult(True, url, text)
     except Exception as e:
-        return WebResult(False, url, "", str(e))
+        return SkillWebResult(False, url, "", str(e))

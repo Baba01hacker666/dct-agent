@@ -4,6 +4,7 @@ Task tracking system for the agent to organize complex requests.
 """
 
 from __future__ import annotations
+import threading
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -23,18 +24,20 @@ class TaskTracker:
         # In a real app, you might save this in .dct/sessions/
         self.tasks: List[Task] = []
         self._next_id = 1
+        self._lock = threading.Lock()
 
     def create(
         self, subject: str, description: str, active_form: Optional[str] = None
     ) -> Task:
-        task = Task(
-            id=str(self._next_id),
-            subject=subject,
-            description=description,
-            active_form=active_form,
-        )
-        self.tasks.append(task)
-        self._next_id += 1
+        with self._lock:
+            task = Task(
+                id=str(self._next_id),
+                subject=subject,
+                description=description,
+                active_form=active_form,
+            )
+            self.tasks.append(task)
+            self._next_id += 1
         return task
 
     def update(
@@ -44,32 +47,37 @@ class TaskTracker:
         subject: Optional[str] = None,
         description: Optional[str] = None,
     ) -> Optional[Task]:
-        for task in self.tasks:
-            if task.id == task_id:
-                if status:
-                    task.status = status
-                if subject:
-                    task.subject = subject
-                if description:
-                    task.description = description
-                return task
+        with self._lock:
+            for task in self.tasks:
+                if task.id == task_id:
+                    if status:
+                        task.status = status
+                    if subject:
+                        task.subject = subject
+                    if description:
+                        task.description = description
+                    return task
         return None
 
     def get_all(self) -> List[Task]:
-        return self.tasks
+        with self._lock:
+            return list(self.tasks)
 
     def get(self, task_id: str) -> Optional[Task]:
-        for task in self.tasks:
-            if task.id == task_id:
-                return task
+        with self._lock:
+            for task in self.tasks:
+                if task.id == task_id:
+                    return task
         return None
 
     def summary(self) -> str:
-        if not self.tasks:
+        with self._lock:
+            tasks = list(self.tasks)
+        if not tasks:
             return "No tasks."
 
         lines = ["[TASKS]"]
-        for t in self.tasks:
+        for t in tasks:
             icon = "[ ]"
             if t.status == "in_progress":
                 icon = "[~]"
@@ -80,8 +88,14 @@ class TaskTracker:
 
 
 # Global tracker for the REPL/Session
-_tracker = TaskTracker()
+_tracker = None
+_tracker_lock = threading.Lock()
 
 
 def get_tracker() -> TaskTracker:
+    global _tracker
+    if _tracker is None:
+        with _tracker_lock:
+            if _tracker is None:
+                _tracker = TaskTracker()
     return _tracker

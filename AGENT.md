@@ -49,6 +49,7 @@ dct/
 │   ├── image.py      # Vision handling (read_image).
 │   ├── lsp.py        # Jedi-based LSP tools (goto_definition, find_references, repo_map).
 │   ├── tasks.py      # Structured task and goal tracking logic.
+│   ├── url_validator.py # SSRF protection — blocks internal/private IPs for web fetch.
 │   └── web.py        # HTTP fetching, DuckDuckGo search, CSS selectors.
 ├── __main__.py       # Module entry point (`python -m dct`).
 └── __init__.py

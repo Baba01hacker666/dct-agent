@@ -13,6 +13,8 @@ from dataclasses import dataclass
 import requests
 from requests.exceptions import RequestException
 
+from dct.tools.url_validator import validate_url
+
 FETCH_TIMEOUT = 10
 UA = "Mozilla/5.0 (compatible; DCT-Agent/3.0)"
 
@@ -34,6 +36,9 @@ def fetch_url(url: str, max_chars: int = 40_000) -> WebResult:
     """
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
+    err = validate_url(url)
+    if err:
+        return WebResult(ok=False, url=url, message=err)
     try:
         r = requests.get(
             url,
