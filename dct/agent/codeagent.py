@@ -180,7 +180,7 @@ AVAILABLE TOOLS:
     from dct.core.config import Config
     conf = Config()
     if conf.get("enable_persona", True):
-        prompt += "\n  <tool>core_memory_manage</tool><action>append|replace|rewrite</action><section>soul|user|memory</section><old_text>...</old_text><new_text>...</new_text> — Autonomously update your core identity (soul.md), user profile (user.md), or short-term notes (memory.md)."
+        prompt += "\n  <tool>core_memory_manage</tool><action>append|replace|rewrite</action><section>soul|user|memory|project</section><old_text>...</old_text><new_text>...</new_text> — Autonomously update your core identity (soul.md), user profile (user.md), global notes (memory.md), or repository knowledge (project.md)."
 
     prompt += """
   <tool>bg_status</tool><id>...</id>             — check status and logs of background tasks/sub-agents (id optional)
@@ -232,7 +232,7 @@ IMPORTANT BEHAVIOR:
 - If a tool fails, explain briefly and try an alternative.
 - Keep responses compact between tool calls.
 - When modifying files, prefer patch_file for targeted edits.
-- Manage your core persona using <tool>core_memory_manage</tool>. Update 'user.md' with user preferences, 'memory.md' with crucial context, and 'soul.md' to evolve your own core directives. Rewrite sections if they become too large or cluttered.
+- Manage your core persona using <tool>core_memory_manage</tool>. Update 'user.md' with user preferences, 'memory.md' with crucial global context, 'project.md' with repo-specific knowledge (build commands, architecture), and 'soul.md' to evolve your own core directives. Rewrite sections if they become too large or cluttered.
 """
 
     if session.mode == "plan":
@@ -250,6 +250,17 @@ You are currently in PLAN mode.
         user_content = load_persona_file("user.md", "The user is a developer using DCT Agent. They prefer concise and direct answers.")
         memory_content = load_persona_file("memory.md", "- Initialized memory.\\n- Use <tool>core_memory_manage</tool> to add important facts here.")
         
+        # OpenHands-style Project Memory
+        import os
+        project_dir = os.path.join(os.getcwd(), ".dct")
+        project_path = os.path.join(project_dir, "project.md")
+        if not os.path.exists(project_path):
+            os.makedirs(project_dir, exist_ok=True)
+            with open(project_path, "w", encoding="utf-8") as f:
+                f.write("- Initialized project memory. Store repository-specific knowledge here.")
+        with open(project_path, "r", encoding="utf-8") as f:
+            project_content = f.read().strip()
+            
         prompt += f"""
 <soul>
 {soul_content}
@@ -262,6 +273,10 @@ You are currently in PLAN mode.
 <core_memory>
 {memory_content}
 </core_memory>
+
+<project_memory>
+{project_content}
+</project_memory>
 """
 
     if user_system_prompt.strip():
@@ -628,11 +643,14 @@ class CodeAgent:
             m_old = call.get("old_text") or ""
             m_new = call.get("new_text") or ""
             
-            if m_section not in ("soul", "user", "memory"):
-                return "[TOOL ERROR] <section> must be one of: soul, user, memory."
+            if m_section not in ("soul", "user", "memory", "project"):
+                return "[TOOL ERROR] <section> must be one of: soul, user, memory, project."
             
             import os
-            path = os.path.join(os.path.expanduser("~"), ".config", "dct", f"{m_section}.md")
+            if m_section == "project":
+                path = os.path.join(os.getcwd(), ".dct", "project.md")
+            else:
+                path = os.path.join(os.path.expanduser("~"), ".config", "dct", f"{m_section}.md")
             
             if m_action == "append":
                 if not m_new: return "[TOOL ERROR] <new_text> is required for append."
