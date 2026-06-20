@@ -428,7 +428,7 @@ def test_run_python_auto_install():
         called_venv = []
 
         def side_effect_fn(path):
-            if "venv" in str(path) and str(path).endswith("python"):
+            if "venv" in str(path) and (str(path).endswith("python") or str(path).endswith("python.exe")):
                 called_venv.append(path)
                 return len(called_venv) > 1
             return True
