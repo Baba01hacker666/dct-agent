@@ -161,6 +161,9 @@ AVAILABLE TOOLS:
   <tool>list_dir</tool><path>...</path>          — list directory
   <tool>tree</tool><path>...</path>              — directory tree
   <tool>glob</tool><pattern>...</pattern><path>...</path>      — fast file discovery using ripgrep
+  <tool>repo_map</tool><path>...</path>          — Generate a semantic map of all classes and functions in a directory (Python)
+  <tool>goto_definition</tool><path>...</path><line>...</line><column>0</column> — Find definition of a symbol (1-indexed line, 0-indexed col)
+  <tool>find_references</tool><path>...</path><line>...</line><column>0</column> — Find all references to a symbol (1-indexed line, 0-indexed col)
   <tool>task_create</tool><subject>...</subject><description>...</description> — Create tracking tasks
   <tool>task_update</tool><id>...</id><status>...</status>       — Update task (pending|in_progress|completed)
   <tool>task_list</tool>                                         — List all tasks
@@ -1117,6 +1120,38 @@ class CodeAgent:
             out = result.summary()
             status = "✓" if result.ok else "✗"
             return f"[{status} {lang} exit={result.returncode} {result.duration_ms}ms]\n{out}"
+        elif tool == "repo_map":
+            path = call.get("path") or "."
+            from dct.tools.lsp import generate_repo_map
+            res = generate_repo_map(path)
+            if not res.ok:
+                return f"[TOOL ERROR] {res.message}"
+            return f"Semantic Repo Map:\n{res.data}"
+
+        elif tool in ("goto_definition", "find_references"):
+            path = call.get("path") or ""
+            line_str = call.get("line") or ""
+            col_str = call.get("column") or "0"
+            if not path or not line_str:
+                return f"[TOOL ERROR] <path> and <line> are required for {tool}."
+            try:
+                line = int(line_str)
+                col = int(col_str)
+            except ValueError:
+                return f"[TOOL ERROR] <line> and <column> must be integers."
+                
+            from dct.tools.lsp import goto_definition, find_references
+            import json
+            
+            if tool == "goto_definition":
+                res = goto_definition(path, line, col)
+            else:
+                res = find_references(path, line, col)
+                
+            if not res.ok:
+                return f"[TOOL ERROR] {res.message}"
+            return json.dumps(res.data, indent=2)
+
 
         elif tool == "read_image":
             path = call.get("path") or ""
