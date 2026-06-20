@@ -468,21 +468,29 @@ class Shell:
         con.print(f"  [{C['dim']}]decomposing into subtasks…[/{C['dim']}]")
 
         # ── Phase 1: Decompose ──────────────────────────────────────────
+        # Collect available models dynamically
+        available_models = set()
+        for s in self.registry.servers:
+            if s.online:
+                available_models.update(s.models)
+        models_str = ", ".join(sorted(available_models)) or self.model
+
         planner_prompt = (
             "You are an expert task orchestrator. Decompose the user's goal into "
-            "parallelizable subtasks. Output them in this EXACT XML format:\n\n"
+            "parallelizable subtasks. You must dynamically route each task to the most appropriate AI model.\n\n"
+            f"AVAILABLE MODELS: {models_str}\n\n"
+            "Output the plan in this EXACT XML format:\n"
             "<plan>\n"
-            '<task id="1" desc="short label" deps="">detailed instructions for this subtask</task>\n'
-            '<task id="2" desc="short label" deps="1">instructions (runs after task 1)</task>\n'
-            '<task id="3" desc="short label" deps="1">instructions (runs parallel with task 2)</task>\n'
+            f'  <task id="1" desc="short label" deps="" model="{self.model}">detailed instructions for this subtask</task>\n'
+            '  <task id="2" desc="short label" deps="1" model="qwen-coder">instructions (runs after task 1)</task>\n'
             "</plan>\n\n"
             "Rules:\n"
-            "- Every task needs an id (number), desc (3-5 word label), and deps (comma-separated ids of tasks it depends on, or empty)\n"
+            "- Every task needs: id (number), desc (3-5 words), deps (comma-separated ids, or empty), and model (choose from AVAILABLE MODELS)\n"
             "- Tasks with empty deps run first, in parallel\n"
             "- Maximize parallelism — tasks should only depend on others when truly necessary\n"
             "- Each task's body should be detailed enough for a specialist to execute independently\n"
             "- Number tasks sequentially starting from 1\n"
-            "- Include an <orchestrator_note> with your reasoning about the decomposition\n"
+            "- Include an <orchestrator_note> with your reasoning about the decomposition and model routing\n"
             "Output ONLY the <plan> XML block, nothing else."
         )
 
@@ -509,18 +517,29 @@ class Shell:
         import re
 
         for match in re.finditer(
-            r'<task\s+id="(\d+)"\s+desc="([^"]*)"\s+deps="([^"]*)"\s*>(.*?)</task>',
+            r"<task\b([^>]*)>(.*?)</task>",
             plan_text,
-            re.DOTALL,
+            re.DOTALL | re.IGNORECASE,
         ):
-            tid = match.group(1)
+            attrs_str = match.group(1)
+            body = match.group(2).strip()
+
+            # Extract attributes safely
+            attrs = dict(re.findall(r'(\w+)="([^"]*)"', attrs_str))
+            tid = attrs.get("id")
+            if not tid:
+                continue
+
             tasks[tid] = {
                 "id": tid,
-                "desc": match.group(2),
+                "desc": attrs.get("desc", ""),
                 "deps": [
-                    d.strip() for d in match.group(3).split(",") if d.strip()
+                    d.strip()
+                    for d in attrs.get("deps", "").split(",")
+                    if d.strip()
                 ],
-                "body": match.group(4).strip(),
+                "model": attrs.get("model", self.model),
+                "body": body,
                 "result": "",
             }
 
@@ -538,7 +557,7 @@ class Shell:
             fg = C["fg"]
             dim = C["dim"]
             con.print(
-                f"  [{acc}]{tid}.[/{acc}] [{fg}]{t['desc']}[/{fg}][{dim}]{deps_str}[/{dim}]"
+                f"  [{acc}]{tid}.[/{acc}] [{fg}]{t['desc']}[/{fg}] [{C['purple']}]{t['model']}[/{C['purple']}][{dim}]{deps_str}[/{dim}]"
             )
 
         # ── Phase 3: Execute in waves ───────────────────────────────────
@@ -563,7 +582,7 @@ class Shell:
             section(f"wave {wave_num}  ·  {len(ready)} tasks in parallel")
             for tid in ready:
                 con.print(
-                    f"  [{C['dim']}]→ {tid}. {tasks[tid]['desc']}[/{C['dim']}]"
+                    f"  [{C['dim']}]→ {tid}. {tasks[tid]['desc']} [{C['accent']}]{tasks[tid]['model']}[/{C['accent']}][/{C['dim']}]"
                 )
 
             def execute_task(tid: str) -> tuple[str, str]:
@@ -588,10 +607,18 @@ class Shell:
                 def stream_fn(srv_, mdl_, msgs_):
                     yield from client_chat_stream(srv_, mdl_, msgs_)
 
-                assert self.active is not None
+                # Resolve dynamic swarm routing
+                task_model = t["model"] or self.model
+                server_to_use = self.active
+                for s in self.registry.servers:
+                    if s.online and task_model in s.models:
+                        server_to_use = s
+                        break
+
+                assert server_to_use is not None
                 agent = CodeAgent(
-                    server=self.active,
-                    model=self.model,
+                    server=server_to_use,
+                    model=task_model,
                     session=worker_session,
                     stream_fn=stream_fn,
                     on_text=lambda c: None,
@@ -1701,7 +1728,7 @@ class Shell:
                     warn("usage: /vision <image_path> <prompt>")
                     continue
                 img_path = rest[1].split(None, 1)[0]
-                prompt = rest[1][len(img_path):].strip()
+                prompt = rest[1][len(img_path) :].strip()
                 if not prompt:
                     warn("usage: /vision <image_path> <prompt>")
                     continue
@@ -1988,6 +2015,7 @@ class Shell:
     def _trigger_learn(self):
         """Run autonomous reflection and recursive learning."""
         from dct.core.theme import con, C
+
         prompt = (
             "Please review our entire conversation history. "
             "Reflect on what tasks you completed, what strategies succeeded, and which failed. "
@@ -1999,7 +2027,9 @@ class Shell:
             "4. <section>soul</section>: If you need to change your core behavioral directives.\n\n"
             "Do NOT invent insights, only reflect on what actually happened."
         )
-        con.print(f"  [{C['dim']}]triggering autonomous recursive learning...[/{C['dim']}]")
+        con.print(
+            f"  [{C['dim']}]triggering autonomous recursive learning...[/{C['dim']}]"
+        )
         self.session.add("user", prompt)
         self._run_agent(self.session.messages, prompt)
 
@@ -2109,7 +2139,7 @@ class Shell:
                     f"\n  [{C['err']}][GOAL ERROR]: {str(e)}[/{C['err']}]"
                 )
                 break
-        
+
         # After goal finishes, explicitly run the learning loop
         self._trigger_learn()
 
