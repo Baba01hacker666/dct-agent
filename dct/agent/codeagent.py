@@ -180,7 +180,7 @@ AVAILABLE TOOLS:
     from dct.core.config import Config
     conf = Config()
     if conf.get("enable_persona", True):
-        prompt += "\n  <tool>core_memory_append</tool><text>...</text> — Append a critical fact to your core memory.md (always visible in context)"
+        prompt += "\n  <tool>core_memory_manage</tool><action>append|replace|rewrite</action><section>soul|user|memory</section><old_text>...</old_text><new_text>...</new_text> — Autonomously update your core identity (soul.md), user profile (user.md), or short-term notes (memory.md)."
 
     prompt += """
   <tool>bg_status</tool><id>...</id>             — check status and logs of background tasks/sub-agents (id optional)
@@ -232,6 +232,7 @@ IMPORTANT BEHAVIOR:
 - If a tool fails, explain briefly and try an alternative.
 - Keep responses compact between tool calls.
 - When modifying files, prefer patch_file for targeted edits.
+- Manage your core persona using <tool>core_memory_manage</tool>. Update 'user.md' with user preferences, 'memory.md' with crucial context, and 'soul.md' to evolve your own core directives. Rewrite sections if they become too large or cluttered.
 """
 
     if session.mode == "plan":
@@ -247,7 +248,7 @@ You are currently in PLAN mode.
     if conf.get("enable_persona", True):
         soul_content = load_persona_file("soul.md", "You are DCT Agent, an autonomous and elite developer AI.\\nYou prioritize clean code, user autonomy, and security.")
         user_content = load_persona_file("user.md", "The user is a developer using DCT Agent. They prefer concise and direct answers.")
-        memory_content = load_persona_file("memory.md", "- Initialized memory.\\n- Use <tool>core_memory_append</tool> to add important facts here.")
+        memory_content = load_persona_file("memory.md", "- Initialized memory.\\n- Use <tool>core_memory_manage</tool> to add important facts here.")
         
         prompt += f"""
 <soul>
@@ -337,6 +338,10 @@ def _parse_tool_call(text: str) -> Optional[dict]:
         "server": _extract_tag(text, "server"),
         "args": _extract_tag(text, "args"),
         "text": _extract_tag(text, "text"),
+        "action": _extract_tag(text, "action"),
+        "section": _extract_tag(text, "section"),
+        "old_text": _extract_tag(text, "old_text"),
+        "new_text": _extract_tag(text, "new_text"),
         "patches": (
             _parse_multi_patch(text) if tool.strip() == "multi_patch_file" else None
         ),
@@ -613,22 +618,47 @@ class CodeAgent:
                 lines.append(f"- {mem_res['text']}")
             return "\n".join(lines)
             
-        elif tool == "core_memory_append":
+        elif tool == "core_memory_manage":
             from dct.core.config import Config
             if not Config().get("enable_persona", True):
-                return "[TOOL ERROR] Persona feature is disabled in config. Cannot append to memory.md."
+                return "[TOOL ERROR] Persona feature is disabled in config."
                 
-            m_text = call.get("text")
-            if not m_text:
-                return "[TOOL ERROR] <text> is required."
+            m_action = call.get("action")
+            m_section = call.get("section")
+            m_old = call.get("old_text") or ""
+            m_new = call.get("new_text") or ""
+            
+            if m_section not in ("soul", "user", "memory"):
+                return "[TOOL ERROR] <section> must be one of: soul, user, memory."
+            
             import os
-            path = os.path.join(os.path.expanduser("~"), ".config", "dct", "memory.md")
-            try:
+            path = os.path.join(os.path.expanduser("~"), ".config", "dct", f"{m_section}.md")
+            
+            if m_action == "append":
+                if not m_new: return "[TOOL ERROR] <new_text> is required for append."
                 with open(path, "a", encoding="utf-8") as f:
-                    f.write(f"\n- {m_text}")
-                return "[Success] Appended to core memory.md. It will be visible in your next turn."
-            except Exception as e:
-                return f"[TOOL ERROR] Failed to append: {e}"
+                    f.write(f"\n{m_new}")
+                return f"[Success] Appended to {m_section}.md. It will be visible next turn."
+            
+            elif m_action == "replace":
+                if not m_old or not m_new: return "[TOOL ERROR] <old_text> and <new_text> required."
+                with open(path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                if m_old not in content:
+                    return f"[TOOL ERROR] Exact <old_text> not found in {m_section}.md."
+                content = content.replace(m_old, m_new)
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                return f"[Success] Replaced text in {m_section}.md."
+                
+            elif m_action == "rewrite":
+                if not m_new: return "[TOOL ERROR] <new_text> required for rewrite."
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(m_new)
+                return f"[Success] Rewrote entire {m_section}.md."
+            
+            else:
+                return "[TOOL ERROR] <action> must be append, replace, or rewrite."
 
         elif tool == "run_subagent":
             instruction = (
