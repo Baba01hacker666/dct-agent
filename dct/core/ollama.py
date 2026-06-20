@@ -59,7 +59,8 @@ def chat_stream(
     model: str,
     messages: list[dict],
     images: list[str] | None = None,
-) -> Iterator[str]:
+    tools: list[dict] | None = None,
+) -> Iterator[str | dict]:
     """
     Yield text chunks from /api/chat (streaming).
     Raises on HTTP error.

@@ -123,7 +123,7 @@ def test_subagent_tool_parsing_and_execution():
     server = Server("local", "localhost", 11434)
     
     # Mock stream_fn that returns tool DONE immediately for the sub-agent
-    def mock_stream_fn(srv, mdl, msgs):
+    def mock_stream_fn(srv, mdl, msgs, **kwargs):
         yield "<tool>DONE</tool>\nCompleted task."
 
     agent = CodeAgent(server, "llama3", session, mock_stream_fn)
@@ -161,7 +161,7 @@ def test_background_subagent_execution():
     session = Session()
     server = Server("local", "localhost", 11434)
     
-    def mock_stream_fn(srv, mdl, msgs):
+    def mock_stream_fn(srv, mdl, msgs, **kwargs):
         yield "<tool>DONE</tool>"
 
     agent = CodeAgent(server, "llama3", session, mock_stream_fn)
