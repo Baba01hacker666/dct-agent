@@ -47,10 +47,12 @@ def test_read_image():
     # Valid PNG (1x1 pixel)
     import struct
     import zlib
+
     def make_png():
         # Minimal valid PNG: 1x1 red pixel
         raw_data = b"\x00" + b"\xff\x00\x00"  # filter=0, R=255, G=0, B=0
         compressed = zlib.compress(raw_data)
+
         def chunk(ctype, data):
             c = ctype + data
             crc = struct.pack(">I", zlib.crc32(c) & 0xFFFFFFFF)

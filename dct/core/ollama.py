@@ -89,7 +89,10 @@ def chat_stream(
                 payload["messages"][i] = msg
                 break
     for chunk in _post_stream(url, payload, CHAT_TIMEOUT, srv):
-        content = chunk.get("message", {}).get("content", "")
+        msg = chunk.get("message", {})
+        if "tool_calls" in msg and msg["tool_calls"]:
+            yield {"tool_calls": msg["tool_calls"]}
+        content = msg.get("content", "")
         if content:
             yield content
         if chunk.get("done"):
@@ -102,7 +105,7 @@ def chat_once(
     messages: list[dict],
     images: list[str] | None = None,
     tools: list[dict] | None = None,
-) -> str:
+) -> str | dict:
     """Non-streaming chat — returns full reply as string."""
     url = f"{srv.base_url()}/api/chat"
     payload: dict = {
@@ -123,7 +126,10 @@ def chat_once(
         url, **_request_kwargs(srv, {"json": payload, "timeout": CHAT_TIMEOUT})
     )
     r.raise_for_status()
-    return r.json().get("message", {}).get("content", "")
+    msg = r.json().get("message", {})
+    if "tool_calls" in msg and msg["tool_calls"]:
+        return {"tool_calls": msg["tool_calls"], "content": msg.get("content", "")}
+    return msg.get("content", "")
 
 
 # ── Models ───────────────────────────────────────────────────────────────────

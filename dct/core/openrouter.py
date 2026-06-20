@@ -90,7 +90,7 @@ def chat_stream(
     for chunk in _post_stream(url, headers, payload, CHAT_TIMEOUT):
         if "choices" in chunk and len(chunk["choices"]) > 0:
             delta = chunk["choices"][0].get("delta", {})
-            
+
             if "tool_calls" in delta:
                 for tc in delta["tool_calls"]:
                     idx = tc.get("index", 0)
@@ -105,7 +105,7 @@ def chat_stream(
                     else:
                         if tc.get("function", {}).get("arguments"):
                             tool_calls_buffer[idx]["function"]["arguments"] += tc["function"]["arguments"]
-            
+
             content = _extract_stream_text(delta)
             if content:
                 yield content
@@ -178,6 +178,7 @@ def pull_stream(srv: "Server", model: str) -> Iterator[dict]:
     Yield a single success status.
     """
     yield {"status": "success"}
+
 
 def get_embeddings(srv: "Server", text: str, model: str = "text-embedding-3-small") -> list[float]:
     url = f"{srv.base_url()}/embeddings"

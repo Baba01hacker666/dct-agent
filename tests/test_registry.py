@@ -121,13 +121,13 @@ def test_subagent_tool_parsing_and_execution():
     # Test mock execution of run_subagent
     session = Session()
     server = Server("local", "localhost", 11434)
-    
+
     # Mock stream_fn that returns tool DONE immediately for the sub-agent
     def mock_stream_fn(srv, mdl, msgs, **kwargs):
         yield "<tool>DONE</tool>\nCompleted task."
 
     agent = CodeAgent(server, "llama3", session, mock_stream_fn)
-    
+
     result = agent._execute_tool(call)
     assert "completed task successfully" in result.lower()
 
@@ -136,7 +136,7 @@ def test_shell_default_agent_mode():
     from dct.cli.shell import Shell
     from dct.core.registry import ServerRegistry
     import tempfile
-    
+
     with tempfile.NamedTemporaryFile(suffix=".json") as tmp:
         registry = ServerRegistry(tmp.name)
         shell = Shell(registry)
@@ -160,24 +160,24 @@ def test_background_subagent_execution():
 
     session = Session()
     server = Server("local", "localhost", 11434)
-    
+
     def mock_stream_fn(srv, mdl, msgs, **kwargs):
         yield "<tool>DONE</tool>"
 
     agent = CodeAgent(server, "llama3", session, mock_stream_fn)
     result = agent._execute_tool(call)
-    
+
     assert "started in background" in result
     # We should have a registered background subagent
     assert len(BACKGROUND_SUBAGENTS) > 0
     bg_id = list(BACKGROUND_SUBAGENTS.keys())[-1]
-    
+
     # Wait for background thread to run and complete
     for _ in range(20):
         if BACKGROUND_SUBAGENTS[bg_id]["status"] in ("completed", "failed"):
             break
         time.sleep(0.1)
-        
+
     assert BACKGROUND_SUBAGENTS[bg_id]["status"] == "completed"
 
     # Cleanup
@@ -203,7 +203,7 @@ def test_background_task_execution():
     session = Session()
     server = Server("local", "localhost", 11434)
     agent = CodeAgent(server, "llama3", session, lambda *args: iter([]))
-    
+
     result = agent._execute_tool(call)
     assert "started in background" in result
     assert len(BACKGROUND_TASKS) > 0
@@ -235,7 +235,7 @@ def test_shell_goal_mode():
     from dct.cli.shell import Shell
     from dct.core.registry import ServerRegistry, Server
     import tempfile
-    
+
     with tempfile.NamedTemporaryFile(suffix=".json") as tmp:
         registry = ServerRegistry(tmp.name)
         # Add a dummy server so active server is resolved
@@ -244,14 +244,14 @@ def test_shell_goal_mode():
         shell = Shell(registry)
         shell.active = srv
         shell.model = "llama3"
-        
+
         # We can test that goal mode starts and updates session state
         # Let's mock agent run to return DONE immediately
         from unittest.mock import patch
         with patch("dct.cli.shell.chat_stream") as mock_stream:
             mock_stream.return_value = ["<tool>DONE</tool>\nGoal achieved."]
             shell._run_goal_mode("test goal")
-            
+
             assert shell.agent_mode is True
             # Session should contain the user goal and the assistant response
             assert any(m["role"] == "user" and "test goal" in m["content"] for m in shell.session.messages)
@@ -262,7 +262,7 @@ def test_shell_btw_command():
     from dct.cli.shell import Shell
     from dct.core.registry import ServerRegistry, Server
     import tempfile
-    
+
     with tempfile.NamedTemporaryFile(suffix=".json") as tmp:
         registry = ServerRegistry(tmp.name)
         srv = Server("local", "localhost", 11434, status="online")
@@ -270,16 +270,16 @@ def test_shell_btw_command():
         shell = Shell(registry)
         shell.active = srv
         shell.model = "llama3"
-        
+
         # Add a mock message to session history
         shell.session.add("user", "Existing prompt")
         shell.session.add("assistant", "Existing response")
-        
+
         from unittest.mock import patch
         with patch("dct.cli.shell.chat_stream") as mock_stream:
             mock_stream.return_value = ["BTW reply"]
             shell._btw("side question")
-            
+
             # The session history should NOT have the side question or response!
             assert len(shell.session.messages) == 2
             assert not any("side question" in m["content"] for m in shell.session.messages)
@@ -422,8 +422,8 @@ def test_run_python_auto_install():
     # On first call, return ModuleNotFoundError in stderr and returncode 1
     # On second call, return successful execution
     with patch("dct.tools.executor._run") as mock_run, \
-         patch("dct.tools.executor.subprocess.run") as mock_sub_run, \
-         patch("dct.tools.executor.os.path.exists") as mock_exists:
+            patch("dct.tools.executor.subprocess.run") as mock_sub_run, \
+            patch("dct.tools.executor.os.path.exists") as mock_exists:
 
         called_venv = []
 
@@ -463,4 +463,3 @@ def test_run_python_auto_install():
         assert "pip" in pip_args
         assert "install" in pip_args
         assert "fake_module_for_test" in pip_args
-

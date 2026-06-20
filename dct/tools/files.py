@@ -22,6 +22,7 @@ def _safe_path(p: str) -> str:
         return "~" + p[len(_HOME):]
     return p
 
+
 # Default sandbox root — resolved at first call to stay current
 _sandbox_root: Path | None = None
 

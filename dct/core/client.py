@@ -74,6 +74,7 @@ def pull_stream(srv: "Server", model: str) -> Iterator[dict]:
     else:
         yield from ollama.pull_stream(srv, model)
 
+
 def get_embeddings(srv: "Server", text: str) -> list[float]:
     if srv.provider in ("openrouter", "openai"):
         return openrouter.get_embeddings(srv, text)

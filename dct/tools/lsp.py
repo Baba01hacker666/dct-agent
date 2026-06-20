@@ -42,7 +42,7 @@ def goto_definition(path: str, line: int, column: int) -> LSPResult:
         script = jedi.Script(path=str(p))
         # jedi columns are 0-indexed
         defs = script.goto(line, column)
-        
+
         results = []
         for d in defs:
             results.append({
@@ -54,10 +54,10 @@ def goto_definition(path: str, line: int, column: int) -> LSPResult:
                 "column": d.column,
                 "description": d.description,
             })
-        
+
         if not results:
             return LSPResult(ok=True, message="No definitions found", data=[])
-            
+
         return LSPResult(ok=True, data=results)
     except Exception as e:
         return LSPResult(ok=False, message=str(e))
@@ -75,7 +75,7 @@ def find_references(path: str, line: int, column: int) -> LSPResult:
     try:
         script = jedi.Script(path=str(p))
         refs = script.get_references(line, column)
-        
+
         results = []
         for r in refs:
             results.append({
@@ -87,10 +87,10 @@ def find_references(path: str, line: int, column: int) -> LSPResult:
                 "column": r.column,
                 "description": r.description,
             })
-            
+
         if not results:
             return LSPResult(ok=True, message="No references found", data=[])
-            
+
         return LSPResult(ok=True, data=results)
     except Exception as e:
         return LSPResult(ok=False, message=str(e))
@@ -130,30 +130,30 @@ def generate_repo_map(dir_path: str, max_files: int = 100) -> LSPResult:
 
     out = []
     file_count = 0
-    
+
     # Simple exclusion heuristics
     exclude_dirs = {".git", "__pycache__", "venv", ".venv", "node_modules", ".pytest_cache", ".mypy_cache"}
 
     for root, dirs, files in os.walk(p):
         dirs[:] = [d for d in dirs if d not in exclude_dirs and not d.startswith(".")]
-        
+
         py_files = [f for f in files if f.endswith(".py")]
         if not py_files:
             continue
-            
+
         rel_root = os.path.relpath(root, p)
         if rel_root == ".":
             rel_root = ""
-            
+
         for f in sorted(py_files):
             if file_count >= max_files:
                 out.append("\n[Truncated: Maximum file limit reached]")
                 return LSPResult(ok=True, data="\n".join(out))
-                
+
             file_count += 1
             fpath = Path(root) / f
             rel_path = os.path.join(rel_root, f) if rel_root else f
-            
+
             signatures = _extract_signatures(fpath)
             if signatures:
                 out.append(f"\n📄 {rel_path}")
@@ -162,5 +162,5 @@ def generate_repo_map(dir_path: str, max_files: int = 100) -> LSPResult:
 
     if not out:
         return LSPResult(ok=True, message="No Python files with structures found.", data="")
-        
+
     return LSPResult(ok=True, data="\n".join(out))

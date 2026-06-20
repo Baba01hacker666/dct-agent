@@ -1776,7 +1776,6 @@ class Shell:
             elif lo.startswith("/chat switch "):
                 idx_str = raw[13:].strip()
 
-
                 chats_dir = os.path.expanduser("~/.config/dct/chats")
                 os.makedirs(chats_dir, exist_ok=True)
                 files = sorted(
@@ -1909,7 +1908,7 @@ class Shell:
                     warn("usage: /vision <image_path> <prompt>")
                     continue
                 img_path = rest[1].split(None, 1)[0]
-                prompt = rest[1][len(img_path) :].strip()
+                prompt = rest[1][len(img_path):].strip()
                 if not prompt:
                     warn("usage: /vision <image_path> <prompt>")
                     continue

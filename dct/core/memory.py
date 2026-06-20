@@ -16,13 +16,14 @@ logger = get_logger("dct.core.memory")
 
 MEMORY_FILE = os.path.join(os.path.expanduser("~"), ".config", "dct", "memory.json")
 
+
 class VectorStore:
     def __init__(self, path: str = MEMORY_FILE):
         self.path = path
         self.memories: List[Dict[str, Any]] = []
         self._lock = threading.Lock()
         self.load()
-        
+
     def load(self) -> None:
         with self._lock:
             if os.path.exists(self.path):
@@ -46,7 +47,7 @@ class VectorStore:
             logger.exception(
                 "Failed to save memory store to %s", self.path
             )
-            
+
     def store(self, text: str, vector: List[float]) -> str:
         if not vector:
             return "Failed to store memory: Invalid vector."
@@ -79,7 +80,7 @@ class VectorStore:
             memories = list(self.memories)
         if not memories:
             return []
-            
+
         def cosine_similarity(v1: List[float], v2: List[float]) -> float:
             dot = sum(a * b for a, b in zip(v1, v2))
             norm1 = math.sqrt(sum(a * a for a in v1))
@@ -87,17 +88,19 @@ class VectorStore:
             if norm1 == 0 or norm2 == 0:
                 return 0.0
             return dot / (norm1 * norm2)
-            
+
         scored = []
         for mem in memories:
             sim = cosine_similarity(query_vector, mem["vector"])
             scored.append((sim, mem))
-            
+
         scored.sort(key=lambda x: x[0], reverse=True)
         return [m[1] for m in scored[:top_k]]
 
+
 _global_store = None
 _store_lock = threading.Lock()
+
 
 def get_store() -> VectorStore:
     global _global_store

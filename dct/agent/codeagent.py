@@ -99,7 +99,7 @@ def _sanitize_tool_result(result: str) -> str:
     safe = _re.sub(
         r"</?(\w+)(\s[^>]*)?>",
         lambda m: f"&lt;{'/' if m.group(0).startswith('</') else ''}"
-                  f"{m.group(1)}{m.group(2) or ''}&gt;",
+        f"{m.group(1)}{m.group(2) or ''}&gt;",
         result,
     )
     return safe
@@ -115,7 +115,6 @@ def load_persona_file(filename: str, default_content: str) -> str:
         return default_content
     with open(path, "r", encoding="utf-8") as f:
         return f.read().strip()
-
 
 
 def _cleanup_background_state() -> None:
@@ -199,7 +198,7 @@ AVAILABLE TOOLS:
   <tool>mcp_call</tool><server>...</server><name>...</name><args>{{...json...}}</args> — Call an MCP server tool
   <tool>memory_store</tool><text>...</text>      — Store important facts, decisions, or user preferences in permanent long-term vector memory
   <tool>memory_search</tool><query>...</query>   — Semantically search long-term memory for past facts"""
-    
+
     from dct.core.config import Config
     conf = Config()
     if conf.get("enable_persona", True):
@@ -286,7 +285,7 @@ You are currently in PLAN mode.
         soul_content = load_persona_file("soul.md", "You are DCT Agent, an autonomous and elite developer AI.\\nYou prioritize clean code, user autonomy, and security.")
         user_content = load_persona_file("user.md", "The user is a developer using DCT Agent. They prefer concise and direct answers.")
         memory_content = load_persona_file("memory.md", "- Initialized memory.\\n- Use <tool>core_memory_manage</tool> to add important facts here.")
-        
+
         # OpenHands-style Project Memory
         import os
         project_dir = os.path.join(os.getcwd(), ".dct")
@@ -297,7 +296,7 @@ You are currently in PLAN mode.
                 f.write("- Initialized project memory. Store repository-specific knowledge here.")
         with open(project_path, "r", encoding="utf-8") as f:
             project_content = f.read().strip()
-            
+
         prompt += f"""
 <soul>
 {soul_content}
@@ -712,33 +711,33 @@ class CodeAgent:
             for mem_res in results:
                 lines.append(f"- {mem_res['text']}")
             return "\n".join(lines)
-            
+
         elif tool == "core_memory_manage":
             from dct.core.config import Config
             if not Config().get("enable_persona", True):
                 return "[TOOL ERROR] Persona feature is disabled in config."
-                
+
             m_action = call.get("action")
             m_section = call.get("section")
             m_old = call.get("old_text") or ""
             m_new = call.get("new_text") or ""
-            
+
             if m_section not in ("soul", "user", "memory", "project"):
                 return "[TOOL ERROR] <section> must be one of: soul, user, memory, project."
-            
+
             import os
             if m_section == "project":
                 path = os.path.join(os.getcwd(), ".dct", "project.md")
             else:
                 path = os.path.join(os.path.expanduser("~"), ".config", "dct", f"{m_section}.md")
-            
+
             if m_action == "append":
                 if not m_new:
                     return "[TOOL ERROR] <new_text> is required for append."
                 with open(path, "a", encoding="utf-8") as f:
                     f.write(f"\n{m_new}")
                 return f"[Success] Appended to {m_section}.md. It will be visible next turn."
-            
+
             elif m_action == "replace":
                 if not m_old or not m_new:
                     return "[TOOL ERROR] <old_text> and <new_text> required."
@@ -750,14 +749,14 @@ class CodeAgent:
                 with open(path, "w", encoding="utf-8") as f:
                     f.write(content)
                 return f"[Success] Replaced text in {m_section}.md."
-                
+
             elif m_action == "rewrite":
                 if not m_new:
                     return "[TOOL ERROR] <new_text> required for rewrite."
                 with open(path, "w", encoding="utf-8") as f:
                     f.write(m_new)
                 return f"[Success] Rewrote entire {m_section}.md."
-            
+
             else:
                 return "[TOOL ERROR] <action> must be append, replace, or rewrite."
 
@@ -1185,11 +1184,10 @@ class CodeAgent:
                 res = goto_definition(path, lint, cint)
             else:
                 res = find_references(path, lint, cint)
-                
+
             if not res.ok:
                 return f"[TOOL ERROR] {res.message}"
             return json.dumps(res.data, indent=2)
-
 
         elif tool == "read_image":
             path = call.get("path") or ""
@@ -1573,7 +1571,7 @@ class CodeAgent:
         for turn in range(self.max_turns):
             # ── CONTEXT PRUNING (Sliding Window) ──
             # Prevent context window exhaustion during long agentic loops
-            total_chars = sum(len(m.get("content", "")) for m in msgs)
+            total_chars = sum(len(m.get("content") or "") for m in msgs)
             if total_chars > 120000:  # Roughly 30k tokens
                 # Collect non-system message indices oldest-first
                 non_sys = [
@@ -1654,17 +1652,17 @@ class CodeAgent:
                         args = json.loads(func.get("arguments", "{}"))
                     except BaseException:
                         args = {}
-                    
+
                     if name == "dct_tool":
                         tool_name = args.get("tool_name", "")
                         kwargs = args.get("kwargs", {})
                         call = {"tool": tool_name, "raw_text": "", **kwargs}
                     else:
                         call = {"tool": name, "raw_text": "", **args}
-                    
+
                     if call["tool"] == "DONE":
                         return final_text
-                    
+
                     tool_name = call["tool"]
                     write_trace_entry(
                         self.session,
@@ -1706,7 +1704,7 @@ class CodeAgent:
                         "tool_call_id": tc_id,
                         "content": f"[TOOL RESULT: {tool_name}]\n{safe_result}"
                     })
-                
+
                 # Continue the multi-turn conversation with the tool responses appended
                 continue
 
