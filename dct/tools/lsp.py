@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import ast
 
 try:
-    import jedi
+    import jedi  # type: ignore
 except ImportError:
     jedi = None
 
