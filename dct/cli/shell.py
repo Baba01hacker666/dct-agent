@@ -10,6 +10,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.styles import Style
+from prompt_toolkit.completion import WordCompleter
 import os
 
 import threading
@@ -683,14 +684,28 @@ class Shell:
             }
         )
 
-
+        COMMANDS = [
+            "/servers", "/add", "/remove", "/probe", "/use",
+            "/models", "/allmodels", "/model", "/pull", "/delete", "/show",
+            "/status", "/clear", "/learn", "/history", "/system", "/prompts", "/prompt",
+            "/copy", "/save", "/load", "/rewind", "/exit", "/quit", "/q", "/help",
+            "/agent", "/goal", "/agentoff", "/mode", "/chat", "/new", "/fork", "/compact",
+            "/skills", "/bg", "/tasks"
+        ]
+        completer = WordCompleter(COMMANDS, ignore_case=True)
 
         while True:
             try:
                 con.print()
                 con.print(self._status_bar())
                 con.print(f"  [{C['dim']}]{'─' * 66}[/{C['dim']}]")
-                raw = session.prompt("  › ", multiline=False, style=style)
+                raw = session.prompt(
+                    "  › ",
+                    multiline=False,
+                    style=style,
+                    completer=completer,
+                    complete_while_typing=True
+                )
                 raw = raw.strip()
 
             except (KeyboardInterrupt, EOFError):
