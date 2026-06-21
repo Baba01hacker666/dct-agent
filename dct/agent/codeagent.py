@@ -1649,7 +1649,13 @@ class CodeAgent:
                     name = func.get("name")
                     try:
                         import json
-                        args = json.loads(func.get("arguments", "{}"))
+                        args_raw = func.get("arguments", {})
+                        if isinstance(args_raw, dict):
+                            args = args_raw
+                        elif isinstance(args_raw, str) and args_raw.strip():
+                            args = json.loads(args_raw)
+                        else:
+                            args = {}
                     except BaseException:
                         args = {}
 

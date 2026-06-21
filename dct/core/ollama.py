@@ -65,6 +65,16 @@ def chat_stream(
     Yield text chunks from /api/chat (streaming).
     Raises on HTTP error.
     """
+    if tools:
+        # Ollama does not fully support streaming tool_calls yet.
+        # Fall back to a blocking call to reliably receive tool_calls.
+        res = chat_once(srv, model, messages, images, tools)
+        if isinstance(res, dict) and "tool_calls" in res:
+            yield res
+        elif isinstance(res, str) and res:
+            yield res
+        return
+
     url = f"{srv.base_url()}/api/chat"
     from dct.core.config import Config
     cfg = Config()
