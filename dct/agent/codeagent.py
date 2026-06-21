@@ -1444,30 +1444,36 @@ class CodeAgent:
                 or call.get("code")
                 or ""
             )
-            choices_str = _extract_tag(call["raw_text"], "choices")
-
-            if choices_str:
-                from prompt_toolkit.shortcuts import radiolist_dialog
-
-                choices = [
-                    c.strip() for c in choices_str.split(",") if c.strip()
-                ]
-                if choices:
-                    try:
-                        dialog_res = radiolist_dialog(
-                            title="Agent Question",
-                            text=question,
-                            values=[(c, c) for c in choices],
-                        ).run()
-                        if dialog_res:
-                            return f"[User responded]\n{dialog_res}"
-                    except Exception:
-                        pass
-
-            print(f"\n  [?] Agent asks: {question}")
-            if choices_str:
-                print(f"  [Choices: {choices_str}]")
-            answer = input("  › ")
+            choices_raw = _extract_tag(call["raw_text"], "choices") or call.get("choices", "")
+            
+            from dct.core.theme import con, C
+            con.print(f"\n  [{C['purple']}]? Agent Question:[/{C['purple']}] [{C['fg']}]{question}[/{C['fg']}]")
+            
+            choices = []
+            if isinstance(choices_raw, list):
+                choices = choices_raw
+            elif isinstance(choices_raw, str) and choices_raw.strip():
+                choices = [c.strip() for c in choices_raw.split(",") if c.strip()]
+                
+            if choices:
+                for idx, c in enumerate(choices, 1):
+                    con.print(f"    [{C['accent']}]{idx})[/{C['accent']}] {c}")
+                con.print(f"    [{C['dim']}](Select 1-{len(choices)} or type your own answer)[/{C['dim']}]")
+                
+            from prompt_toolkit import PromptSession
+            prompt_sess = PromptSession()
+            
+            try:
+                answer = prompt_sess.prompt("  › ")
+            except (KeyboardInterrupt, EOFError):
+                answer = "User cancelled."
+                
+            # If user typed a number matching a choice, expand it
+            if choices and answer.strip().isdigit():
+                idx = int(answer.strip())
+                if 1 <= idx <= len(choices):
+                    answer = choices[idx - 1]
+                    
             return f"[User responded]\n{answer}"
 
         elif tool == "notebook_edit":

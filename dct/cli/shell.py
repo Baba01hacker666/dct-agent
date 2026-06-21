@@ -681,6 +681,13 @@ class Shell:
         style = Style.from_dict(
             {
                 "bottom-toolbar": "bg:#1f2937 #f9fafb",
+                "completion-menu.completion": "bg:#1f2937 #f9fafb",
+                "completion-menu.completion.current": "bg:#3b82f6 #ffffff bold",
+                "completion-menu.meta.completion": "bg:#111827 #9ca3af",
+                "completion-menu.meta.completion.current": "bg:#2563eb #ffffff bold",
+                "scrollbar.background": "bg:#111827",
+                "scrollbar.button": "bg:#4b5563",
+                "auto-suggestion": "fg:#6b7280 italic",
             }
         )
 
