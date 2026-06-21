@@ -10,7 +10,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.styles import Style
-from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit.completion import Completer, Completion
 import os
 
 import threading
@@ -684,15 +684,70 @@ class Shell:
             }
         )
 
-        COMMANDS = [
-            "/servers", "/add", "/remove", "/probe", "/use",
-            "/models", "/allmodels", "/model", "/pull", "/delete", "/show",
-            "/status", "/clear", "/learn", "/history", "/system", "/prompts", "/prompt",
-            "/copy", "/save", "/load", "/rewind", "/exit", "/quit", "/q", "/help",
-            "/agent", "/goal", "/agentoff", "/mode", "/chat", "/new", "/fork", "/compact",
-            "/skills", "/bg", "/tasks"
-        ]
-        completer = WordCompleter(COMMANDS, ignore_case=True)
+        COMMAND_HELP = {
+            "/servers": "List all registered servers",
+            "/add": "Register a new server",
+            "/remove": "Unregister a server",
+            "/probe": "Probe servers for latency/models",
+            "/use": "Switch active server",
+            "/models": "List models on active server",
+            "/allmodels": "List all models across servers",
+            "/model": "Switch active model",
+            "/pull": "Pull a model to active server",
+            "/delete": "Delete a model",
+            "/show": "Show model details",
+            "/status": "Show active server, model, session stats",
+            "/clear": "Clear conversation history",
+            "/learn": "Trigger autonomous reflection",
+            "/history": "Show turn count and token estimate",
+            "/system": "Set a system prompt",
+            "/prompts": "List built-in system prompt presets",
+            "/prompt": "Apply a built-in prompt preset",
+            "/copy": "Copy transcript to clipboard",
+            "/save": "Save conversation to JSON",
+            "/load": "Load a saved JSON conversation",
+            "/new": "Start a new, blank chat session",
+            "/fork": "Branch off current session",
+            "/compact": "Strip raw tool outputs to save context",
+            "/chats": "List all saved chat sessions",
+            "/chat": "Switch to a saved chat session",
+            "/btw": "Ask side question without appending to history",
+            "/broadcast": "Send message to ALL online servers",
+            "/bc": "Send message to ALL online servers",
+            "/agent": "Toggle agent mode ON/OFF",
+            "/goal": "Run agent autonomously in Goal Mode",
+            "/skills": "List available skills",
+            "/bg": "Send the active process to the background",
+            "/tasks": "List running background tasks",
+            "/rewind": "Rewind conversation",
+            "/exit": "Exit shell",
+            "/quit": "Exit shell",
+            "/help": "Show help",
+        }
+
+        class SlashCommandCompleter(Completer):
+            def get_completions(self, document, complete_event):
+                text = document.text_before_cursor.lstrip()
+                if not text.startswith("/"):
+                    return
+                
+                parts = text.split()
+                if len(parts) > 1 and not document.text_before_cursor.endswith(" "):
+                    return
+                    
+                cmd_typed = parts[0] if parts else ""
+                if document.text_before_cursor.endswith(" ") or not cmd_typed:
+                    return
+                    
+                for cmd, desc in COMMAND_HELP.items():
+                    if cmd.startswith(cmd_typed):
+                        yield Completion(
+                            cmd,
+                            start_position=-len(cmd_typed),
+                            display_meta=desc
+                        )
+
+        completer = SlashCommandCompleter()
 
         while True:
             try:
