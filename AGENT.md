@@ -98,6 +98,18 @@ When writing code or debugging, follow these workflows:
 
 - Write clean, idiomatic Python 3.11+.
 - Use type hints wherever possible to maintain clarity.
+
+## 🛠️ Tool Calling & Inner Workings
+
+### XML vs Native Tool Calling
+The `dct-agent` supports two modes of tool calling, determined by `use_native_tools` in `~/.config/dct/config.json`:
+1. **XML Parsing (`use_native_tools=False`)**: The agent is instructed to emit `<tool>tool_name</tool><code>...</code>` blocks. `codeagent.py` uses `_has_tool_call` and `_parse_tool_call` to extract the tool and its arguments. This mode is highly resilient for smaller models (like `qwen3.6`) or providers that don't correctly support native API tool schemas.
+2. **Native Tool Calling (`use_native_tools=True`)**: The agent is strictly forbidden from outputting XML and must use the provider's native JSON schema (`dct_tool`). If the provider fails to supply the tools argument correctly or ignores it, the agent will silently drop tools.
+
+### Automated Agent Testing
+To formally verify that tool calls are correctly processed and the agent execution loop does not hang, we use dedicated test scripts:
+- **`tests/test_agent_tools.py`**: A Python-level unit test that mocks `stream_fn` to simulate LLM XML outputs. It asserts that `_parse_tool_call` successfully catches the XML and that the `CodeAgent.run()` loop executes the tool.
+- **`pexpect` Live Tests**: Interactive tests (`test_agent_live_xml.py`) spawn the actual `python -m dct.cli.main` process to verify live REPL behavior, UI stability, and end-to-end execution.
 - When creating or modifying CLI output, use the `rich` library to ensure consistent formatting.
 - Respect the existing 79-character line length limit for formatting.
 - If implementing new tools, make sure to add safe fallbacks, timeout limits, and error handling so that the main agent loop doesn't crash during execution.

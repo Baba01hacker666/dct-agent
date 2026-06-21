@@ -352,10 +352,12 @@ You can use tools by emitting structured XML tags in your response.
 5) Summarize what changed and what remains, then emit the DONE tool.
 
 [IMPORTANT BEHAVIOR]
+- If the user is just chatting or greeting (e.g., 'hi', 'hello'), respond conversationally without invoking any tools. Use tools ONLY when necessary to fulfill a specific actionable request.
 - Never invent or hallucinate tool output. If unsure, run a tool.
 - If a tool fails, explain briefly and try an alternative.
 - Keep responses compact between tool calls.
 - When modifying files, prefer `patch_file` or `multi_patch_file` for targeted edits.
+- Do not repeatedly list directories (`ls`, `list_dir`, `tree`) if you already know they are empty or if you have already seen their contents.
 - Manage your core persona using `core_memory_manage`. Update 'user.md' with user preferences, 'memory.md' with crucial global context, 'project.md' with repo-specific knowledge (build commands, architecture), and 'soul.md' to evolve your own core directives.
 """
 
@@ -1143,7 +1145,7 @@ class CodeAgent:
             )
             code = call.get("code") or ""
             if not code:
-                return "[TOOL ERROR] No code provided."
+                return "[TOOL ERROR] No code provided. You must wrap your code/script inside <code>...</code> tags."
 
             is_bg = (call.get("background") or "").strip().lower() == "true"
             if is_bg:
@@ -1331,7 +1333,9 @@ class CodeAgent:
             return f"[file: {file_res.path}  showing lines {start_idx + 1}-{start_idx + len(lines_to_show)} of {total_lines}]\n{numbered}"
 
         elif tool == "write_file":
-            path = call.get("path") or ""
+            path = call.get("path") or call.get("file") or ""
+            if not path:
+                return "[TOOL ERROR] You must provide a <path> tag specifying the file location."
 
             if mode == "plan":
                 import os
@@ -1351,7 +1355,9 @@ class CodeAgent:
             return res_str
 
         elif tool == "patch_file":
-            path = call.get("path") or ""
+            path = call.get("path") or call.get("file") or ""
+            if not path:
+                return "[TOOL ERROR] You must provide a <path> tag specifying the file location."
 
             if mode == "plan":
                 import os
@@ -1376,7 +1382,9 @@ class CodeAgent:
             return res_str
 
         elif tool == "multi_patch_file":
-            path = call.get("path") or ""
+            path = call.get("path") or call.get("file") or ""
+            if not path:
+                return "[TOOL ERROR] You must provide a <path> tag specifying the file location."
 
             from pathlib import Path
 
