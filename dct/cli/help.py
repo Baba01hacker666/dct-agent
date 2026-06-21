@@ -214,7 +214,7 @@ HELP_SECTIONS = {
   [{C["fg"]}]/help chat[/{C["fg"]}]          [{C["dim"]}]chat and session commands[/{C["dim"]}]
   [{C["fg"]}]/help agent[/{C["fg"]}]         [{C["dim"]}]agent mode and tools[/{C["dim"]}]
   [{C["fg"]}]/help tools[/{C["fg"]}]         [{C["dim"]}]direct tool commands[/{C["dim"]}]
-  [{C["fg"]}]/help broadcast[/{C["fg"]}]     [{C["dim"]}]broadcast to all servers[/{C["fg"]}]
+  [{C["fg"]}]/help broadcast[/{C["fg"]}]     [{C["dim"]}]broadcast to all servers[/{C["dim"]}]
 
 [{C["accent"]}]── Session Rewind ──────────────────────────────────────[/{C["accent"]}]
 

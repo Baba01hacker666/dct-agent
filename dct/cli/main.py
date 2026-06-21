@@ -423,3 +423,6 @@ def main():
         shell.agent_mode = False
     shell.init(init_alias=init_alias, init_model=args.model)
     shell.run()
+
+if __name__ == '__main__':
+    main()
