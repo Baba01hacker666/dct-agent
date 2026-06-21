@@ -733,6 +733,8 @@ class Shell:
             "/squad show": "Show details of a squad",
             "/squad delete": "Delete a squad",
             "/squad run": "Run an agent squad",
+            "/swarm": "Alias for /squad commands",
+            "/team": "Alias for /squad commands",
             "/orchestrate": "Orchestrate multiple agents",
             "/editai": "Edit the last AI response",
             "/retry": "Regenerate the last AI response",
@@ -799,6 +801,20 @@ class Shell:
                 continue
 
             lo = raw.lower()
+
+            if lo.startswith("/swarm ") or lo == "/swarm":
+                lo = lo.replace("/swarm", "/squad", 1)
+                raw = raw.replace("/swarm", "/squad", 1)
+            elif lo.startswith("/swarms") or lo == "/swarms":
+                lo = lo.replace("/swarms", "/squads", 1)
+                raw = raw.replace("/swarms", "/squads", 1)
+            elif lo.startswith("/team ") or lo == "/team":
+                lo = lo.replace("/team", "/squad", 1)
+                raw = raw.replace("/team", "/squad", 1)
+            elif lo.startswith("/teams") or lo == "/teams":
+                lo = lo.replace("/teams", "/squads", 1)
+                raw = raw.replace("/teams", "/squads", 1)
+
             parts = raw.split()
 
             # ── exit ─────────────────────────────────────────────────────
