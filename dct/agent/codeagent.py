@@ -132,6 +132,33 @@ def _run_auto_linter(path: str) -> str:
             pass
     return "\n".join(errors) if errors else ""
 
+
+def find_agents_md(cwd: str) -> str:
+    import os
+    agents_content = []
+    current_dir = os.path.abspath(cwd)
+    paths_to_check = []
+    while True:
+        paths_to_check.append(os.path.join(current_dir, "AGENTS.md"))
+        parent = os.path.dirname(current_dir)
+        if parent == current_dir:
+            break
+        current_dir = parent
+        
+    paths_to_check.reverse()
+    
+    for path in paths_to_check:
+        if os.path.isfile(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    agents_content.append(f"--- {path} ---\n{f.read()}")
+            except Exception:
+                pass
+                
+    if agents_content:
+        return "[AGENTS.md DIRECTIVES]\n" + "\n\n".join(agents_content) + "\n\n"
+    return ""
+
 def load_persona_file(filename: str, default_content: str) -> str:
     import os
     path = os.path.join(os.path.expanduser("~"), ".config", "dct", filename)
@@ -218,9 +245,7 @@ Pass the `tool_name` parameter and provide arguments in `kwargs`:
 - repo_map(path: str) — Generate a semantic map of all classes and functions
 - goto_definition(path: str, line: int, column: int) — Find definition of a symbol
 - find_references(path: str, line: int, column: int) — Find all references to a symbol
-- task_create(subject: str, description: str) — Create tracking tasks
-- task_update(id: str, status: str) — Update task
-- task_list() — List all tasks
+- update_plan(plan: str, explanation: str) — Track steps and progress in a markdown plan
 - notebook_edit(path: str, index: int, mode: str, source: str) — Edit jupyter notebooks
 - web_extract(url: str, selector: str) — Fetch webpage and optionally extract via CSS selector
 - grep(pattern: str, path: str, glob: str, output_mode: str, context: int) — fast regex search
@@ -377,6 +402,8 @@ You are currently in PLAN mode.
 <project_memory>
 {project_content}
 </project_memory>
+
+{find_agents_md(os.getcwd())}
 """
 
     if user_system_prompt.strip():
@@ -1568,26 +1595,16 @@ class CodeAgent:
             if not r_nb.ok:
                 return f"[TOOL ERROR] {r_nb.message}"
             return "[SUCCESS] Notebook updated."
-        elif tool == "task_create":
-            subject = _extract_tag(call["raw_text"], "subject")
-            desc = _extract_tag(call["raw_text"], "description")
-            if not subject or not desc:
-                return "[TOOL ERROR] <subject> and <description> are required."
-            new_task = get_tracker().create(subject, desc)
-            return f"Task created: ID {new_task.id} - {new_task.subject}"
-        elif tool == "task_update":
-            tid = _extract_tag(call["raw_text"], "id")
-            new_status: str | None = _extract_tag(call["raw_text"], "status")
-            if not tid or not new_status:
-                return "[TOOL ERROR] <id> and <status> are required."
-            if new_status not in ["pending", "in_progress", "completed"]:
-                return f"[TOOL ERROR] Invalid status: {new_status}"
-            t_updated = get_tracker().update(tid, status=new_status)
-            if not t_updated:
-                return f"[TOOL ERROR] Task ID {tid} not found."
-            return f"Task {t_updated.id} updated to {t_updated.status}."
-        elif tool == "task_list":
-            return get_tracker().summary()
+        elif tool == "update_plan":
+            plan = call.get("plan") or _extract_tag(call.get("raw_text", ""), "plan") or ""
+            explanation = call.get("explanation") or _extract_tag(call.get("raw_text", ""), "explanation") or ""
+            if not plan:
+                return "[TOOL ERROR] <plan> is required."
+            import os
+            plan_file = os.path.join(os.path.expanduser("~/.config/dct"), "current_plan.md")
+            with open(plan_file, "w", encoding="utf-8") as f:
+                f.write(plan)
+            return f"[SUCCESS] Plan updated. Explanation: {explanation}"
         elif tool == "DONE":
             return "__DONE__"
 
