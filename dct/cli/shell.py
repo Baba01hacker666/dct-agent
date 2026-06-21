@@ -743,6 +743,7 @@ class Shell:
             "/bg": "Send the active process to the background",
             "/tasks": "List running background tasks",
             "/task kill": "Kill a running background task",
+            "/verbose": "Toggle verbose output mode",
             "/rewind": "Rewind conversation",
             "/rewindto": "Rewind conversation to a specific point",
             "/back": "Rewind conversation",
@@ -1981,6 +1982,13 @@ class Shell:
                 )
 
             # ── tasks ─────────────────────────────────────────────────────
+            elif lo == "/verbose":
+                from dct.core.config import Config
+                cfg = Config()
+                is_verb = not cfg.get("verbose", False)
+                cfg.set("verbose", is_verb)
+                con.print(f"  [{C['ok']}]Verbose mode {'enabled' if is_verb else 'disabled'}[/{C['ok']}]")
+
             elif lo == "/tasks":
                 from dct.tools.tasks import get_tracker
 
@@ -2258,20 +2266,67 @@ class Shell:
         def _on_text(chunk: str):
             con.print(f"[{C['fg']}]{chunk}[/{C['fg']}]", end="")
 
-        def _on_tool(tool_name: str, _: str):
+        def _on_tool(tool_name: str, args_str: str):
+            from rich.panel import Panel
+            from rich.syntax import Syntax
+            from dct.core.config import Config
+            import ast
+            
             con.print()
-            con.print(
-                f"\n  [{C['yellow']}]⚡ tool:[/{C['yellow']}] [{C['fg']}]{tool_name}[/{C['fg']}]"
-            )
+            try:
+                call = ast.literal_eval(args_str)
+            except Exception:
+                call = {}
+                
+            content = ""
+            lang = "text"
+            if "code" in call:
+                content = call["code"]
+                lang = "python" if tool_name == "run_python" else "bash"
+            elif "command" in call:
+                content = call["command"]
+                lang = "bash"
+            elif "path" in call:
+                content = f"Path: {call['path']}"
+                if "content" in call:
+                    content += f"\n\n{call['content']}"
+            elif "url" in call:
+                content = call["url"]
+            elif "query" in call:
+                content = call["query"]
+            elif args_str:
+                content = args_str
+                
+            if content:
+                is_verbose = Config().get("verbose", False)
+                lines = content.splitlines()
+                if not is_verbose and len(lines) > 10:
+                    content = "\n".join(lines[:10]) + f"\n\n... [{len(lines)-10} more lines hidden. Use /verbose to show full]"
+                
+                if lang in ("python", "bash"):
+                    display_content = Syntax(content, lang, theme="monokai", word_wrap=True)
+                else:
+                    display_content = content
+                    
+                panel = Panel(display_content, title=f"[{C['yellow']}]⚡ Tool:[/{C['yellow']}] [{C['fg']}]{tool_name}[/{C['fg']}]", border_style="yellow", expand=False)
+                con.print(panel)
+            else:
+                con.print(f"\n  [{C['yellow']}]⚡ tool:[/{C['yellow']}] [{C['fg']}]{tool_name}[/{C['fg']}]")
 
         def _on_result(tool_name: str, result: str):
-            section(f"result: {tool_name}")
-            if len(result) > 2000:
-                con.print(f"[{C['code']}]{result[:2000]}[/{C['code']}]")
-                info(f"… ({len(result)} chars total)")
+            from rich.panel import Panel
+            from dct.core.config import Config
+            
+            is_verbose = Config().get("verbose", False)
+            lines = result.splitlines()
+            if not is_verbose and len(lines) > 15:
+                content = "\n".join(lines[:15]) + f"\n\n... [{len(lines)-15} more lines hidden. Use /verbose to show full output]"
             else:
-                con.print(f"[{C['code']}]{result}[/{C['code']}]")
+                content = result
+                
+            panel = Panel(content, title=f"Result: {tool_name}", border_style="blue", expand=False)
             con.print()
+            con.print(panel)
             con.print(f"  [{C['dim']}]continuing…[/{C['dim']}]")
             con.print("  ", end="")
 
@@ -2346,20 +2401,67 @@ class Shell:
         def _on_text(chunk: str):
             con.print(f"[{C['fg']}]{chunk}[/{C['fg']}]", end="")
 
-        def _on_tool(tool_name: str, _: str):
+        def _on_tool(tool_name: str, args_str: str):
+            from rich.panel import Panel
+            from rich.syntax import Syntax
+            from dct.core.config import Config
+            import ast
+            
             con.print()
-            con.print(
-                f"\n  [{C['yellow']}]⚡ tool:[/{C['yellow']}] [{C['fg']}]{tool_name}[/{C['fg']}]"
-            )
+            try:
+                call = ast.literal_eval(args_str)
+            except Exception:
+                call = {}
+                
+            content = ""
+            lang = "text"
+            if "code" in call:
+                content = call["code"]
+                lang = "python" if tool_name == "run_python" else "bash"
+            elif "command" in call:
+                content = call["command"]
+                lang = "bash"
+            elif "path" in call:
+                content = f"Path: {call['path']}"
+                if "content" in call:
+                    content += f"\n\n{call['content']}"
+            elif "url" in call:
+                content = call["url"]
+            elif "query" in call:
+                content = call["query"]
+            elif args_str:
+                content = args_str
+                
+            if content:
+                is_verbose = Config().get("verbose", False)
+                lines = content.splitlines()
+                if not is_verbose and len(lines) > 10:
+                    content = "\n".join(lines[:10]) + f"\n\n... [{len(lines)-10} more lines hidden. Use /verbose to show full]"
+                
+                if lang in ("python", "bash"):
+                    display_content = Syntax(content, lang, theme="monokai", word_wrap=True)
+                else:
+                    display_content = content
+                    
+                panel = Panel(display_content, title=f"[{C['yellow']}]⚡ Tool:[/{C['yellow']}] [{C['fg']}]{tool_name}[/{C['fg']}]", border_style="yellow", expand=False)
+                con.print(panel)
+            else:
+                con.print(f"\n  [{C['yellow']}]⚡ tool:[/{C['yellow']}] [{C['fg']}]{tool_name}[/{C['fg']}]")
 
         def _on_result(tool_name: str, result: str):
-            section(f"result: {tool_name}")
-            if len(result) > 2000:
-                con.print(f"[{C['code']}]{result[:2000]}[/{C['code']}]")
-                info(f"… ({len(result)} chars total)")
+            from rich.panel import Panel
+            from dct.core.config import Config
+            
+            is_verbose = Config().get("verbose", False)
+            lines = result.splitlines()
+            if not is_verbose and len(lines) > 15:
+                content = "\n".join(lines[:15]) + f"\n\n... [{len(lines)-15} more lines hidden. Use /verbose to show full output]"
             else:
-                con.print(f"[{C['code']}]{result}[/{C['code']}]")
+                content = result
+                
+            panel = Panel(content, title=f"Result: {tool_name}", border_style="blue", expand=False)
             con.print()
+            con.print(panel)
             con.print(f"  [{C['dim']}]continuing…[/{C['dim']}]")
             con.print("  ", end="")
 
