@@ -1629,6 +1629,12 @@ class CodeAgent:
                 for chunk in self.stream_fn(self.server, self.model, msgs, tools=self._get_native_tools()):
                     if isinstance(chunk, dict) and "tool_calls" in chunk:
                         native_tool_calls = chunk["tool_calls"]
+                        if "content" in chunk and chunk["content"]:
+                            if first_chunk:
+                                status.stop()
+                                first_chunk = False
+                            self.on_text(chunk["content"])
+                            response_text += chunk["content"]
                         continue
                     if first_chunk:
                         status.stop()
