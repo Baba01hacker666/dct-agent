@@ -105,6 +105,33 @@ def _sanitize_tool_result(result: str) -> str:
     return safe
 
 
+def _run_auto_linter(path: str) -> str:
+    import subprocess
+    import os
+    if not os.path.exists(path):
+        return ""
+    ext = os.path.splitext(path)[1].lower()
+    errors = []
+    if ext == ".py":
+        try:
+            subprocess.run(["python3", "-m", "py_compile", path], check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            errors.append(f"SyntaxError:\n{e.stderr.strip()}")
+            return "\n".join(errors)
+        try:
+            res = subprocess.run(["ruff", "check", path], capture_output=True, text=True)
+            if res.returncode != 0:
+                errors.append(f"Ruff Lint Errors:\n{res.stdout.strip() or res.stderr.strip()}")
+        except FileNotFoundError:
+            pass
+        try:
+            res = subprocess.run(["flake8", path], capture_output=True, text=True)
+            if res.returncode != 0:
+                errors.append(f"Flake8 Lint Errors:\n{res.stdout.strip() or res.stderr.strip()}")
+        except FileNotFoundError:
+            pass
+    return "\n".join(errors) if errors else ""
+
 def load_persona_file(filename: str, default_content: str) -> str:
     import os
     path = os.path.join(os.path.expanduser("~"), ".config", "dct", filename)
@@ -1290,7 +1317,11 @@ class CodeAgent:
             if not write_res.ok:
                 return f"[TOOL ERROR] {write_res.message}"
             size_info = f"  {len(content.encode('utf-8', errors='replace')) / 1024:.1f} KB"
-            return f"[written: {write_res.path}{size_info}]\n{write_res.diff[:1200] if write_res.diff else '(new file)'}"
+            res_str = f"[written: {write_res.path}{size_info}]\n{write_res.diff[:1200] if write_res.diff else '(new file)'}"
+            linter_err = _run_auto_linter(write_res.path)
+            if linter_err:
+                res_str += f"\n\n[AUTO-REFLECTION ERROR] Linter detected issues after your edit:\n{linter_err}"
+            return res_str
 
         elif tool == "patch_file":
             path = call.get("path") or ""
@@ -1311,7 +1342,11 @@ class CodeAgent:
                 if patch_res.content
                 else ""
             )
-            return f"[patched: {patch_res.path}{size_info}]\n{patch_res.diff[:1200]}"
+            res_str = f"[patched: {patch_res.path}{size_info}]\n{patch_res.diff[:1200]}"
+            linter_err = _run_auto_linter(patch_res.path)
+            if linter_err:
+                res_str += f"\n\n[AUTO-REFLECTION ERROR] Linter detected issues after your edit:\n{linter_err}"
+            return res_str
 
         elif tool == "multi_patch_file":
             path = call.get("path") or ""
@@ -1382,7 +1417,11 @@ class CodeAgent:
                 )
                 diff_str = "".join(diff_lines)
                 size_info = f"  {len(content.encode('utf-8', errors='replace')) / 1024:.1f} KB"
-                return f"[multi-patched: {path}{size_info}]\n{diff_str[:1200]}"
+                res_str = f"[multi-patched: {path}{size_info}]\n{diff_str[:1200]}"
+                linter_err = _run_auto_linter(path)
+                if linter_err:
+                    res_str += f"\n\n[AUTO-REFLECTION ERROR] Linter detected issues after your edit:\n{linter_err}"
+                return res_str
             except Exception as e:
                 return f"[TOOL ERROR] Failed to write file: {str(e)}"
 
