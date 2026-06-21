@@ -75,6 +75,8 @@ def test_multi_patch_file_failures():
 
 
 def test_write_trace_entry_logging():
+    import dct.agent.session
+    dct.agent.session._cfg = None
     # Mock config to enable tracing
     with patch("dct.core.config.Config") as mock_cfg_class:
         mock_cfg = MagicMock()
