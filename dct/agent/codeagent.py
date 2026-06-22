@@ -417,19 +417,39 @@ Apply the following additional instructions while still obeying all tool and saf
 
     return prompt
 
-def _extract_tag(text: str, tag: str) -> Optional[str]:
+def _extract_tag(text: str, tag: str, fuzzy: bool = False) -> Optional[str]:
     m = re.search(
         rf"<{tag}(?:\s+[^>]*)?>(.*?)</{tag}>", text, re.DOTALL | re.IGNORECASE
     )
-    return m.group(1).strip() if m else None
-
+    if m:
+        return m.group(1).strip()
+        
+    if fuzzy:
+        # If model forgot closing tag or used wrong format, capture until next < or EOF
+        # Special case for code: sometimes they just use ``` instead of <code> tags
+        if tag == "code":
+            m_md = re.search(r"```[a-zA-Z]*\n(.*?)```", text, re.DOTALL)
+            if m_md:
+                return m_md.group(1).strip()
+        m_fuz = re.search(
+            rf"<{tag}(?:\s+[^>]*)?>(.*?)(?:<\w+>|$)", text, re.DOTALL | re.IGNORECASE
+        )
+        if m_fuz:
+            return m_fuz.group(1).strip()
+            
+    return None
 
 def _has_tool_call(text: str) -> bool:
-    return bool(
-        re.search(
-            r"<tool(?:\s+[^>]*)?>(.+?)</tool>", text, re.DOTALL | re.IGNORECASE
-        )
-    )
+    if re.search(r"<tool(?:\s+[^>]*)?>(.+?)</tool>", text, re.DOTALL | re.IGNORECASE):
+        return True
+    
+    from dct.core.config import Config
+    if Config().get("enable_approx_parser", False):
+        if re.search(r"<(?:tool|action)(?:\s+name=[\"']([^\"']+)[\"'])?", text, re.IGNORECASE):
+            return True
+        if "[TOOL]" in text or "```xml" in text:
+            return True
+    return False
 
 
 def _parse_multi_patch(text: str) -> list[dict[str, str]]:
@@ -448,45 +468,72 @@ def _parse_multi_patch(text: str) -> list[dict[str, str]]:
 
 def _parse_tool_call(text: str) -> Optional[dict]:
     """Extract the first tool call from model output."""
-    tool = _extract_tag(text, "tool")
+    from dct.core.config import Config
+    fuzzy = Config().get("enable_approx_parser", False)
+    
+    tool = _extract_tag(text, "tool", fuzzy=False)
+    is_fuzzy = False
+    
+    if not tool and fuzzy:
+        # Try to find a fuzzy tool name
+        m1 = re.search(r"<(?:tool|action)(?:\s+name=[\"']([^\"']+)[\"'])?", text, re.IGNORECASE)
+        if m1 and m1.group(1):
+            tool = m1.group(1)
+            is_fuzzy = True
+        else:
+            m2 = re.search(r"\[TOOL\]\s*([a-zA-Z0-9_]+)", text)
+            if m2:
+                tool = m2.group(1)
+                is_fuzzy = True
+            else:
+                # Catch-all if they just used <run_bash>...
+                for known_tool in ["run_bash", "run_shell", "run_python", "read_file", "write_file", "patch_file"]:
+                    if f"<{known_tool}" in text:
+                        tool = known_tool
+                        is_fuzzy = True
+                        break
+
     if not tool:
         return None
+        
     return {
         "raw_text": text,
         "tool": tool.strip(),
-        "code": _extract_tag(text, "code"),
-        "path": _extract_tag(text, "path"),
-        "url": _extract_tag(text, "url"),
-        "query": _extract_tag(text, "query"),
-        "old": _extract_tag(text, "old"),
-        "new": _extract_tag(text, "new"),
-        "question": _extract_tag(text, "question"),
-        "pattern": _extract_tag(text, "pattern"),
-        "glob": _extract_tag(text, "glob"),
-        "output_mode": _extract_tag(text, "output_mode"),
-        "context": _extract_tag(text, "context"),
-        "head_limit": _extract_tag(text, "head_limit"),
-        "start_line": _extract_tag(text, "start_line"),
-        "end_line": _extract_tag(text, "end_line"),
-        "tail": _extract_tag(text, "tail"),
-        "instruction": _extract_tag(text, "instruction"),
-        "system_prompt": _extract_tag(text, "system_prompt"),
-        "model": _extract_tag(text, "model"),
-        "background": _extract_tag(text, "background"),
-        "id": _extract_tag(text, "id"),
-        "input": _extract_tag(text, "input"),
-        "name": _extract_tag(text, "name"),
-        "description": _extract_tag(text, "description"),
-        "prompt": _extract_tag(text, "prompt"),
-        "skill": _extract_tag(text, "skill"),
-        "members": _extract_tag(text, "members"),
-        "server": _extract_tag(text, "server"),
-        "args": _extract_tag(text, "args"),
-        "text": _extract_tag(text, "text"),
-        "action": _extract_tag(text, "action"),
-        "section": _extract_tag(text, "section"),
-        "old_text": _extract_tag(text, "old_text"),
-        "new_text": _extract_tag(text, "new_text"),
+        "is_fuzzy": is_fuzzy,
+        "code": _extract_tag(text, "code", fuzzy),
+        "path": _extract_tag(text, "path", fuzzy),
+        "url": _extract_tag(text, "url", fuzzy),
+        "query": _extract_tag(text, "query", fuzzy),
+        "old": _extract_tag(text, "old", fuzzy),
+        "new": _extract_tag(text, "new", fuzzy),
+        "question": _extract_tag(text, "question", fuzzy),
+        "pattern": _extract_tag(text, "pattern", fuzzy),
+        "glob": _extract_tag(text, "glob", fuzzy),
+        "output_mode": _extract_tag(text, "output_mode", fuzzy),
+        "context": _extract_tag(text, "context", fuzzy),
+        "head_limit": _extract_tag(text, "head_limit", fuzzy),
+        "start_line": _extract_tag(text, "start_line", fuzzy),
+        "end_line": _extract_tag(text, "end_line", fuzzy),
+        "tail": _extract_tag(text, "tail", fuzzy),
+        "instruction": _extract_tag(text, "instruction", fuzzy),
+        "system_prompt": _extract_tag(text, "system_prompt", fuzzy),
+        "model": _extract_tag(text, "model", fuzzy),
+        "background": _extract_tag(text, "background", fuzzy),
+        "id": _extract_tag(text, "id", fuzzy),
+        "input": _extract_tag(text, "input", fuzzy),
+        "name": _extract_tag(text, "name", fuzzy),
+        "description": _extract_tag(text, "description", fuzzy),
+        "prompt": _extract_tag(text, "prompt", fuzzy),
+        "skill": _extract_tag(text, "skill", fuzzy),
+        "members": _extract_tag(text, "members", fuzzy),
+        "server": _extract_tag(text, "server", fuzzy),
+        "args": _extract_tag(text, "args", fuzzy),
+        "text": _extract_tag(text, "text", fuzzy),
+        "action": _extract_tag(text, "action", fuzzy),
+        "section": _extract_tag(text, "section", fuzzy),
+        "old_text": _extract_tag(text, "old_text", fuzzy),
+        "new_text": _extract_tag(text, "new_text", fuzzy),
+        "selector": _extract_tag(text, "selector", fuzzy),
         "patches": (
             _parse_multi_patch(text)
             if tool.strip() == "multi_patch_file"
@@ -1890,6 +1937,8 @@ class CodeAgent:
             exec_status.start()
             try:
                 result = self._execute_tool(call)
+                if call.get("is_fuzzy"):
+                    result = "[WARNING] Your tool call syntax was malformed or missing XML tags (e.g., using [TOOL] or missing </tool>). The system salvaged it fuzzily, but you MUST use proper <tool>name</tool> tags next time.\n\n" + result
 
                 # Sync system prompt in case a tool (like skill_load) mutated it mid-loop
                 if (
