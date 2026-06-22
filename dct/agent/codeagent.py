@@ -1717,6 +1717,38 @@ class CodeAgent:
                 get_funny_exec_msg,
             )
 
+            class FunctionCallsFilter:
+                def __init__(self, callback):
+                    self.callback = callback
+                    self.buffer = ""
+                    self.in_block = False
+                    self.start_tag = "<function_calls>"
+                    self.end_tag = "</function_calls>"
+
+                def push(self, text: str):
+                    for char in text:
+                        self.buffer += char
+                        if not self.in_block:
+                            if self.buffer == self.start_tag:
+                                self.in_block = True
+                                self.buffer = ""
+                            elif not self.start_tag.startswith(self.buffer):
+                                self.callback(self.buffer[0])
+                                self.buffer = self.buffer[1:]
+                        else:
+                            if self.buffer == self.end_tag:
+                                self.in_block = False
+                                self.buffer = ""
+                            elif not self.end_tag.startswith(self.buffer):
+                                self.buffer = self.buffer[1:]
+
+                def flush(self):
+                    if self.buffer and not self.in_block:
+                        self.callback(self.buffer)
+                        self.buffer = ""
+
+            ui_filter = FunctionCallsFilter(self.on_text)
+
             response_text = ""
             native_tool_calls = []
             status = con.status(
@@ -1733,16 +1765,17 @@ class CodeAgent:
                             if first_chunk:
                                 status.stop()
                                 first_chunk = False
-                            self.on_text(chunk["content"])
+                            ui_filter.push(chunk["content"])
                             response_text += chunk["content"]
                         continue
                     if first_chunk:
                         status.stop()
                         first_chunk = False
-                    self.on_text(chunk)
+                    ui_filter.push(chunk)
                     response_text += chunk
             finally:
                 status.stop()
+                ui_filter.flush()
 
             final_text = response_text
             assistant_msg = {"role": "assistant", "content": response_text}
