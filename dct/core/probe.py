@@ -155,7 +155,7 @@ def probe_endpoints_detail(srv: "Server") -> list[dict]:
     headers = {}
     if srv.api_key:
         headers["Authorization"] = f"Bearer {srv.api_key}"
-    req_kwargs: dict[str, Any] = {"timeout": PROBE_TIMEOUT, "headers": headers}
+    req_kwargs: dict[str, Any] = {"headers": headers}
     if not srv.tls_verify:
         req_kwargs["verify"] = False
     rows = []
