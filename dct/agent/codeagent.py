@@ -44,11 +44,10 @@ Tool call format the model is instructed to use:
 """
 
 from __future__ import annotations
-import re
 import threading
 import time
 from itertools import count
-from typing import Callable, Optional, TYPE_CHECKING
+from typing import Callable, TYPE_CHECKING
 
 from dct.tools.executor import dispatch, ExecResult
 from dct.tools.files import (
@@ -62,10 +61,18 @@ from dct.tools.files import (
 )
 from dct.tools.image import read_image
 from dct.tools.web import fetch_url, search_ddg
-from dct.tools.tasks import get_tracker
 from dct.skills.notebook import edit_notebook_cell
 from dct.skills.web import fetch_and_extract
+from dct.agent.parser import (
+    _extract_tag,
+    _has_tool_call,
+    _parse_tool_call,
+    _sanitize_tool_result,
+)
 from dct.agent.session import write_trace_entry
+from dct.core.logging import get_logger
+
+logger = get_logger("dct.agent.codeagent")
 
 if TYPE_CHECKING:
     from dct.core.registry import Server
@@ -87,47 +94,43 @@ BG_CLEANUP_TTL = 300
 BG_LOG_MAX_CHARS = 10000
 
 
-def _sanitize_tool_result(result: str) -> str:
-    """Escape XML-like content in tool results to prevent prompt injection.
-
-    If a fetched URL or read file contains <tool> tags, the regex-based
-    tool-call parser could interpret them as real tool calls.  We replace
-    '<' with its HTML entity in content that looks like an XML tag.
-    """
-    import re as _re
-    # Replace opening <word...> and closing </word> tags
-    safe = _re.sub(
-        r"</?(\w+)(\s[^>]*)?>",
-        lambda m: f"&lt;{'/' if m.group(0).startswith('</') else ''}"
-        f"{m.group(1)}{m.group(2) or ''}&gt;",
-        result,
-    )
-    return safe
-
-
 def _run_auto_linter(path: str) -> str:
     import subprocess
     import os
+
     if not os.path.exists(path):
         return ""
     ext = os.path.splitext(path)[1].lower()
     errors = []
     if ext == ".py":
         try:
-            subprocess.run(["python3", "-m", "py_compile", path], check=True, capture_output=True, text=True)
+            subprocess.run(
+                ["python3", "-m", "py_compile", path],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
         except subprocess.CalledProcessError as e:
             errors.append(f"SyntaxError:\n{e.stderr.strip()}")
             return "\n".join(errors)
         try:
-            res = subprocess.run(["ruff", "check", path], capture_output=True, text=True)
+            res = subprocess.run(
+                ["ruff", "check", path], capture_output=True, text=True
+            )
             if res.returncode != 0:
-                errors.append(f"Ruff Lint Errors:\n{res.stdout.strip() or res.stderr.strip()}")
+                errors.append(
+                    f"Ruff Lint Errors:\n{res.stdout.strip() or res.stderr.strip()}"
+                )
         except FileNotFoundError:
             pass
         try:
-            res = subprocess.run(["flake8", path], capture_output=True, text=True)
+            res = subprocess.run(
+                ["flake8", path], capture_output=True, text=True
+            )
             if res.returncode != 0:
-                errors.append(f"Flake8 Lint Errors:\n{res.stdout.strip() or res.stderr.strip()}")
+                errors.append(
+                    f"Flake8 Lint Errors:\n{res.stdout.strip() or res.stderr.strip()}"
+                )
         except FileNotFoundError:
             pass
     return "\n".join(errors) if errors else ""
@@ -135,6 +138,7 @@ def _run_auto_linter(path: str) -> str:
 
 def find_agents_md(cwd: str) -> str:
     import os
+
     agents_content = []
     current_dir = os.path.abspath(cwd)
     paths_to_check = []
@@ -144,23 +148,29 @@ def find_agents_md(cwd: str) -> str:
         if parent == current_dir:
             break
         current_dir = parent
-        
+
     paths_to_check.reverse()
-    
+
     for path in paths_to_check:
         if os.path.isfile(path):
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     agents_content.append(f"--- {path} ---\n{f.read()}")
-            except Exception:
-                pass
-                
+            except OSError:
+                logger.exception(
+                    "Failed to read AGENTS.md directives from %s", path
+                )
+
     if agents_content:
-        return "[AGENTS.md DIRECTIVES]\n" + "\n\n".join(agents_content) + "\n\n"
+        return (
+            "[AGENTS.md DIRECTIVES]\n" + "\n\n".join(agents_content) + "\n\n"
+        )
     return ""
+
 
 def load_persona_file(filename: str, default_content: str) -> str:
     import os
+
     path = os.path.join(os.path.expanduser("~"), ".config", "dct", filename)
     if not os.path.exists(path):
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -223,6 +233,7 @@ Current Mode: {mode}
 """
 
     from dct.core.config import Config
+
     conf = Config()
     use_native = conf.get("use_native_tools", True)
 
@@ -372,18 +383,30 @@ You are currently in PLAN mode.
 """
 
     if conf.get("enable_persona", True):
-        soul_content = load_persona_file("soul.md", "You are DCT Agent, an autonomous and elite developer AI.\nYou prioritize clean code, user autonomy, and security.")
-        user_content = load_persona_file("user.md", "The user is a developer using DCT Agent. They prefer concise and direct answers.")
-        memory_content = load_persona_file("memory.md", "- Initialized memory.\n- Use core_memory_manage to add important facts here.")
+        soul_content = load_persona_file(
+            "soul.md",
+            "You are DCT Agent, an autonomous and elite developer AI.\nYou prioritize clean code, user autonomy, and security.",
+        )
+        user_content = load_persona_file(
+            "user.md",
+            "The user is a developer using DCT Agent. They prefer concise and direct answers.",
+        )
+        memory_content = load_persona_file(
+            "memory.md",
+            "- Initialized memory.\n- Use core_memory_manage to add important facts here.",
+        )
 
         # OpenHands-style Project Memory
         import os
+
         project_dir = os.path.join(os.getcwd(), ".dct")
         project_path = os.path.join(project_dir, "project.md")
         if not os.path.exists(project_path):
             os.makedirs(project_dir, exist_ok=True)
             with open(project_path, "w", encoding="utf-8") as f:
-                f.write("- Initialized project memory. Store repository-specific knowledge here.")
+                f.write(
+                    "- Initialized project memory. Store repository-specific knowledge here."
+                )
         with open(project_path, "r", encoding="utf-8") as f:
             project_content = f.read().strip()
 
@@ -416,130 +439,6 @@ Apply the following additional instructions while still obeying all tool and saf
 """
 
     return prompt
-
-def _extract_tag(text: str, tag: str, fuzzy: bool = False) -> Optional[str]:
-    m = re.search(
-        rf"<{tag}(?:\s+[^>]*)?>(.*?)</{tag}>", text, re.DOTALL | re.IGNORECASE
-    )
-    if m:
-        return m.group(1).strip()
-        
-    if fuzzy:
-        # If model forgot closing tag or used wrong format, capture until next < or EOF
-        # Special case for code: sometimes they just use ``` instead of <code> tags
-        if tag == "code":
-            m_md = re.search(r"```[a-zA-Z]*\n(.*?)```", text, re.DOTALL)
-            if m_md:
-                return m_md.group(1).strip()
-        m_fuz = re.search(
-            rf"<{tag}(?:\s+[^>]*)?>(.*?)(?:<\w+>|$)", text, re.DOTALL | re.IGNORECASE
-        )
-        if m_fuz:
-            return m_fuz.group(1).strip()
-            
-    return None
-
-def _has_tool_call(text: str) -> bool:
-    if re.search(r"<tool(?:\s+[^>]*)?>(.+?)</tool>", text, re.DOTALL | re.IGNORECASE):
-        return True
-    
-    from dct.core.config import Config
-    if Config().get("enable_approx_parser", False):
-        if re.search(r"<(?:tool|action)(?:\s+name=[\"']([^\"']+)[\"'])?", text, re.IGNORECASE):
-            return True
-        if "[TOOL]" in text or "```xml" in text:
-            return True
-    return False
-
-
-def _parse_multi_patch(text: str) -> list[dict[str, str]]:
-    """Parse multiple <patch> blocks containing <old> and <new>."""
-    patches = []
-    for patch_match in re.finditer(
-        r"<patch>(.*?)</patch>", text, re.DOTALL | re.IGNORECASE
-    ):
-        patch_content = patch_match.group(1)
-        old = _extract_tag(patch_content, "old")
-        new = _extract_tag(patch_content, "new")
-        if old is not None and new is not None:
-            patches.append({"old": old, "new": new})
-    return patches
-
-
-def _parse_tool_call(text: str) -> Optional[dict]:
-    """Extract the first tool call from model output."""
-    from dct.core.config import Config
-    fuzzy = Config().get("enable_approx_parser", False)
-    
-    tool = _extract_tag(text, "tool", fuzzy=False)
-    is_fuzzy = False
-    
-    if not tool and fuzzy:
-        # Try to find a fuzzy tool name
-        m1 = re.search(r"<(?:tool|action)(?:\s+name=[\"']([^\"']+)[\"'])?", text, re.IGNORECASE)
-        if m1 and m1.group(1):
-            tool = m1.group(1)
-            is_fuzzy = True
-        else:
-            m2 = re.search(r"\[TOOL\]\s*([a-zA-Z0-9_]+)", text)
-            if m2:
-                tool = m2.group(1)
-                is_fuzzy = True
-            else:
-                # Catch-all if they just used <run_bash>...
-                for known_tool in ["run_bash", "run_shell", "run_python", "read_file", "write_file", "patch_file"]:
-                    if f"<{known_tool}" in text:
-                        tool = known_tool
-                        is_fuzzy = True
-                        break
-
-    if not tool:
-        return None
-        
-    return {
-        "raw_text": text,
-        "tool": tool.strip(),
-        "is_fuzzy": is_fuzzy,
-        "code": _extract_tag(text, "code", fuzzy),
-        "path": _extract_tag(text, "path", fuzzy),
-        "url": _extract_tag(text, "url", fuzzy),
-        "query": _extract_tag(text, "query", fuzzy),
-        "old": _extract_tag(text, "old", fuzzy),
-        "new": _extract_tag(text, "new", fuzzy),
-        "question": _extract_tag(text, "question", fuzzy),
-        "pattern": _extract_tag(text, "pattern", fuzzy),
-        "glob": _extract_tag(text, "glob", fuzzy),
-        "output_mode": _extract_tag(text, "output_mode", fuzzy),
-        "context": _extract_tag(text, "context", fuzzy),
-        "head_limit": _extract_tag(text, "head_limit", fuzzy),
-        "start_line": _extract_tag(text, "start_line", fuzzy),
-        "end_line": _extract_tag(text, "end_line", fuzzy),
-        "tail": _extract_tag(text, "tail", fuzzy),
-        "instruction": _extract_tag(text, "instruction", fuzzy),
-        "system_prompt": _extract_tag(text, "system_prompt", fuzzy),
-        "model": _extract_tag(text, "model", fuzzy),
-        "background": _extract_tag(text, "background", fuzzy),
-        "id": _extract_tag(text, "id", fuzzy),
-        "input": _extract_tag(text, "input", fuzzy),
-        "name": _extract_tag(text, "name", fuzzy),
-        "description": _extract_tag(text, "description", fuzzy),
-        "prompt": _extract_tag(text, "prompt", fuzzy),
-        "skill": _extract_tag(text, "skill", fuzzy),
-        "members": _extract_tag(text, "members", fuzzy),
-        "server": _extract_tag(text, "server", fuzzy),
-        "args": _extract_tag(text, "args", fuzzy),
-        "text": _extract_tag(text, "text", fuzzy),
-        "action": _extract_tag(text, "action", fuzzy),
-        "section": _extract_tag(text, "section", fuzzy),
-        "old_text": _extract_tag(text, "old_text", fuzzy),
-        "new_text": _extract_tag(text, "new_text", fuzzy),
-        "selector": _extract_tag(text, "selector", fuzzy),
-        "patches": (
-            _parse_multi_patch(text)
-            if tool.strip() == "multi_patch_file"
-            else None
-        ),
-    }
 
 
 class CodeAgent:
@@ -823,6 +722,7 @@ class CodeAgent:
                 return "[TOOL ERROR] <text> is required."
             from dct.core.client import get_embeddings
             from dct.core.memory import get_store
+
             try:
                 vec = get_embeddings(self.server, m_text)
             except Exception as e:
@@ -837,6 +737,7 @@ class CodeAgent:
                 return "[TOOL ERROR] <query> is required."
             from dct.core.client import get_embeddings
             from dct.core.memory import get_store
+
             try:
                 vec = get_embeddings(self.server, m_query)
             except Exception as e:
@@ -853,6 +754,7 @@ class CodeAgent:
 
         elif tool == "core_memory_manage":
             from dct.core.config import Config
+
             if not Config().get("enable_persona", True):
                 return "[TOOL ERROR] Persona feature is disabled in config."
 
@@ -865,10 +767,16 @@ class CodeAgent:
                 return "[TOOL ERROR] <section> must be one of: soul, user, memory, project."
 
             import os
+
             if m_section == "project":
                 path = os.path.join(os.getcwd(), ".dct", "project.md")
             else:
-                path = os.path.join(os.path.expanduser("~"), ".config", "dct", f"{m_section}.md")
+                path = os.path.join(
+                    os.path.expanduser("~"),
+                    ".config",
+                    "dct",
+                    f"{m_section}.md",
+                )
 
             if m_action == "append":
                 if not m_new:
@@ -1299,6 +1207,7 @@ class CodeAgent:
         elif tool == "repo_map":
             path = call.get("path") or "."
             from dct.tools.lsp import generate_repo_map
+
             res = generate_repo_map(path)
             if not res.ok:
                 return f"[TOOL ERROR] {res.message}"
@@ -1309,7 +1218,9 @@ class CodeAgent:
             line_str = call.get("line") or ""
             col_str = call.get("column") or "0"
             if not path or not line_str:
-                return f"[TOOL ERROR] <path> and <line> are required for {tool}."
+                return (
+                    f"[TOOL ERROR] <path> and <line> are required for {tool}."
+                )
             try:
                 lint = int(line_str)
                 cint = int(col_str)
@@ -1499,7 +1410,9 @@ class CodeAgent:
                 )
                 diff_str = "".join(diff_lines)
                 size_info = f"  {len(content.encode('utf-8', errors='replace')) / 1024:.1f} KB"
-                res_str = f"[multi-patched: {path}{size_info}]\n{diff_str[:1200]}"
+                res_str = (
+                    f"[multi-patched: {path}{size_info}]\n{diff_str[:1200]}"
+                )
                 linter_err = _run_auto_linter(path)
                 if linter_err:
                     res_str += f"\n\n[AUTO-REFLECTION ERROR] Linter detected issues after your edit:\n{linter_err}"
@@ -1601,36 +1514,46 @@ class CodeAgent:
                 or call.get("code")
                 or ""
             )
-            choices_raw = _extract_tag(call["raw_text"], "choices") or call.get("choices", "")
-            
+            choices_raw = _extract_tag(
+                call["raw_text"], "choices"
+            ) or call.get("choices", "")
+
             from dct.core.theme import con, C
-            con.print(f"\n  [{C['purple']}]? Agent Question:[/{C['purple']}] [{C['fg']}]{question}[/{C['fg']}]")
-            
+
+            con.print(
+                f"\n  [{C['purple']}]? Agent Question:[/{C['purple']}] [{C['fg']}]{question}[/{C['fg']}]"
+            )
+
             choices = []
             if isinstance(choices_raw, list):
                 choices = choices_raw
             elif isinstance(choices_raw, str) and choices_raw.strip():
-                choices = [c.strip() for c in choices_raw.split(",") if c.strip()]
-                
+                choices = [
+                    c.strip() for c in choices_raw.split(",") if c.strip()
+                ]
+
             if choices:
                 for idx, c in enumerate(choices, 1):
                     con.print(f"    [{C['accent']}]{idx})[/{C['accent']}] {c}")
-                con.print(f"    [{C['dim']}](Select 1-{len(choices)} or type your own answer)[/{C['dim']}]")
-                
+                con.print(
+                    f"    [{C['dim']}](Select 1-{len(choices)} or type your own answer)[/{C['dim']}]"
+                )
+
             from prompt_toolkit import PromptSession
+
             prompt_sess = PromptSession()
-            
+
             try:
                 answer = prompt_sess.prompt("  › ")
             except (KeyboardInterrupt, EOFError):
                 answer = "User cancelled."
-                
+
             # If user typed a number matching a choice, expand it
             if choices and answer.strip().isdigit():
                 idx = int(answer.strip())
                 if 1 <= idx <= len(choices):
                     answer = choices[idx - 1]
-                    
+
             return f"[User responded]\n{answer}"
 
         elif tool == "notebook_edit":
@@ -1651,12 +1574,23 @@ class CodeAgent:
                 return f"[TOOL ERROR] {r_nb.message}"
             return "[SUCCESS] Notebook updated."
         elif tool == "update_plan":
-            plan = call.get("plan") or _extract_tag(call.get("raw_text", ""), "plan") or ""
-            explanation = call.get("explanation") or _extract_tag(call.get("raw_text", ""), "explanation") or ""
+            plan = (
+                call.get("plan")
+                or _extract_tag(call.get("raw_text", ""), "plan")
+                or ""
+            )
+            explanation = (
+                call.get("explanation")
+                or _extract_tag(call.get("raw_text", ""), "explanation")
+                or ""
+            )
             if not plan:
                 return "[TOOL ERROR] <plan> is required."
             import os
-            plan_file = os.path.join(os.path.expanduser("~/.config/dct"), "current_plan.md")
+
+            plan_file = os.path.join(
+                os.path.expanduser("~/.config/dct"), "current_plan.md"
+            )
             with open(plan_file, "w", encoding="utf-8") as f:
                 f.write(plan)
             return f"[SUCCESS] Plan updated. Explanation: {explanation}"
@@ -1692,23 +1626,32 @@ class CodeAgent:
 
     def _get_native_tools(self) -> list[dict] | None:
         from dct.core.config import Config
+
         if not Config().get("use_native_tools", True):
             return None
-        return [{
-            "type": "function",
-            "function": {
-                "name": "dct_tool",
-                "description": "Execute a DCT Agent tool. Check the AVAILABLE TOOLS list in system prompt for valid names and parameters.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "tool_name": {"type": "string", "description": "Name of the tool (e.g. run_shell, read_file, DONE)"},
-                        "kwargs": {"type": "object", "description": "Key-value arguments mapping directly to the XML tags described in the prompt. Do not use XML in strings."}
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": "dct_tool",
+                    "description": "Execute a DCT Agent tool. Check the AVAILABLE TOOLS list in system prompt for valid names and parameters.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "tool_name": {
+                                "type": "string",
+                                "description": "Name of the tool (e.g. run_shell, read_file, DONE)",
+                            },
+                            "kwargs": {
+                                "type": "object",
+                                "description": "Key-value arguments mapping directly to the XML tags described in the prompt. Do not use XML in strings.",
+                            },
+                        },
+                        "required": ["tool_name", "kwargs"],
                     },
-                    "required": ["tool_name", "kwargs"]
-                }
+                },
             }
-        }]
+        ]
 
     def run(self, messages: list[dict]) -> str:
         """
@@ -1805,7 +1748,12 @@ class CodeAgent:
             status.start()
             first_chunk = True
             try:
-                for chunk in self.stream_fn(self.server, self.model, msgs, tools=self._get_native_tools()):
+                for chunk in self.stream_fn(
+                    self.server,
+                    self.model,
+                    msgs,
+                    tools=self._get_native_tools(),
+                ):
                     if isinstance(chunk, dict) and "tool_calls" in chunk:
                         native_tool_calls = chunk["tool_calls"]
                         if "content" in chunk and chunk["content"]:
@@ -1830,7 +1778,9 @@ class CodeAgent:
                 assistant_msg["tool_calls"] = native_tool_calls
             msgs.append(assistant_msg)
             write_trace_entry(
-                self.session, "model_response", {"content": response_text, "tool_calls": native_tool_calls}
+                self.session,
+                "model_response",
+                {"content": response_text, "tool_calls": native_tool_calls},
             )
 
             if native_tool_calls:
@@ -1841,6 +1791,7 @@ class CodeAgent:
                     name = func.get("name")
                     try:
                         import json
+
                         args_raw = func.get("arguments", {})
                         if isinstance(args_raw, dict):
                             args = args_raw
@@ -1867,7 +1818,11 @@ class CodeAgent:
                         "tool_call",
                         {
                             "tool": tool_name,
-                            "arguments": {k: v for k, v in call.items() if k != "raw_text"},
+                            "arguments": {
+                                k: v
+                                for k, v in call.items()
+                                if k != "raw_text"
+                            },
                         },
                     )
                     if self.on_tool:
@@ -1880,7 +1835,11 @@ class CodeAgent:
                     exec_status.start()
                     try:
                         result = self._execute_tool(call)
-                        if (msgs and msgs[0].get("role") == "system" and self.session.system_prompt):
+                        if (
+                            msgs
+                            and msgs[0].get("role") == "system"
+                            and self.session.system_prompt
+                        ):
                             msgs[0]["content"] = self.session.system_prompt
                     finally:
                         exec_status.stop()
@@ -1897,11 +1856,13 @@ class CodeAgent:
                         return final_text
 
                     safe_result = _sanitize_tool_result(result)
-                    msgs.append({
-                        "role": "tool",
-                        "tool_call_id": tc_id,
-                        "content": f"[TOOL RESULT: {tool_name}]\n{safe_result}"
-                    })
+                    msgs.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc_id,
+                            "content": f"[TOOL RESULT: {tool_name}]\n{safe_result}",
+                        }
+                    )
 
                 # Continue the multi-turn conversation with the tool responses appended
                 continue
@@ -1938,7 +1899,10 @@ class CodeAgent:
             try:
                 result = self._execute_tool(call)
                 if call.get("is_fuzzy"):
-                    result = "[WARNING] Your tool call syntax was malformed or missing XML tags (e.g., using [TOOL] or missing </tool>). The system salvaged it fuzzily, but you MUST use proper <tool>name</tool> tags next time.\n\n" + result
+                    result = (
+                        "[WARNING] Your tool call syntax was malformed or missing XML tags (e.g., using [TOOL] or missing </tool>). The system salvaged it fuzzily, but you MUST use proper <tool>name</tool> tags next time.\n\n"
+                        + result
+                    )
 
                 # Sync system prompt in case a tool (like skill_load) mutated it mid-loop
                 if (

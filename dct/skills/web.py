@@ -4,11 +4,11 @@ Extended web research skill for deeper data extraction.
 """
 
 from __future__ import annotations
-import requests
 from bs4 import BeautifulSoup
 from dataclasses import dataclass
 
 from dct.tools.url_validator import validate_url
+from dct.tools.web import _get_validated_response
 
 
 @dataclass
@@ -25,10 +25,7 @@ def fetch_and_extract(url: str, selector: str | None = None) -> SkillWebResult:
     if err:
         return SkillWebResult(False, url, "", err)
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        }
-        resp = requests.get(url, headers=headers, timeout=10)
+        resp = _get_validated_response(url)
         resp.raise_for_status()
 
         soup = BeautifulSoup(resp.text, "html.parser")

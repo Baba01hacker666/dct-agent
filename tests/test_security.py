@@ -1,4 +1,5 @@
 """Tests for security hardening: URL validation, path sandboxing, prompt injection."""
+
 import pytest
 
 
@@ -15,8 +16,10 @@ class TestUrlValidator:
 
         assert validate_url("file:///etc/passwd") is not None
         assert validate_url("ftp://evil.com/malware") is not None
-        assert validate_url("gopher://localhost/") == \
-            "Only http:// and https:// URLs are allowed."
+        assert (
+            validate_url("gopher://localhost/")
+            == "Only http:// and https:// URLs are allowed."
+        )
 
     def test_blocks_localhost(self):
         from dct.tools.url_validator import validate_url
@@ -52,6 +55,52 @@ class TestUrlValidator:
         res = fetch_url("http://127.0.0.1:1/secret")
         assert not res.ok
         assert "Blocked" in res.message or "internal" in res.message.lower()
+
+    def test_fetch_url_blocks_unsafe_redirect(self, monkeypatch):
+        from dct.tools.web import fetch_url
+
+        class Response:
+            url = "https://example.com/start"
+            is_redirect = True
+            headers = {"location": "http://127.0.0.1:1/secret"}
+
+        def fake_get(*args, **kwargs):
+            return Response()
+
+        monkeypatch.setattr("dct.tools.web.requests.get", fake_get)
+        res = fetch_url("https://example.com/start")
+        assert not res.ok
+        assert "Blocked" in res.message or "internal" in res.message.lower()
+
+    def test_fetch_url_allows_safe_redirect(self, monkeypatch):
+        from dct.tools.web import fetch_url
+
+        class RedirectResponse:
+            url = "https://example.com/start"
+            is_redirect = True
+            headers = {"location": "https://example.com/final"}
+
+        class FinalResponse:
+            url = "https://example.com/final"
+            is_redirect = False
+            headers = {"content-type": "text/html"}
+            text = "<html><title>ok</title><body>safe</body></html>"
+            status_code = 200
+
+            def raise_for_status(self):
+                pass
+
+        responses = [RedirectResponse(), FinalResponse()]
+
+        def fake_get(*args, **kwargs):
+            return responses.pop(0)
+
+        monkeypatch.setattr("dct.tools.web.requests.get", fake_get)
+        res = fetch_url("https://example.com/start")
+        assert res.ok
+        assert res.url == "https://example.com/final"
+        assert res.title == "ok"
+        assert "safe" in res.content
 
 
 class TestPathSandbox:
@@ -127,6 +176,7 @@ class TestPromptInjection:
 class TestSkillWebResult:
     def test_skill_web_result_renamed(self):
         from dct.skills.web import SkillWebResult
+
         r = SkillWebResult(ok=True, url="http://example.com", content="test")
         assert r.ok
         assert r.content == "test"

@@ -40,7 +40,9 @@ class Session:
         try:
             self.save(os.path.join(chats_dir, f"{self.name}.json"))
         except Exception:
-            logger.debug("Autosave failed for session %s", self.name, exc_info=True)
+            logger.debug(
+                "Autosave failed for session %s", self.name, exc_info=True
+            )
 
     def add(self, role: str, content: str):
         self.messages.append({"role": role, "content": content})
@@ -138,7 +140,7 @@ def _get_cfg():
 
             _cfg = Config()
         except Exception:
-            pass
+            logger.exception("Failed to initialize config for session tracing")
     return _cfg
 
 
@@ -149,6 +151,7 @@ def write_trace_entry(session: "Session", entry_type: str, data: dict):
         if cfg is None or not cfg.get("enable_tracing", False):
             return
     except Exception:
+        logger.exception("Failed to check tracing configuration")
         return
 
     import os
