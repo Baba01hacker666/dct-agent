@@ -1250,45 +1250,28 @@ class CodeAgent:
 
         elif tool == "read_file":
             path = call.get("path") or ""
-            file_res = read_file(path)
-            if not file_res.ok:
-                return f"[TOOL ERROR] {file_res.message}"
-            lines = file_res.content.splitlines()
-            total_lines = len(lines)
-
             start_str = call.get("start_line")
             end_str = call.get("end_line")
             tail_str = call.get("tail")
 
             try:
-                if tail_str:
-                    tail_idx = int(tail_str)
-                    start_idx = max(0, total_lines - tail_idx)
-                    lines_to_show = lines[start_idx:]
-                else:
-                    start_idx = max(0, int(start_str) - 1) if start_str else 0
-                    end_idx = (
-                        min(total_lines, int(end_str))
-                        if end_str
-                        else total_lines
-                    )
-                    lines_to_show = lines[start_idx:end_idx]
+                start_line = int(start_str) if start_str else None
+                end_line = int(end_str) if end_str else None
+                tail = int(tail_str) if tail_str else None
             except ValueError:
                 return "[TOOL ERROR] start_line, end_line, and tail must be integers."
 
-            line_limit = 2000
-            truncated = False
-            if len(lines_to_show) > line_limit:
-                lines_to_show = lines_to_show[:line_limit]
-                truncated = True
-
-            numbered = "\n".join(
-                f"{i + start_idx + 1:4d}  {line_text}"
-                for i, line_text in enumerate(lines_to_show)
+            file_res = read_file(
+                path,
+                start_line=start_line,
+                end_line=end_line,
+                tail=tail,
             )
-            if truncated:
-                numbered += "\n...[TRUNCATED]..."
-            return f"[file: {file_res.path}  showing lines {start_idx + 1}-{start_idx + len(lines_to_show)} of {total_lines}]\n{numbered}"
+            if not file_res.ok:
+                return f"[TOOL ERROR] {file_res.message}"
+            if getattr(file_res, "warning", ""):
+                return f"[WARNING] {file_res.warning}\n{file_res.content}"
+            return file_res.content
 
         elif tool == "write_file":
             path = call.get("path") or call.get("file") or ""

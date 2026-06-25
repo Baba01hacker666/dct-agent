@@ -62,27 +62,126 @@ class FileResult:
     diff: str = ""
 
 
+@dataclass
+class ReadResult(FileResult):
+    """Extended result for read_file with metadata."""
+    total_lines: int = 0
+    file_size: int = 0
+    is_binary: bool = False
+    warning: str = ""
+
+
 # Skip diff generation for files larger than this (bytes)
 DIFF_MAX_BYTES = 100_000
 # Reject writes larger than this (bytes)
 WRITE_MAX_BYTES = 50 * 1024 * 1024  # 50 MB
 
 
-def read_file(path: str, max_bytes: int = 512_000) -> FileResult:
+def _is_binary(path: Path, probe_bytes: int = 8192) -> bool:
+    """Detect binary files by checking for null bytes in the first chunk."""
+    try:
+        with open(path, "rb") as f:
+            chunk = f.read(probe_bytes)
+        return b"\x00" in chunk
+    except Exception:
+        return False
+
+
+def read_file(
+    path: str,
+    max_bytes: int = 512_000,
+    start_line: int | None = None,
+    end_line: int | None = None,
+    tail: int | None = None,
+    line_limit: int = 2000,
+) -> ReadResult:
+    """Read a file with optional line slicing and metadata.
+
+    Args:
+        path: File path to read.
+        max_bytes: Maximum file size in bytes (default 512KB).
+        start_line: 1-based start line (inclusive). None = start of file.
+        end_line: 1-based end line (inclusive). None = end of file.
+        tail: Show only the last N lines. Takes precedence over start_line/end_line.
+        line_limit: Maximum number of output lines (default 2000).
+
+    Returns:
+        ReadResult with content (line-numbered), metadata, and any warnings.
+    """
     try:
         p = _check_path(path)
         if not p.exists():
-            return FileResult(ok=False, path=str(p), message="file not found")
-        if p.stat().st_size > max_bytes:
-            return FileResult(
+            return ReadResult(ok=False, path=str(p), message="file not found")
+
+        file_size = p.stat().st_size
+        if file_size > max_bytes:
+            return ReadResult(
                 ok=False,
                 path=str(p),
-                message=f"file too large (>{max_bytes // 1024}KB)",
+                file_size=file_size,
+                message=f"file too large ({fmt_size(file_size)}, max {fmt_size(max_bytes)})",
             )
+
+        # Binary detection
+        if _is_binary(p):
+            return ReadResult(
+                ok=False,
+                path=_safe_path(str(p)),
+                file_size=file_size,
+                is_binary=True,
+                message="binary file detected — use read_image for images or a hex tool for raw bytes",
+            )
+
         content = p.read_text(errors="replace")
-        return FileResult(ok=True, path=_safe_path(str(p)), content=content)
+        lines = content.splitlines()
+        total_lines = len(lines)
+        warning = ""
+
+        # Conflict: tail takes precedence over start_line/end_line
+        if tail is not None and (start_line is not None or end_line is not None):
+            warning = "tail takes precedence — start_line/end_line were ignored"
+
+        # Apply slicing
+        if tail is not None:
+            start_idx = max(0, total_lines - tail)
+            lines_to_show = lines[start_idx:]
+        else:
+            start_idx = max(0, (start_line or 1) - 1)
+            end_idx = min(total_lines, end_line) if end_line else total_lines
+            if start_idx >= end_idx:
+                start_idx = min(start_idx, total_lines)
+                end_idx = start_idx
+            lines_to_show = lines[start_idx:end_idx]
+
+        # Apply output line limit
+        truncated = False
+        if len(lines_to_show) > line_limit:
+            lines_to_show = lines_to_show[:line_limit]
+            truncated = True
+
+        # Build numbered output
+        numbered = "\n".join(
+            f"{i + start_idx + 1:4d}  {line_text}"
+            for i, line_text in enumerate(lines_to_show)
+        )
+        if truncated:
+            numbered += "\n...[TRUNCATED]..."
+
+        # Header with metadata
+        show_range = f"{start_idx + 1}-{start_idx + len(lines_to_show)}"
+        header = f"[file: {_safe_path(str(p))}  lines {show_range} of {total_lines}  size: {fmt_size(file_size)}]"
+        result_content = f"{header}\n{numbered}"
+
+        return ReadResult(
+            ok=True,
+            path=_safe_path(str(p)),
+            content=result_content,
+            total_lines=total_lines,
+            file_size=file_size,
+            warning=warning,
+        )
     except Exception as e:
-        return FileResult(ok=False, path=_safe_path(path), message=str(e))
+        return ReadResult(ok=False, path=_safe_path(path), message=str(e))
 
 
 def write_file(path: str, content: str, backup: bool = True) -> FileResult:
@@ -193,7 +292,7 @@ def list_dir(path: str, max_entries: int = 200) -> FileResult:
             if entry.is_file():
                 try:
                     sz = entry.stat().st_size
-                    size = f" ({_fmt_size(sz)})"
+                    size = f" ({fmt_size(sz)})"
                 except Exception:
                     pass
             entries.append(f"[{tag}] {entry.name}{size}")
@@ -353,12 +452,16 @@ def _make_diff(old: str, new: str, fname: str) -> str:
     return "".join(diff)
 
 
-def _fmt_size(n: int) -> str:
+def fmt_size(n: int) -> str:
     if n < 1024:
         return f"{n}B"
     if n < 1024**2:
         return f"{n / 1024:.1f}KB"
     return f"{n / 1024**2:.1f}MB"
+
+
+# Backward-compatible alias
+_fmt_size = fmt_size
 
 
 def run_glob(

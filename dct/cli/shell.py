@@ -42,7 +42,7 @@ from dct.core.client import (
 )
 from dct.agent.session import Session, write_trace_entry
 from dct.tools.executor import dispatch
-from dct.tools.files import read_file, write_file
+from dct.tools.files import read_file, write_file, fmt_size
 from dct.tools.web import fetch_url, search_ddg
 from dct.cli.display import (
     show_servers,
@@ -2061,14 +2061,20 @@ class Shell:
                 if not r.ok:
                     err(r.message)
                     continue
-                section(f"file: {r.path}")
+                # Print header with metadata
+                total = getattr(r, "total_lines", 0)
+                size = getattr(r, "file_size", 0)
+                header = f"file: {r.path}"
+                if total:
+                    header += f"  ({total} lines"
+                    if size:
+                        header += f", {fmt_size(size)}"
+                    header += ")"
+                section(header)
+                # Content already has line numbers from read_file()
                 lines = r.content.splitlines()
-                for i, line in enumerate(lines[:200], 1):
-                    con.print(
-                        f"  [{C['dim']}]{i:4d}[/{C['dim']}]  [{C['fg']}]{line}[/{C['fg']}]"
-                    )
-                if len(lines) > 200:
-                    info(f"… {len(lines) - 200} more lines")
+                for line in lines:
+                    con.print(f"  [{C['fg']}]{line}[/{C['fg']}]")
 
             # ── direct write ─────────────────────────────────────────────
             elif lo.startswith("/write "):
