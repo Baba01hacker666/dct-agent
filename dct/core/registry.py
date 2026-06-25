@@ -146,6 +146,32 @@ class ServerRegistry:
                 logger.exception("Failed to load servers from %s", self._path)
                 self.servers = []
 
+    def reload(self):
+        """Re-read servers from disk, merging with in-memory state.
+
+        Servers that exist on disk but not in memory are added.
+        Servers already in memory keep their current state.
+        This prevents a long-running process from clobbering servers
+        added by other CLI invocations.
+        """
+        if not os.path.exists(self._path):
+            return
+        try:
+            with open(self._path) as f:
+                data = json.load(f)
+        except Exception:
+            logger.exception("Failed to reload servers from %s", self._path)
+            return
+        disk_servers = {
+            (s.get("host"), s.get("port"), s.get("provider", "ollama")): s
+            for s in data.get("servers", [])
+        }
+        known = {(s.host, s.port, s.provider) for s in self.servers}
+        with self._lock:
+            for key, sdata in disk_servers.items():
+                if key not in known:
+                    self.servers.append(Server.from_dict(sdata))
+
     def save(self):
         os.makedirs(os.path.dirname(self._path), exist_ok=True)
         try:

@@ -326,7 +326,8 @@ class Shell:
 
         while not self._probe_stop.wait(interval):
             try:
-                probe_all(self.registry)  # silent background refresh
+                self.registry.reload()  # pick up servers added by other processes
+                probe_all(self.registry)
             except Exception:
                 pass
 
