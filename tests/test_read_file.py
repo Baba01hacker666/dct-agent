@@ -17,11 +17,10 @@ from dct.tools.files import read_file, ReadResult, fmt_size, _is_binary
 def _make_file(tmp_path, name, content, binary=False):
     """Create a file in tmp_path and return its path string."""
     p = tmp_path / name
-    mode = "wb" if binary else "w"
     if binary:
         p.write_bytes(content)
     else:
-        p.write_text(content)
+        p.write_text(content, encoding="utf-8")
     return str(p)
 
 
