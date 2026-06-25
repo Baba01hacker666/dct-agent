@@ -132,7 +132,7 @@ def read_file(
                 message="binary file detected — use read_image for images or a hex tool for raw bytes",
             )
 
-        content = p.read_text(errors="replace")
+        content = p.read_text(encoding="utf-8", errors="replace")
         lines = content.splitlines()
         total_lines = len(lines)
         warning = ""
@@ -213,11 +213,11 @@ def write_file(path: str, content: str, backup: bool = True) -> FileResult:
         was_new = not p.exists()
         if not was_new:
             if content_bytes <= DIFF_MAX_BYTES:
-                old_content = p.read_text(errors="replace")
+                old_content = p.read_text(encoding="utf-8", errors="replace")
             if backup:
                 shutil.copy2(p, str(p) + ".dct.bak")
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(content)
+        p.write_text(content, encoding="utf-8")
 
         if content_bytes > DIFF_MAX_BYTES:
             diff = f"(file too large for diff: {content_bytes / 1024:.1f} KB)"
@@ -239,7 +239,7 @@ def patch_file(path: str, old: str, new: str) -> FileResult:
         p = _check_path(path)
         if not p.exists():
             return FileResult(ok=False, path=str(p), message="file not found")
-        content = p.read_text(errors="replace")
+        content = p.read_text(encoding="utf-8", errors="replace")
         if old not in content:
             return FileResult(
                 ok=False, path=str(p), message="patch target not found in file"
@@ -260,7 +260,7 @@ def patch_file(path: str, old: str, new: str) -> FileResult:
                 )
 
         shutil.copy2(p, str(p) + ".dct.bak")
-        p.write_text(new_content)
+        p.write_text(new_content, encoding="utf-8")
 
         new_bytes = len(new_content.encode("utf-8", errors="replace"))
         if new_bytes > DIFF_MAX_BYTES:
