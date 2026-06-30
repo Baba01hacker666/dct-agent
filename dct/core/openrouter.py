@@ -12,15 +12,18 @@ from dct.core import http
 if TYPE_CHECKING:
     from dct.core.registry import Server
 
+
 CHAT_TIMEOUT = 180
 DEFAULT_TIMEOUT = 6
+OPENROUTER_REFERER = "https://github.com/doraemon-cyber-team/dct"
+OPENROUTER_TITLE = "DCT Agent"
 
 
 def _get_headers(srv: "Server") -> dict:
     headers = {"Authorization": f"Bearer {srv.api_key}"} if srv.api_key else {}
     if srv.provider == "openrouter":
-        headers["HTTP-Referer"] = "https://github.com/doraemon-cyber-team/dct"
-        headers["X-Title"] = "DCT Agent"
+        headers["HTTP-Referer"] = OPENROUTER_REFERER
+        headers["X-Title"] = OPENROUTER_TITLE
     return headers
 
 
