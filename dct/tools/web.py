@@ -62,26 +62,27 @@ def fetch_url(url: str, max_chars: int = 40_000) -> WebResult:
 
 def _get_validated_response(url: str) -> requests.Response:
     headers = {"User-Agent": UA}
-    for _ in range(MAX_REDIRECTS + 1):
-        r = requests.get(
-            url,
-            timeout=FETCH_TIMEOUT,
-            headers=headers,
-            allow_redirects=False,
-        )
-        if not r.is_redirect:
-            return r
+    with requests.Session() as session:
+        for _ in range(MAX_REDIRECTS + 1):
+            r = session.get(
+                url,
+                timeout=FETCH_TIMEOUT,
+                headers=headers,
+                allow_redirects=False,
+            )
+            if not r.is_redirect:
+                return r
 
-        location = r.headers.get("location")
-        if not location:
-            return r
+            location = r.headers.get("location")
+            if not location:
+                return r
 
-        url = urllib.parse.urljoin(r.url, location)
-        err = validate_url(url)
-        if err:
-            raise RequestException(err)
+            url = urllib.parse.urljoin(r.url, location)
+            err = validate_url(url)
+            if err:
+                raise RequestException(err)
 
-    raise RequestException("Too many redirects")
+        raise RequestException("Too many redirects")
 
 
 def search_ddg(query: str, max_results: int = 8) -> list[dict]:
