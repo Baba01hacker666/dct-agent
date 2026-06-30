@@ -16,6 +16,14 @@ CHAT_TIMEOUT = 180
 DEFAULT_TIMEOUT = 6
 
 
+def _get_headers(srv: "Server") -> dict:
+    headers = {"Authorization": f"Bearer {srv.api_key}"} if srv.api_key else {}
+    if srv.provider == "openrouter":
+        headers["HTTP-Referer"] = "https://github.com/doraemon-cyber-team/dct"
+        headers["X-Title"] = "DCT Agent"
+    return headers
+
+
 def _extract_stream_text(delta: dict) -> str:
     """
     Normalize streaming delta content from providers that may return:
@@ -61,18 +69,19 @@ def _post_stream(
 
 # ── Chat ─────────────────────────────────────────────────────────────────────
 def chat_stream(
-    srv: "Server", model: str, messages: list[dict], tools: list[dict] | None = None
+    srv: "Server",
+    model: str,
+    messages: list[dict],
+    tools: list[dict] | None = None,
 ) -> Iterator[str | dict]:
     """
     Yield text chunks from OpenAI-compatible /chat/completions (streaming).
     Raises on HTTP error.
     """
     url = f"{srv.base_url()}/chat/completions"
-    headers = {"Authorization": f"Bearer {srv.api_key}"}
-    if srv.provider == "openrouter":
-        headers["HTTP-Referer"] = "https://github.com/doraemon-cyber-team/dct"
-        headers["X-Title"] = "DCT Agent"
+    headers = _get_headers(srv)
     from dct.core.config import Config
+
     cfg = Config()
     payload = {
         "model": model,
@@ -99,12 +108,16 @@ def chat_stream(
                             "id": tc.get("id"),
                             "function": {
                                 "name": tc.get("function", {}).get("name", ""),
-                                "arguments": tc.get("function", {}).get("arguments", "")
-                            }
+                                "arguments": tc.get("function", {}).get(
+                                    "arguments", ""
+                                ),
+                            },
                         }
                     else:
                         if tc.get("function", {}).get("arguments"):
-                            tool_calls_buffer[idx]["function"]["arguments"] += tc["function"]["arguments"]
+                            tool_calls_buffer[idx]["function"][
+                                "arguments"
+                            ] += tc["function"]["arguments"]
 
             content = _extract_stream_text(delta)
             if content:
@@ -114,13 +127,15 @@ def chat_stream(
         yield {"tool_calls": list(tool_calls_buffer.values())}
 
 
-def chat_once(srv: "Server", model: str, messages: list[dict], tools: list[dict] | None = None) -> str | dict:
+def chat_once(
+    srv: "Server",
+    model: str,
+    messages: list[dict],
+    tools: list[dict] | None = None,
+) -> str | dict:
     """Non-streaming chat — returns full reply as string."""
     url = f"{srv.base_url()}/chat/completions"
-    headers = {"Authorization": f"Bearer {srv.api_key}"}
-    if srv.provider == "openrouter":
-        headers["HTTP-Referer"] = "https://github.com/doraemon-cyber-team/dct"
-        headers["X-Title"] = "DCT Agent"
+    headers = _get_headers(srv)
     payload = {"model": model, "messages": messages, "stream": False}
     if tools:
         payload["tools"] = tools
@@ -133,7 +148,10 @@ def chat_once(srv: "Server", model: str, messages: list[dict], tools: list[dict]
     if "choices" in data and len(data["choices"]) > 0:
         msg = data["choices"][0].get("message", {})
         if "tool_calls" in msg and msg["tool_calls"]:
-            return {"tool_calls": msg["tool_calls"], "content": msg.get("content", "")}
+            return {
+                "tool_calls": msg["tool_calls"],
+                "content": msg.get("content", ""),
+            }
         return msg.get("content", "")
     return ""
 
@@ -141,7 +159,7 @@ def chat_once(srv: "Server", model: str, messages: list[dict], tools: list[dict]
 # ── Models ───────────────────────────────────────────────────────────────────
 def list_models(srv: "Server") -> list[dict]:
     url = f"{srv.base_url()}/models"
-    headers = {"Authorization": f"Bearer {srv.api_key}"} if srv.api_key else {}
+    headers = _get_headers(srv)
     r = http.client.get(url, headers=headers, timeout=DEFAULT_TIMEOUT)
     r.raise_for_status()
     # OpenRouter returns { "data": [ { "id": "model/name", ... } ] }
@@ -180,12 +198,11 @@ def pull_stream(srv: "Server", model: str) -> Iterator[dict]:
     yield {"status": "success"}
 
 
-def get_embeddings(srv: "Server", text: str, model: str = "text-embedding-3-small") -> list[float]:
+def get_embeddings(
+    srv: "Server", text: str, model: str = "text-embedding-3-small"
+) -> list[float]:
     url = f"{srv.base_url()}/embeddings"
-    headers = {"Authorization": f"Bearer {srv.api_key}"}
-    if srv.provider == "openrouter":
-        headers["HTTP-Referer"] = "https://github.com/doraemon-cyber-team/dct"
-        headers["X-Title"] = "DCT Agent"
+    headers = _get_headers(srv)
     payload = {"model": model, "input": text}
     r = http.client.post(url, headers=headers, json=payload, timeout=15)
     r.raise_for_status()

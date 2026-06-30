@@ -1722,7 +1722,7 @@ class CodeAgent:
 
             ui_filter = FunctionCallsFilter(self.on_text)
 
-            response_text = ""
+            response_chunks = []
             native_tool_calls = []
             status = con.status(
                 f"[{C['dim']}]{get_funny_thinking_msg()}[/{C['dim']}]",
@@ -1744,17 +1744,18 @@ class CodeAgent:
                                 status.stop()
                                 first_chunk = False
                             ui_filter.push(chunk["content"])
-                            response_text += chunk["content"]
+                            response_chunks.append(chunk["content"])
                         continue
                     if first_chunk:
                         status.stop()
                         first_chunk = False
                     ui_filter.push(chunk)
-                    response_text += chunk
+                    response_chunks.append(chunk)
             finally:
                 status.stop()
                 ui_filter.flush()
 
+            response_text = "".join(response_chunks)
             final_text = response_text
             assistant_msg = {"role": "assistant", "content": response_text}
             if native_tool_calls:
