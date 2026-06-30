@@ -1,0 +1,1 @@
+- Initialized project memory. Store repository-specific knowledge here.
