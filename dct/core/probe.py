@@ -33,6 +33,8 @@ def probe_server(srv: "Server") -> dict:
     Returns: {"ok": bool, "endpoint": str, "data": dict}
     """
     base = srv.base_url()
+
+    session = requests.Session()
     headers = {}
     if srv.api_key:
         headers["Authorization"] = f"Bearer {srv.api_key}"
@@ -43,7 +45,9 @@ def probe_server(srv: "Server") -> dict:
     if srv.provider in ("openrouter", "openai"):
         try:
             t0 = time.time()
-            r = requests.get(f"{base}/api/v1/models", timeout=PROBE_TIMEOUT, **req_kwargs)
+            r = session.get(
+                f"{base}/api/v1/models", timeout=PROBE_TIMEOUT, **req_kwargs
+            )
             ms = int((time.time() - t0) * 1000)
             if r.status_code == 200:
                 data = r.json()
@@ -74,7 +78,9 @@ def probe_server(srv: "Server") -> dict:
             tried_tags = True
         try:
             t0 = time.time()
-            r = requests.get(f"{base}{path}", timeout=PROBE_TIMEOUT, **req_kwargs)
+            r = session.get(
+                f"{base}{path}", timeout=PROBE_TIMEOUT, **req_kwargs
+            )
             ms = int((time.time() - t0) * 1000)
             if r.status_code == 200:
                 try:
@@ -90,21 +96,35 @@ def probe_server(srv: "Server") -> dict:
                 else:
                     if not tried_tags:
                         try:
-                            tr = requests.get(f"{base}/api/tags", timeout=PROBE_TIMEOUT, **req_kwargs)
+                            tr = session.get(
+                                f"{base}/api/tags",
+                                timeout=PROBE_TIMEOUT,
+                                **req_kwargs,
+                            )
                             if tr.ok:
                                 srv.models = [
                                     m["name"]
                                     for m in tr.json().get("models", [])
                                 ]
                         except Exception:
-                            logger.debug("Failed to fetch tags from %s", base, exc_info=True)
+                            logger.debug(
+                                "Failed to fetch tags from %s",
+                                base,
+                                exc_info=True,
+                            )
 
                 try:
-                    vr = requests.get(f"{base}/api/version", timeout=PROBE_TIMEOUT, **req_kwargs)
+                    vr = session.get(
+                        f"{base}/api/version",
+                        timeout=PROBE_TIMEOUT,
+                        **req_kwargs,
+                    )
                     if vr.ok:
                         srv.version = vr.json().get("version", "")
                 except Exception:
-                    logger.debug("Failed to fetch version from %s", base, exc_info=True)
+                    logger.debug(
+                        "Failed to fetch version from %s", base, exc_info=True
+                    )
 
                 return {
                     "ok": True,
@@ -152,6 +172,8 @@ def probe_endpoints_detail(srv: "Server") -> list[dict]:
     Used for the detailed /probe <alias> display.
     """
     base = srv.base_url()
+
+    session = requests.Session()
     headers = {}
     if srv.api_key:
         headers["Authorization"] = f"Bearer {srv.api_key}"
@@ -162,7 +184,9 @@ def probe_endpoints_detail(srv: "Server") -> list[dict]:
     for path in PROBE_ORDER:
         try:
             t0 = time.time()
-            r = requests.get(f"{base}{path}", timeout=PROBE_TIMEOUT, **req_kwargs)
+            r = session.get(
+                f"{base}{path}", timeout=PROBE_TIMEOUT, **req_kwargs
+            )
             ms = int((time.time() - t0) * 1000)
             try:
                 snippet = str(r.json())[:72] + "…"
