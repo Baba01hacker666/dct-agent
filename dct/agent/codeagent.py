@@ -1586,9 +1586,10 @@ class CodeAgent:
     def _summarize_dropped(self, dropped: list[dict]) -> str:
         from dct.core.client import chat_once
 
-        text = ""
+        text_parts = []
         for m in dropped:
-            text += f"{m.get('role', 'unknown').upper()}:\n{m.get('content', '')}\n\n"
+            text_parts.append(f"{m.get('role', 'unknown').upper()}:\n{m.get('content', '')}\n\n")
+        text = "".join(text_parts)
 
         if len(text) > 60000:
             text = text[-60000:]
@@ -1699,21 +1700,35 @@ class CodeAgent:
                     self.end_tag = "</function_calls>"
 
                 def push(self, text: str):
-                    for char in text:
-                        self.buffer += char
+                    self.buffer += text
+                    while self.buffer:
                         if not self.in_block:
-                            if self.buffer == self.start_tag:
+                            idx = self.buffer.find(self.start_tag)
+                            if idx == -1:
+                                for i in range(1, len(self.start_tag)):
+                                    if self.buffer.endswith(self.start_tag[:i]) and self.start_tag.startswith(self.buffer[-i:]):
+                                        safe_len = len(self.buffer) - i
+                                        if safe_len > 0:
+                                            self.callback(self.buffer[:safe_len])
+                                            self.buffer = self.buffer[safe_len:]
+                                        return
+                                self.callback(self.buffer)
+                                self.buffer = ""
+                            else:
+                                self.callback(self.buffer[:idx])
+                                self.buffer = self.buffer[idx + len(self.start_tag):]
                                 self.in_block = True
-                                self.buffer = ""
-                            elif not self.start_tag.startswith(self.buffer):
-                                self.callback(self.buffer[0])
-                                self.buffer = self.buffer[1:]
                         else:
-                            if self.buffer == self.end_tag:
-                                self.in_block = False
+                            idx = self.buffer.find(self.end_tag)
+                            if idx == -1:
+                                for i in range(1, len(self.end_tag)):
+                                    if self.buffer.endswith(self.end_tag[:i]) and self.end_tag.startswith(self.buffer[-i:]):
+                                        self.buffer = self.buffer[-i:]
+                                        return
                                 self.buffer = ""
-                            elif not self.end_tag.startswith(self.buffer):
-                                self.buffer = self.buffer[1:]
+                            else:
+                                self.buffer = self.buffer[idx + len(self.end_tag):]
+                                self.in_block = False
 
                 def flush(self):
                     if self.buffer and not self.in_block:
@@ -1722,7 +1737,7 @@ class CodeAgent:
 
             ui_filter = FunctionCallsFilter(self.on_text)
 
-            response_chunks = []
+            response_text_parts = []
             native_tool_calls = []
             status = con.status(
                 f"[{C['dim']}]{get_funny_thinking_msg()}[/{C['dim']}]",
@@ -1744,18 +1759,18 @@ class CodeAgent:
                                 status.stop()
                                 first_chunk = False
                             ui_filter.push(chunk["content"])
-                            response_chunks.append(chunk["content"])
+                            response_text_parts.append(chunk["content"])
                         continue
                     if first_chunk:
                         status.stop()
                         first_chunk = False
                     ui_filter.push(chunk)
-                    response_chunks.append(chunk)
+                    response_text_parts.append(chunk)
             finally:
                 status.stop()
                 ui_filter.flush()
 
-            response_text = "".join(response_chunks)
+            response_text = "".join(response_text_parts)
             final_text = response_text
             assistant_msg = {"role": "assistant", "content": response_text}
             if native_tool_calls:

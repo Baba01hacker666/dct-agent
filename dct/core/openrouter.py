@@ -12,19 +12,8 @@ from dct.core import http
 if TYPE_CHECKING:
     from dct.core.registry import Server
 
-
 CHAT_TIMEOUT = 180
 DEFAULT_TIMEOUT = 6
-OPENROUTER_REFERER = "https://github.com/doraemon-cyber-team/dct"
-OPENROUTER_TITLE = "DCT Agent"
-
-
-def _get_headers(srv: "Server") -> dict:
-    headers = {"Authorization": f"Bearer {srv.api_key}"} if srv.api_key else {}
-    if srv.provider == "openrouter":
-        headers["HTTP-Referer"] = OPENROUTER_REFERER
-        headers["X-Title"] = OPENROUTER_TITLE
-    return headers
 
 
 def _extract_stream_text(delta: dict) -> str:
@@ -53,13 +42,13 @@ def _post_stream(
     url: str, headers: dict, payload: dict, timeout: int
 ) -> Iterator[dict]:
     """POST with stream=True, yield parsed JSON chunks (SSE format)."""
-    with http.client.post(
-        url, headers=headers, json=payload, stream=True, timeout=timeout
+    with http.client.stream(
+        "POST", url, headers=headers, json=payload, timeout=timeout
     ) as r:
         r.raise_for_status()
         for line in r.iter_lines():
             if line:
-                line_str = line.decode("utf-8")
+                line_str = line
                 if line_str.startswith("data: "):
                     data_str = line_str[6:]
                     if data_str == "[DONE]":
@@ -70,21 +59,86 @@ def _post_stream(
                         continue
 
 
+def _inject_prompt_caching(messages: list[dict], model: str) -> list[dict]:
+    """Inject Anthropic's cache_control block into Claude requests."""
+    import copy
+    
+    if "claude" not in model.lower():
+        return messages
+        
+    msgs = copy.deepcopy(messages)
+    breakpoints_added = 0
+    
+    # 1. System prompt (usually at index 0)
+    for m in msgs:
+        if m["role"] == "system" and breakpoints_added < 4:
+            if isinstance(m["content"], str):
+                m["content"] = [
+                    {
+                        "type": "text",
+                        "text": m["content"],
+                        "cache_control": {"type": "ephemeral"}
+                    }
+                ]
+                breakpoints_added += 1
+            elif isinstance(m["content"], list) and m["content"]:
+                for block in reversed(m["content"]):
+                    if block.get("type") == "text":
+                        block["cache_control"] = {"type": "ephemeral"}
+                        breakpoints_added += 1
+                        break
+            break
+
+    # 2. Target recent user messages
+    user_indices = [i for i, m in enumerate(msgs) if m["role"] == "user"]
+    targets = []
+    if user_indices:
+        targets.append(user_indices[-1])
+        if len(user_indices) > 3:
+            targets.append(user_indices[-3])
+        elif len(user_indices) > 1:
+            targets.append(user_indices[-2])
+            
+    for idx in targets:
+        if breakpoints_added >= 4:
+            break
+        m = msgs[idx]
+        if isinstance(m["content"], str):
+            m["content"] = [
+                {
+                    "type": "text",
+                    "text": m["content"],
+                    "cache_control": {"type": "ephemeral"}
+                }
+            ]
+            breakpoints_added += 1
+        elif isinstance(m["content"], list) and m["content"]:
+            for block in reversed(m["content"]):
+                if block.get("type") == "text":
+                    block["cache_control"] = {"type": "ephemeral"}
+                    breakpoints_added += 1
+                    break
+                    
+    return msgs
+
+
 # ── Chat ─────────────────────────────────────────────────────────────────────
 def chat_stream(
-    srv: "Server",
-    model: str,
-    messages: list[dict],
-    tools: list[dict] | None = None,
+    srv: "Server", model: str, messages: list[dict], tools: list[dict] | None = None
 ) -> Iterator[str | dict]:
     """
     Yield text chunks from OpenAI-compatible /chat/completions (streaming).
     Raises on HTTP error.
     """
     url = f"{srv.base_url()}/chat/completions"
-    headers = _get_headers(srv)
+    headers = {"Authorization": f"Bearer {srv.api_key}"}
+    if srv.provider == "openrouter":
+        headers["HTTP-Referer"] = "https://github.com/doraemon-cyber-team/dct"
+        headers["X-Title"] = "DCT Agent"
+        
+    messages = _inject_prompt_caching(messages, model)
+    
     from dct.core.config import Config
-
     cfg = Config()
     payload = {
         "model": model,
@@ -111,16 +165,12 @@ def chat_stream(
                             "id": tc.get("id"),
                             "function": {
                                 "name": tc.get("function", {}).get("name", ""),
-                                "arguments": tc.get("function", {}).get(
-                                    "arguments", ""
-                                ),
-                            },
+                                "arguments": tc.get("function", {}).get("arguments", "")
+                            }
                         }
                     else:
                         if tc.get("function", {}).get("arguments"):
-                            tool_calls_buffer[idx]["function"][
-                                "arguments"
-                            ] += tc["function"]["arguments"]
+                            tool_calls_buffer[idx]["function"]["arguments"] += tc["function"]["arguments"]
 
             content = _extract_stream_text(delta)
             if content:
@@ -130,15 +180,16 @@ def chat_stream(
         yield {"tool_calls": list(tool_calls_buffer.values())}
 
 
-def chat_once(
-    srv: "Server",
-    model: str,
-    messages: list[dict],
-    tools: list[dict] | None = None,
-) -> str | dict:
+def chat_once(srv: "Server", model: str, messages: list[dict], tools: list[dict] | None = None) -> str | dict:
     """Non-streaming chat — returns full reply as string."""
     url = f"{srv.base_url()}/chat/completions"
-    headers = _get_headers(srv)
+    headers = {"Authorization": f"Bearer {srv.api_key}"}
+    if srv.provider == "openrouter":
+        headers["HTTP-Referer"] = "https://github.com/doraemon-cyber-team/dct"
+        headers["X-Title"] = "DCT Agent"
+        
+    messages = _inject_prompt_caching(messages, model)
+    
     payload = {"model": model, "messages": messages, "stream": False}
     if tools:
         payload["tools"] = tools
@@ -151,10 +202,7 @@ def chat_once(
     if "choices" in data and len(data["choices"]) > 0:
         msg = data["choices"][0].get("message", {})
         if "tool_calls" in msg and msg["tool_calls"]:
-            return {
-                "tool_calls": msg["tool_calls"],
-                "content": msg.get("content", ""),
-            }
+            return {"tool_calls": msg["tool_calls"], "content": msg.get("content", "")}
         return msg.get("content", "")
     return ""
 
@@ -162,7 +210,7 @@ def chat_once(
 # ── Models ───────────────────────────────────────────────────────────────────
 def list_models(srv: "Server") -> list[dict]:
     url = f"{srv.base_url()}/models"
-    headers = _get_headers(srv)
+    headers = {"Authorization": f"Bearer {srv.api_key}"} if srv.api_key else {}
     r = http.client.get(url, headers=headers, timeout=DEFAULT_TIMEOUT)
     r.raise_for_status()
     # OpenRouter returns { "data": [ { "id": "model/name", ... } ] }
@@ -201,11 +249,12 @@ def pull_stream(srv: "Server", model: str) -> Iterator[dict]:
     yield {"status": "success"}
 
 
-def get_embeddings(
-    srv: "Server", text: str, model: str = "text-embedding-3-small"
-) -> list[float]:
+def get_embeddings(srv: "Server", text: str, model: str = "text-embedding-3-small") -> list[float]:
     url = f"{srv.base_url()}/embeddings"
-    headers = _get_headers(srv)
+    headers = {"Authorization": f"Bearer {srv.api_key}"}
+    if srv.provider == "openrouter":
+        headers["HTTP-Referer"] = "https://github.com/doraemon-cyber-team/dct"
+        headers["X-Title"] = "DCT Agent"
     payload = {"model": model, "input": text}
     r = http.client.post(url, headers=headers, json=payload, timeout=15)
     r.raise_for_status()

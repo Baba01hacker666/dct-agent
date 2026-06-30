@@ -2206,12 +2206,14 @@ class Shell:
             status.start()
             first_chunk = True
             try:
+                chunks = []
                 for chunk in chat_stream(self.active, self.model, messages):
                     if first_chunk:
                         status.stop()
                         first_chunk = False
                     con.print(f"[{C['fg']}]{chunk}[/{C['fg']}]", end="")
-                    full += chunk
+                    chunks.append(chunk)
+                full += "".join(chunks)
                 break  # Success!
             except KeyboardInterrupt:
                 status.stop()
@@ -2219,9 +2221,9 @@ class Shell:
                 break
             except Exception as e:
                 status.stop()
-                import requests
+                import httpx
 
-                if isinstance(e, requests.exceptions.RequestException):
+                if isinstance(e, httpx.RequestError):
                     warn(
                         f"\nConnection to {self.active.alias} lost mid-stream."
                     )
@@ -2569,12 +2571,14 @@ class Shell:
             status.start()
             first_chunk = True
             try:
+                chunks = []
                 for chunk in chat_stream(self.active, self.model, messages):
                     if first_chunk:
                         status.stop()
                         first_chunk = False
                     con.print(f"[{C['fg']}]{chunk}[/{C['fg']}]", end="")
-                    full += chunk
+                    chunks.append(chunk)
+                full += "".join(chunks)
                 break  # Success!
             except KeyboardInterrupt:
                 status.stop()
@@ -2582,9 +2586,9 @@ class Shell:
                 break
             except Exception as e:
                 status.stop()
-                import requests
+                import httpx
 
-                if isinstance(e, requests.exceptions.RequestException):
+                if isinstance(e, httpx.RequestError):
                     warn(
                         f"\nConnection to {self.active.alias} lost mid-stream."
                     )
@@ -2637,9 +2641,11 @@ class Shell:
             con.print(f"  [{C['dim']}]{'─' * 66}[/{C['dim']}]")
             con.print("  ", end="")
             try:
+                chunks = []
                 for chunk in chat_stream(s, m, msgs):
                     con.print(f"[{C['fg']}]{chunk}[/{C['fg']}]", end="")
-                    full += chunk
+                    chunks.append(chunk)
+                full += "".join(chunks)
                 con.print()
             except Exception as e:
                 con.print()

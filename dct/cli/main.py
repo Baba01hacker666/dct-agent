@@ -21,8 +21,25 @@ from dct.cli.display import (
 from dct.cli.shell import Shell
 
 
+class RichArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        from dct.core.theme import err
+        err(f"argument error: {message}")
+        self.print_help(sys.stderr)
+        sys.exit(2)
+
+def port_type(v: str) -> int:
+    try:
+        p = int(v)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"invalid int value: '{v}'")
+    if not 1 <= p <= 65535:
+        raise argparse.ArgumentTypeError(f"port must be 1-65535, got {p}")
+    return p
+
+
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(
+    p = RichArgumentParser(
         prog="dct",
         description="Doraemon Cyber Team — multi-server Ollama agent",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -55,7 +72,7 @@ Inside the shell type /help for all commands.
         "-p",
         "--port",
         default=11434,
-        type=int,
+        type=port_type,
         help="initial server port (default: 11434)",
     )
     p.add_argument("-m", "--model", default="", help="preferred model")
@@ -79,7 +96,7 @@ Inside the shell type /help for all commands.
     # add
     pa = sub.add_parser("add", help="register a server")
     pa.add_argument("host")
-    pa.add_argument("port", type=int)
+    pa.add_argument("port", type=port_type)
     pa.add_argument("alias", nargs="?", default="")
     pa.add_argument("note", nargs="?", default="")
     pa.add_argument("--api-key", default="", help="API key for auth (Bearer)")
@@ -148,7 +165,8 @@ def main():
     args = parser.parse_args()
     registry = ServerRegistry()
 
-    con.print(BANNER)
+    if not args.cmd and not args.version:
+        con.print(BANNER)
 
     if args.version:
         from dct import __version__
@@ -290,6 +308,7 @@ def main():
                 f"  [{C['dim']}]probing {len(registry.servers)} server(s)…[/{C['dim']}]"
             )
             results = probe_all(registry)
+            registry.save()
             show_probe_summary(results, registry)
         return
 

@@ -41,9 +41,8 @@ def _post_stream(
     """POST with stream=True, yield parsed JSON lines."""
     kwargs = _request_kwargs(srv) if srv else {}
     kwargs["json"] = payload
-    kwargs["stream"] = True
     kwargs["timeout"] = timeout
-    with http.client.post(url, **kwargs) as r:
+    with http.client.stream("POST", url, **kwargs) as r:
         r.raise_for_status()
         for line in r.iter_lines():
             if line:
@@ -164,13 +163,18 @@ def show_model(srv: "Server", model: str) -> dict:
 
 
 def delete_model(srv: "Server", model: str) -> bool:
-    r = http.client.delete(
-        f"{srv.base_url()}/api/delete",
-        **_request_kwargs(
-            srv, {"json": {"name": model}, "timeout": DEFAULT_TIMEOUT}
-        ),
-    )
-    return r.ok
+    try:
+        r = http.client.request(
+            "DELETE",
+            f"{srv.base_url()}/api/delete",
+            **_request_kwargs(
+                srv, {"json": {"name": model}, "timeout": DEFAULT_TIMEOUT}
+            ),
+        )
+        return r.is_success
+    except Exception as e:
+        logger.error(f"Failed to delete model {model}: {e}")
+        return False
 
 
 def running_models(srv: "Server") -> list[dict]:

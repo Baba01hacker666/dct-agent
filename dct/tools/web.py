@@ -10,8 +10,8 @@ import re
 import urllib.parse
 from dataclasses import dataclass
 
-import requests
-from requests.exceptions import RequestException
+import httpx
+from httpx import RequestError as RequestException
 
 from dct.tools.url_validator import validate_url
 
@@ -60,29 +60,28 @@ def fetch_url(url: str, max_chars: int = 40_000) -> WebResult:
         return WebResult(ok=False, url=url, message=str(e))
 
 
-def _get_validated_response(url: str) -> requests.Response:
+def _get_validated_response(url: str) -> httpx.Response:
     headers = {"User-Agent": UA}
-    with requests.Session() as session:
-        for _ in range(MAX_REDIRECTS + 1):
-            r = session.get(
-                url,
-                timeout=FETCH_TIMEOUT,
-                headers=headers,
-                allow_redirects=False,
-            )
-            if not r.is_redirect:
-                return r
+    client = httpx.Client(follow_redirects=False)
+    for _ in range(MAX_REDIRECTS + 1):
+        r = client.get(
+            url,
+            timeout=FETCH_TIMEOUT,
+            headers=headers,
+        )
+        if not r.is_redirect:
+            return r
 
-            location = r.headers.get("location")
-            if not location:
-                return r
+        location = r.headers.get("location")
+        if not location:
+            return r
 
-            url = urllib.parse.urljoin(r.url, location)
-            err = validate_url(url)
-            if err:
-                raise RequestException(err)
+        url = urllib.parse.urljoin(r.url, location)
+        err = validate_url(url)
+        if err:
+            raise RequestException(err)
 
-        raise RequestException("Too many redirects")
+    raise RequestException("Too many redirects")
 
 
 def search_ddg(query: str, max_results: int = 8) -> list[dict]:
@@ -93,7 +92,7 @@ def search_ddg(query: str, max_results: int = 8) -> list[dict]:
     results = []
     try:
         params = {"q": query, "kl": "wt-wt", "kp": "-2"}
-        r = requests.get(
+        r = httpx.get(
             "https://html.duckduckgo.com/html/",
             params=params,
             headers={"User-Agent": UA},

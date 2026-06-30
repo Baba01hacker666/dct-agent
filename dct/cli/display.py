@@ -157,7 +157,7 @@ def show_probe_summary(results: dict[str, dict], registry: "ServerRegistry"):
             mod = len(s.models)
             ok(
                 f"{server_tag(s)}  via {ep}{lat}  {mod} model(s)"
-                + (f"  ollama {s.version}" if s.version else "")
+                + (f"  ollama {s.version.strip()}" if s.version else "")
             )
         else:
             err(f"[{C['err']}]{alias}[/{C['err']}]  offline / unreachable")

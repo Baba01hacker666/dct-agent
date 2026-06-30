@@ -120,50 +120,41 @@ def parse_tool_call(text: str) -> Optional[dict]:
     if not tool:
         return None
 
-    return {
+    result = {
         "raw_text": text,
         "tool": tool.strip(),
         "is_fuzzy": is_fuzzy,
-        "code": extract_tag(text, "code", fuzzy),
-        "path": extract_tag(text, "path", fuzzy),
-        "url": extract_tag(text, "url", fuzzy),
-        "query": extract_tag(text, "query", fuzzy),
-        "old": extract_tag(text, "old", fuzzy),
-        "new": extract_tag(text, "new", fuzzy),
-        "question": extract_tag(text, "question", fuzzy),
-        "pattern": extract_tag(text, "pattern", fuzzy),
-        "glob": extract_tag(text, "glob", fuzzy),
-        "output_mode": extract_tag(text, "output_mode", fuzzy),
-        "context": extract_tag(text, "context", fuzzy),
-        "head_limit": extract_tag(text, "head_limit", fuzzy),
-        "start_line": extract_tag(text, "start_line", fuzzy),
-        "end_line": extract_tag(text, "end_line", fuzzy),
-        "tail": extract_tag(text, "tail", fuzzy),
-        "instruction": extract_tag(text, "instruction", fuzzy),
-        "system_prompt": extract_tag(text, "system_prompt", fuzzy),
-        "model": extract_tag(text, "model", fuzzy),
-        "background": extract_tag(text, "background", fuzzy),
-        "id": extract_tag(text, "id", fuzzy),
-        "input": extract_tag(text, "input", fuzzy),
-        "name": extract_tag(text, "name", fuzzy),
-        "description": extract_tag(text, "description", fuzzy),
-        "prompt": extract_tag(text, "prompt", fuzzy),
-        "skill": extract_tag(text, "skill", fuzzy),
-        "members": extract_tag(text, "members", fuzzy),
-        "server": extract_tag(text, "server", fuzzy),
-        "args": extract_tag(text, "args", fuzzy),
-        "text": extract_tag(text, "text", fuzzy),
-        "action": extract_tag(text, "action", fuzzy),
-        "section": extract_tag(text, "section", fuzzy),
-        "old_text": extract_tag(text, "old_text", fuzzy),
-        "new_text": extract_tag(text, "new_text", fuzzy),
-        "selector": extract_tag(text, "selector", fuzzy),
-        "patches": (
-            parse_multi_patch(text)
-            if tool.strip() == "multi_patch_file"
-            else None
-        ),
     }
+
+    # Pre-fill all expected keys with None
+    keys = ["code", "path", "url", "query", "old", "new", "question", "pattern", "glob", "output_mode", 
+            "context", "head_limit", "start_line", "end_line", "tail", "instruction", "system_prompt", 
+            "model", "background", "id", "input", "name", "description", "prompt", "skill", "members", 
+            "server", "args", "text", "action", "section", "old_text", "new_text", "selector"]
+    for k in keys:
+        result[k] = None
+
+    # Single pass for well-formed tags
+    for match in re.finditer(r"<([a-zA-Z0-9_]+)(?:\s+[^>]*)?>(.*?)</\1>", text, re.DOTALL | re.IGNORECASE):
+        tag_name = match.group(1).lower()
+        if tag_name in result:
+            result[tag_name] = match.group(2).strip()
+
+    # Fallback for fuzzy matching
+    if fuzzy:
+        if result["code"] is None:
+            m_md = re.search(r"```[a-zA-Z]*\n(.*?)```", text, re.DOTALL)
+            if m_md:
+                result["code"] = m_md.group(1).strip()
+        
+        for k in keys:
+            if result[k] is None:
+                m_fuz = re.search(rf"<{k}(?:\s+[^>]*)?>(.*?)(?:<\w+>|$)", text, re.DOTALL | re.IGNORECASE)
+                if m_fuz:
+                    result[k] = m_fuz.group(1).strip()
+
+    result["patches"] = parse_multi_patch(text) if tool.strip() == "multi_patch_file" else None
+    return result
 
 
 _extract_tag = extract_tag
