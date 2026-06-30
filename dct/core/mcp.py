@@ -28,9 +28,7 @@ class MCPClient:
         self.req_id = 0
         self.responses: Dict[int, Any] = {}
 
-        self.reader_thread = threading.Thread(
-            target=self._read_stdout, daemon=True
-        )
+        self.reader_thread = threading.Thread(target=self._read_stdout, daemon=True)
         self.reader_thread.start()
 
     def _read_stdout(self):
@@ -160,11 +158,7 @@ class MCPManager:
         for c in content:
             if c.get("type") == "text":
                 text_outputs.append(c.get("text", ""))
-        return (
-            "\n".join(text_outputs)
-            if text_outputs
-            else "[MCP Success - No output]"
-        )
+        return "\n".join(text_outputs) if text_outputs else "[MCP Success - No output]"
 
 
 _global_mcp = None

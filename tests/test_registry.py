@@ -15,7 +15,14 @@ def test_server_dict_serialization():
 
 
 def test_server_tls_auth_serialization():
-    s = Server("secure", "ollama.example.com", 443, api_key="secret123", tls=True, tls_verify=False)
+    s = Server(
+        "secure",
+        "ollama.example.com",
+        443,
+        api_key="secret123",
+        tls=True,
+        tls_verify=False,
+    )
     d = s.to_dict()
     assert d["tls"] is True
     assert d["tls_verify"] is False
@@ -59,6 +66,7 @@ def test_registry_add_openrouter(tmp_path):
 
 def test_list_dir_optimization(tmp_path):
     from dct.tools.files import list_dir
+
     # Create some dummy files
     for i in range(5):
         (tmp_path / f"file_{i}.txt").write_text(f"content {i}")
@@ -93,6 +101,7 @@ def test_code_agent_xml_extraction():
 
     # Stub run_glob inside test
     from unittest.mock import patch, MagicMock
+
     with patch("dct.agent.codeagent.run_glob") as mock_glob:
         mock_glob.return_value = MagicMock(ok=True, content="file1.py")
         result = agent._execute_tool(call)
@@ -145,7 +154,12 @@ def test_shell_default_agent_mode():
 
 def test_background_subagent_execution():
     import time
-    from dct.agent.codeagent import _parse_tool_call, CodeAgent, BACKGROUND_SUBAGENTS, BACKGROUND_SUBAGENTS_LOCK
+    from dct.agent.codeagent import (
+        _parse_tool_call,
+        CodeAgent,
+        BACKGROUND_SUBAGENTS,
+        BACKGROUND_SUBAGENTS_LOCK,
+    )
     from dct.agent.session import Session
     from dct.core.registry import Server
 
@@ -187,7 +201,12 @@ def test_background_subagent_execution():
 
 def test_background_task_execution():
     import time
-    from dct.agent.codeagent import _parse_tool_call, CodeAgent, BACKGROUND_TASKS, BACKGROUND_TASKS_LOCK
+    from dct.agent.codeagent import (
+        _parse_tool_call,
+        CodeAgent,
+        BACKGROUND_TASKS,
+        BACKGROUND_TASKS_LOCK,
+    )
     from dct.agent.session import Session
     from dct.core.registry import Server
 
@@ -248,14 +267,21 @@ def test_shell_goal_mode():
         # We can test that goal mode starts and updates session state
         # Let's mock agent run to return DONE immediately
         from unittest.mock import patch
+
         with patch("dct.cli.shell.chat_stream") as mock_stream:
             mock_stream.return_value = ["<tool>DONE</tool>\nGoal achieved."]
             shell._run_goal_mode("test goal")
 
             assert shell.agent_mode is True
             # Session should contain the user goal and the assistant response
-            assert any(m["role"] == "user" and "test goal" in m["content"] for m in shell.session.messages)
-            assert any(m["role"] == "assistant" and "Goal achieved" in m["content"] for m in shell.session.messages)
+            assert any(
+                m["role"] == "user" and "test goal" in m["content"]
+                for m in shell.session.messages
+            )
+            assert any(
+                m["role"] == "assistant" and "Goal achieved" in m["content"]
+                for m in shell.session.messages
+            )
 
 
 def test_shell_btw_command():
@@ -276,13 +302,16 @@ def test_shell_btw_command():
         shell.session.add("assistant", "Existing response")
 
         from unittest.mock import patch
+
         with patch("dct.cli.shell.chat_stream") as mock_stream:
             mock_stream.return_value = ["BTW reply"]
             shell._btw("side question")
 
             # The session history should NOT have the side question or response!
             assert len(shell.session.messages) == 2
-            assert not any("side question" in m["content"] for m in shell.session.messages)
+            assert not any(
+                "side question" in m["content"] for m in shell.session.messages
+            )
             assert not any("BTW reply" in m["content"] for m in shell.session.messages)
 
 
@@ -371,6 +400,7 @@ def test_append_log_safe_truncates():
 
 def test_config_defaults(tmp_path):
     from dct.core.config import Config
+
     cfg_path = tmp_path / "config.json"
     cfg = Config(str(cfg_path))
     assert cfg.get("agent_enabled") is True
@@ -421,22 +451,31 @@ def test_run_python_auto_install():
     # Mock the internal _run function
     # On first call, return ModuleNotFoundError in stderr and returncode 1
     # On second call, return successful execution
-    with patch("dct.tools.executor._run") as mock_run, \
-            patch("dct.tools.executor.subprocess.run") as mock_sub_run, \
-            patch("dct.tools.executor.os.path.exists") as mock_exists:
-
+    with (
+        patch("dct.tools.executor._run") as mock_run,
+        patch("dct.tools.executor.subprocess.run") as mock_sub_run,
+        patch("dct.tools.executor.os.path.exists") as mock_exists,
+    ):
         called_venv = []
 
         def side_effect_fn(path):
-            if "venv" in str(path) and (str(path).endswith("python") or str(path).endswith("python.exe")):
+            if "venv" in str(path) and (
+                str(path).endswith("python") or str(path).endswith("python.exe")
+            ):
                 called_venv.append(path)
                 return len(called_venv) > 1
             return True
+
         mock_exists.side_effect = side_effect_fn
 
         mock_run.side_effect = [
-            ("", "ModuleNotFoundError: No module named 'fake_module_for_test'", 1, False),
-            ("success_output", "", 0, False)
+            (
+                "",
+                "ModuleNotFoundError: No module named 'fake_module_for_test'",
+                1,
+                False,
+            ),
+            ("success_output", "", 0, False),
         ]
 
         # Mock subprocess.run for the pip install call to succeed
@@ -447,7 +486,10 @@ def test_run_python_auto_install():
         res = run_python("import fake_module_for_test")
 
         assert res.ok
-        assert "Auto-installed missing packages in venv: fake_module_for_test" in res.stdout
+        assert (
+            "Auto-installed missing packages in venv: fake_module_for_test"
+            in res.stdout
+        )
         assert "success_output" in res.stdout
         assert mock_run.call_count == 2
 

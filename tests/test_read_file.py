@@ -4,9 +4,7 @@ import sys
 import os
 import pytest
 
-sys.path.insert(
-    0, os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-)
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from dct.tools.files import read_file, ReadResult, fmt_size, _is_binary  # noqa: E402
 

@@ -19,7 +19,7 @@ _HOME = os.path.expanduser("~")
 def _safe_path(p: str) -> str:
     """Replace home directory with ~ for privacy in error messages."""
     if p.startswith(_HOME):
-        return "~" + p[len(_HOME):]
+        return "~" + p[len(_HOME) :]
     return p
 
 
@@ -32,6 +32,7 @@ def _get_sandbox_root() -> Path | None:
     global _sandbox_root
     if _sandbox_root is None:
         from dct.core.config import Config
+
         cfg = Config()
         root = cfg.get("project_root") or ""
         _sandbox_root = Path(root).resolve() if root else None
@@ -65,6 +66,7 @@ class FileResult:
 @dataclass
 class ReadResult(FileResult):
     """Extended result for read_file with metadata."""
+
     total_lines: int = 0
     file_size: int = 0
     is_binary: bool = False
@@ -422,7 +424,8 @@ def _run_grep_fallback(
         proc = subprocess.run(cmd, capture_output=True, text=True)
         if proc.returncode not in (0, 1):
             return FileResult(
-                ok=False, path=path,
+                ok=False,
+                path=path,
                 message=f"grep error: {proc.stderr.strip() or 'unknown error'}",
             )
         out = proc.stdout.strip()
@@ -488,9 +491,7 @@ def run_glob(
 
         out = proc.stdout.strip()
         if not out:
-            return FileResult(
-                ok=True, path=path, content="(no matching files found)"
-            )
+            return FileResult(ok=True, path=path, content="(no matching files found)")
 
         return FileResult(ok=True, path=path, content=out)
     except Exception as e:
@@ -504,6 +505,7 @@ def _run_glob_fallback(pattern: str, path: str = ".") -> FileResult:
     except TypeError:
         # Python < 3.10 doesn't support root_dir
         import os as _os
+
         cwd = _os.getcwd()
         try:
             _os.chdir(path)

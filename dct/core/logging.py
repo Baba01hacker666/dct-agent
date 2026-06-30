@@ -29,9 +29,7 @@ def _init_logging() -> None:
     logger.setLevel(logging.DEBUG)
 
     # File handler with rotation
-    fh = RotatingFileHandler(
-        _LOG_FILE, maxBytes=_MAX_BYTES, backupCount=_BACKUP_COUNT
-    )
+    fh = RotatingFileHandler(_LOG_FILE, maxBytes=_MAX_BYTES, backupCount=_BACKUP_COUNT)
     fh.setLevel(logging.DEBUG)
     fh.setFormatter(
         logging.Formatter(

@@ -52,9 +52,7 @@ def probe_server(srv: "Server") -> dict:
                 models_data = data.get("data", [])
                 srv.models = [m.get("id") for m in models_data]
                 srv.version = (
-                    "OpenRouter v1"
-                    if srv.provider == "openrouter"
-                    else "OpenAI API"
+                    "OpenRouter v1" if srv.provider == "openrouter" else "OpenAI API"
                 )
                 return {
                     "ok": True,
@@ -90,17 +88,22 @@ def probe_server(srv: "Server") -> dict:
                 else:
                     if not tried_tags:
                         try:
-                            tr = httpx.get(f"{base}/api/tags", timeout=PROBE_TIMEOUT, **req_kwargs)
+                            tr = httpx.get(
+                                f"{base}/api/tags", timeout=PROBE_TIMEOUT, **req_kwargs
+                            )
                             if tr.is_success:
                                 srv.models = [
-                                    m["name"]
-                                    for m in tr.json().get("models", [])
+                                    m["name"] for m in tr.json().get("models", [])
                                 ]
                         except Exception:
-                            logger.debug("Failed to fetch tags from %s", base, exc_info=True)
+                            logger.debug(
+                                "Failed to fetch tags from %s", base, exc_info=True
+                            )
 
                 try:
-                    vr = httpx.get(f"{base}/api/version", timeout=PROBE_TIMEOUT, **req_kwargs)
+                    vr = httpx.get(
+                        f"{base}/api/version", timeout=PROBE_TIMEOUT, **req_kwargs
+                    )
                     if vr.is_success:
                         srv.version = vr.json().get("version", "")
                 except Exception:

@@ -57,11 +57,14 @@ def test_read_image():
             c = ctype + data
             crc = struct.pack(">I", zlib.crc32(c) & 0xFFFFFFFF)
             return struct.pack(">I", len(data)) + c + crc
+
         ihdr = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
-        return (b"\x89PNG\r\n\x1a\n"
-                + chunk(b"IHDR", ihdr)
-                + chunk(b"IDAT", compressed)
-                + chunk(b"IEND", b""))
+        return (
+            b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", ihdr)
+            + chunk(b"IDAT", compressed)
+            + chunk(b"IEND", b"")
+        )
 
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
         f.write(make_png())
@@ -78,15 +81,22 @@ def test_read_image():
 
 def test_ollama_chat_with_images():
     from dct.core import ollama
+
     s = Server("s1", "localhost", 11434)
     msgs = [{"role": "user", "content": "What is this?"}]
 
     with patch("dct.core.ollama._post_stream") as mock_stream:
-        mock_stream.return_value = iter([{
-            "message": {"content": "a red pixel"},
-            "done": True,
-        }])
-        chunks = list(ollama.chat_stream(s, "llava", msgs, images=["data:image/png;base64,AAAA"]))
+        mock_stream.return_value = iter(
+            [
+                {
+                    "message": {"content": "a red pixel"},
+                    "done": True,
+                }
+            ]
+        )
+        chunks = list(
+            ollama.chat_stream(s, "llava", msgs, images=["data:image/png;base64,AAAA"])
+        )
         assert "a red pixel" in "".join(chunks)
         # Verify images were attached to the last user message
         call_args = mock_stream.call_args
@@ -129,6 +139,7 @@ def test_extract_stream_text_openrouter_parts():
 
 def test_shell_rewind_logic():
     from dct.agent.session import Session
+
     session = Session()
     session.add("user", "Hello")
     session.add("assistant", "Hi")

@@ -31,9 +31,7 @@ class VectorStore:
                     with open(self.path, "r", encoding="utf-8") as f:
                         self.memories = json.load(f)
                 except Exception:
-                    logger.exception(
-                        "Failed to load memory store from %s", self.path
-                    )
+                    logger.exception("Failed to load memory store from %s", self.path)
                     self.memories = []
 
     def save(self) -> None:
@@ -44,9 +42,7 @@ class VectorStore:
             with open(self.path, "w", encoding="utf-8") as f:
                 json.dump(memories_snapshot, f)
         except Exception:
-            logger.exception(
-                "Failed to save memory store to %s", self.path
-            )
+            logger.exception("Failed to save memory store to %s", self.path)
 
     def store(self, text: str, vector: List[float]) -> str:
         if not vector:
@@ -59,12 +55,7 @@ class VectorStore:
                     return f"Memory already stored. ID: {mem['id']}"
 
         mem_id = str(uuid.uuid4())
-        doc = {
-            "id": mem_id,
-            "text": text,
-            "vector": vector,
-            "timestamp": time.time()
-        }
+        doc = {"id": mem_id, "text": text, "vector": vector, "timestamp": time.time()}
         with self._lock:
             # TTL: drop entries older than 30 days
             cutoff = time.time() - 30 * 86400

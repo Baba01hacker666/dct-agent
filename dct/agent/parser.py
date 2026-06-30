@@ -24,8 +24,10 @@ def sanitize_tool_result(result: str) -> str:
     """Escape XML-like content in tool results to prevent prompt injection."""
     return re.sub(
         r"</?(\w+)(\s[^>]*)?>",
-        lambda m: f"&lt;{'/' if m.group(0).startswith('</') else ''}"
-        f"{m.group(1)}{m.group(2) or ''}&gt;",
+        lambda m: (
+            f"&lt;{'/' if m.group(0).startswith('</') else ''}"
+            f"{m.group(1)}{m.group(2) or ''}&gt;"
+        ),
         result,
     )
 
@@ -127,15 +129,49 @@ def parse_tool_call(text: str) -> Optional[dict]:
     }
 
     # Pre-fill all expected keys with None
-    keys = ["code", "path", "url", "query", "old", "new", "question", "pattern", "glob", "output_mode", 
-            "context", "head_limit", "start_line", "end_line", "tail", "instruction", "system_prompt", 
-            "model", "background", "id", "input", "name", "description", "prompt", "skill", "members", 
-            "server", "args", "text", "action", "section", "old_text", "new_text", "selector"]
+    keys = [
+        "code",
+        "path",
+        "url",
+        "query",
+        "old",
+        "new",
+        "question",
+        "pattern",
+        "glob",
+        "output_mode",
+        "context",
+        "head_limit",
+        "start_line",
+        "end_line",
+        "tail",
+        "instruction",
+        "system_prompt",
+        "model",
+        "background",
+        "id",
+        "input",
+        "name",
+        "description",
+        "prompt",
+        "skill",
+        "members",
+        "server",
+        "args",
+        "text",
+        "action",
+        "section",
+        "old_text",
+        "new_text",
+        "selector",
+    ]
     for k in keys:
         result[k] = None
 
     # Single pass for well-formed tags
-    for match in re.finditer(r"<([a-zA-Z0-9_]+)(?:\s+[^>]*)?>(.*?)</\1>", text, re.DOTALL | re.IGNORECASE):
+    for match in re.finditer(
+        r"<([a-zA-Z0-9_]+)(?:\s+[^>]*)?>(.*?)</\1>", text, re.DOTALL | re.IGNORECASE
+    ):
         tag_name = match.group(1).lower()
         if tag_name in result:
             result[tag_name] = match.group(2).strip()
@@ -146,14 +182,20 @@ def parse_tool_call(text: str) -> Optional[dict]:
             m_md = re.search(r"```[a-zA-Z]*\n(.*?)```", text, re.DOTALL)
             if m_md:
                 result["code"] = m_md.group(1).strip()
-        
+
         for k in keys:
             if result[k] is None:
-                m_fuz = re.search(rf"<{k}(?:\s+[^>]*)?>(.*?)(?:<\w+>|$)", text, re.DOTALL | re.IGNORECASE)
+                m_fuz = re.search(
+                    rf"<{k}(?:\s+[^>]*)?>(.*?)(?:<\w+>|$)",
+                    text,
+                    re.DOTALL | re.IGNORECASE,
+                )
                 if m_fuz:
                     result[k] = m_fuz.group(1).strip()
 
-    result["patches"] = parse_multi_patch(text) if tool.strip() == "multi_patch_file" else None
+    result["patches"] = (
+        parse_multi_patch(text) if tool.strip() == "multi_patch_file" else None
+    )
     return result
 
 

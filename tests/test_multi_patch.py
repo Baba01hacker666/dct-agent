@@ -10,7 +10,12 @@ def test_multi_patch_file_success():
     # Setup agent session mock
     session_mock = MagicMock()
     session_mock.mode = "chat"
-    agent = CodeAgent(server=None, model="test-model", session=session_mock, stream_fn=lambda *a, **k: iter([]))
+    agent = CodeAgent(
+        server=None,
+        model="test-model",
+        session=session_mock,
+        stream_fn=lambda *a, **k: iter([]),
+    )
 
     # Create a temporary file to patch
     with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
@@ -21,10 +26,7 @@ def test_multi_patch_file_success():
         call = {
             "tool": "multi_patch_file",
             "path": temp_path,
-            "patches": [
-                {"old": "AAA", "new": "111"},
-                {"old": "CCC", "new": "333"}
-            ]
+            "patches": [{"old": "AAA", "new": "111"}, {"old": "CCC", "new": "333"}],
         }
         res = agent._execute_tool(call)
         assert "[multi-patched:" in res
@@ -42,7 +44,12 @@ def test_multi_patch_file_success():
 def test_multi_patch_file_failures():
     session_mock = MagicMock()
     session_mock.mode = "chat"
-    agent = CodeAgent(server=None, model="test-model", session=session_mock, stream_fn=lambda *a, **k: iter([]))
+    agent = CodeAgent(
+        server=None,
+        model="test-model",
+        session=session_mock,
+        stream_fn=lambda *a, **k: iter([]),
+    )
 
     with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
         f.write("AAA\nBBB\nAAA\n")
@@ -53,9 +60,7 @@ def test_multi_patch_file_failures():
         call = {
             "tool": "multi_patch_file",
             "path": temp_path,
-            "patches": [
-                {"old": "AAA", "new": "111"}
-            ]
+            "patches": [{"old": "AAA", "new": "111"}],
         }
         res = agent._execute_tool(call)
         assert "not unique" in res
@@ -64,9 +69,7 @@ def test_multi_patch_file_failures():
         call_not_found = {
             "tool": "multi_patch_file",
             "path": temp_path,
-            "patches": [
-                {"old": "DDD", "new": "444"}
-            ]
+            "patches": [{"old": "DDD", "new": "444"}],
         }
         res_not_found = agent._execute_tool(call_not_found)
         assert "not found" in res_not_found
@@ -76,11 +79,14 @@ def test_multi_patch_file_failures():
 
 def test_write_trace_entry_logging():
     import dct.agent.session
+
     dct.agent.session._cfg = None
     # Mock config to enable tracing
     with patch("dct.core.config.Config") as mock_cfg_class:
         mock_cfg = MagicMock()
-        mock_cfg.get.side_effect = lambda key, default=None: True if key == "enable_tracing" else default
+        mock_cfg.get.side_effect = lambda key, default=None: (
+            True if key == "enable_tracing" else default
+        )
         mock_cfg_class.return_value = mock_cfg
 
         session = Session(name="test_trace_session")

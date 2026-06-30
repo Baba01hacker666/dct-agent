@@ -124,9 +124,7 @@ def _run_auto_linter(path: str) -> str:
         except FileNotFoundError:
             pass
         try:
-            res = subprocess.run(
-                ["flake8", path], capture_output=True, text=True
-            )
+            res = subprocess.run(["flake8", path], capture_output=True, text=True)
             if res.returncode != 0:
                 errors.append(
                     f"Flake8 Lint Errors:\n{res.stdout.strip() or res.stderr.strip()}"
@@ -157,14 +155,10 @@ def find_agents_md(cwd: str) -> str:
                 with open(path, "r", encoding="utf-8") as f:
                     agents_content.append(f"--- {path} ---\n{f.read()}")
             except OSError:
-                logger.exception(
-                    "Failed to read AGENTS.md directives from %s", path
-                )
+                logger.exception("Failed to read AGENTS.md directives from %s", path)
 
     if agents_content:
-        return (
-            "[AGENTS.md DIRECTIVES]\n" + "\n\n".join(agents_content) + "\n\n"
-        )
+        return "[AGENTS.md DIRECTIVES]\n" + "\n\n".join(agents_content) + "\n\n"
     return ""
 
 
@@ -567,12 +561,8 @@ class CodeAgent:
             for line in lines:
                 parts = [p.strip() for p in line.split("|")]
                 role = parts[0] if len(parts) > 0 else "member"
-                s_model = (
-                    parts[1] if len(parts) > 1 and parts[1] else self.model
-                )
-                s_server_alias = (
-                    parts[2] if len(parts) > 2 and parts[2] else ""
-                )
+                s_model = parts[1] if len(parts) > 1 and parts[1] else self.model
+                s_server_alias = parts[2] if len(parts) > 2 and parts[2] else ""
                 s_skill = parts[3] if len(parts) > 3 and parts[3] else ""
 
                 target_server = self.server
@@ -591,9 +581,9 @@ class CodeAgent:
 
                 sub_system = f"Your role in this swarm: {role}\n"
                 if s_skill:
-                    skill_data = custom_skills.get(
+                    skill_data = custom_skills.get(s_skill) or SKILL_PRESETS.get(
                         s_skill
-                    ) or SKILL_PRESETS.get(s_skill)
+                    )
                     if skill_data:
                         sub_system += skill_data["prompt"] + "\n\n"
 
@@ -625,20 +615,14 @@ class CodeAgent:
                         _append_log_safe(data, chunk)
 
                     def on_tool(t_name, t_call):
-                        _append_log_safe(
-                            data, f"\n⚡ tool: {t_name}\nCall: {t_call}\n"
-                        )
+                        _append_log_safe(data, f"\n⚡ tool: {t_name}\nCall: {t_call}\n")
 
                     def on_result(t_name, t_res):
-                        _append_log_safe(
-                            data, f"\nresult: {t_name}\n{t_res}\n"
-                        )
+                        _append_log_safe(data, f"\nresult: {t_name}\n{t_res}\n")
 
                     return on_text, on_tool, on_result
 
-                bg_on_text, bg_on_tool, bg_on_result = _make_callbacks(
-                    bg_sub_data
-                )
+                bg_on_text, bg_on_tool, bg_on_result = _make_callbacks(bg_sub_data)
 
                 sub_agent = CodeAgent(
                     server=target_server,
@@ -657,16 +641,12 @@ class CodeAgent:
                         with BACKGROUND_SUBAGENTS_LOCK:
                             BACKGROUND_SUBAGENTS[b_id]["status"] = "completed"
                             BACKGROUND_SUBAGENTS[b_id]["result"] = res
-                            BACKGROUND_SUBAGENTS[b_id][
-                                "completed_at"
-                            ] = time.time()
+                            BACKGROUND_SUBAGENTS[b_id]["completed_at"] = time.time()
                     except Exception as e:
                         with BACKGROUND_SUBAGENTS_LOCK:
                             BACKGROUND_SUBAGENTS[b_id]["status"] = "failed"
                             BACKGROUND_SUBAGENTS[b_id]["result"] = str(e)
-                            BACKGROUND_SUBAGENTS[b_id][
-                                "completed_at"
-                            ] = time.time()
+                            BACKGROUND_SUBAGENTS[b_id]["completed_at"] = time.time()
 
                 sub_thread = threading.Thread(
                     target=run_subagent_bg,
@@ -809,10 +789,7 @@ class CodeAgent:
 
         elif tool == "run_subagent":
             instruction = (
-                call.get("instruction")
-                or call.get("prompt")
-                or call.get("code")
-                or ""
+                call.get("instruction") or call.get("prompt") or call.get("code") or ""
             )
             if not instruction:
                 return "[TOOL ERROR] <instruction> is required."
@@ -831,9 +808,7 @@ class CodeAgent:
                     SKILL_PRESETS = {}
                 conf = Config()
                 custom = conf.get("custom_skills", {})
-                skill_data = custom.get(sub_skill) or SKILL_PRESETS.get(
-                    sub_skill
-                )
+                skill_data = custom.get(sub_skill) or SKILL_PRESETS.get(sub_skill)
                 if skill_data:
                     sub_system = skill_data["prompt"] + "\n\n" + sub_system
                 else:
@@ -896,16 +871,12 @@ class CodeAgent:
                         with BACKGROUND_SUBAGENTS_LOCK:
                             BACKGROUND_SUBAGENTS[b_id]["status"] = "completed"
                             BACKGROUND_SUBAGENTS[b_id]["result"] = res
-                            BACKGROUND_SUBAGENTS[b_id][
-                                "completed_at"
-                            ] = time.time()
+                            BACKGROUND_SUBAGENTS[b_id]["completed_at"] = time.time()
                     except Exception as e:
                         with BACKGROUND_SUBAGENTS_LOCK:
                             BACKGROUND_SUBAGENTS[b_id]["status"] = "failed"
                             BACKGROUND_SUBAGENTS[b_id]["result"] = str(e)
-                            BACKGROUND_SUBAGENTS[b_id][
-                                "completed_at"
-                            ] = time.time()
+                            BACKGROUND_SUBAGENTS[b_id]["completed_at"] = time.time()
 
                 sub_thread = threading.Thread(
                     target=run_subagent_bg,
@@ -927,15 +898,11 @@ class CodeAgent:
                 con.print(
                     f"\n  [{C['purple']}][SUB-AGENT STARTING][/{C['purple']}] Model: {sub_model} | Mode: {sub_session.mode.upper()}"
                 )
-                con.print(
-                    f"  [{C['dim']}]Instruction: {instruction}[/{C['dim']}]"
-                )
+                con.print(f"  [{C['dim']}]Instruction: {instruction}[/{C['dim']}]")
                 con.print(f"  [{C['dim']}]{'─' * 66}[/{C['dim']}]")
 
                 def sub_on_text(chunk: str):
-                    con.print(
-                        f"[{C['purple']}]{chunk}[/{C['purple']}]", end=""
-                    )
+                    con.print(f"[{C['purple']}]{chunk}[/{C['purple']}]", end="")
 
                 def sub_on_tool(sub_tool_name: str, sub_call_str: str):
                     con.print()
@@ -946,16 +913,12 @@ class CodeAgent:
                 def sub_on_result(sub_tool_name: str, sub_result: str):
                     section(f"sub-agent result: {sub_tool_name}")
                     if len(sub_result) > 2000:
-                        con.print(
-                            f"[{C['code']}]{sub_result[:2000]}[/{C['code']}]"
-                        )
+                        con.print(f"[{C['code']}]{sub_result[:2000]}[/{C['code']}]")
                         info(f"… ({len(sub_result)} chars total)")
                     else:
                         con.print(f"[{C['code']}]{sub_result}[/{C['code']}]")
                     con.print()
-                    con.print(
-                        f"  [{C['dim']}]continuing sub-agent…[/{C['dim']}]"
-                    )
+                    con.print(f"  [{C['dim']}]continuing sub-agent…[/{C['dim']}]")
                     con.print("  ", end="")
 
                 sub_agent = CodeAgent(
@@ -1074,9 +1037,7 @@ class CodeAgent:
                         proc.stdin.write(input_text)
                         proc.stdin.flush()
                         bg_task["log"].append(f"[Input sent: {input_text}]")
-                        return (
-                            f"[Success] Sent input to background task {tid}."
-                        )
+                        return f"[Success] Sent input to background task {tid}."
                     except Exception as e:
                         return f"[TOOL ERROR] Failed to write to task stdin: {str(e)}"
 
@@ -1094,9 +1055,7 @@ class CodeAgent:
                 return "[TOOL ERROR] Execution is blocked in PLAN mode. You must use <tool>exit_plan_mode</tool> first."
 
             lang = (
-                "python"
-                if "python" in tool
-                else "bash" if "bash" in tool else "shell"
+                "python" if "python" in tool else "bash" if "bash" in tool else "shell"
             )
             code = call.get("code") or ""
             if not code:
@@ -1139,9 +1098,9 @@ class CodeAgent:
                 except Exception as e:
                     with BACKGROUND_TASKS_LOCK:
                         BACKGROUND_TASKS[task_id]["status"] = "failed"
-                        BACKGROUND_TASKS[task_id][
-                            "result"
-                        ] = f"Failed to start process: {str(e)}"
+                        BACKGROUND_TASKS[task_id]["result"] = (
+                            f"Failed to start process: {str(e)}"
+                        )
                         BACKGROUND_TASKS[task_id]["completed_at"] = time.time()
                     if temp_file:
                         try:
@@ -1158,9 +1117,7 @@ class CodeAgent:
                                 break
                             with BACKGROUND_TASKS_LOCK:
                                 if t_id in BACKGROUND_TASKS:
-                                    _append_log_safe(
-                                        BACKGROUND_TASKS[t_id], line
-                                    )
+                                    _append_log_safe(BACKGROUND_TASKS[t_id], line)
                     except Exception as e:
                         with BACKGROUND_TASKS_LOCK:
                             if t_id in BACKGROUND_TASKS:
@@ -1218,9 +1175,7 @@ class CodeAgent:
             line_str = call.get("line") or ""
             col_str = call.get("column") or "0"
             if not path or not line_str:
-                return (
-                    f"[TOOL ERROR] <path> and <line> are required for {tool}."
-                )
+                return f"[TOOL ERROR] <path> and <line> are required for {tool}."
             try:
                 lint = int(line_str)
                 cint = int(col_str)
@@ -1288,7 +1243,9 @@ class CodeAgent:
             write_res = write_file(path, content)
             if not write_res.ok:
                 return f"[TOOL ERROR] {write_res.message}"
-            size_info = f"  {len(content.encode('utf-8', errors='replace')) / 1024:.1f} KB"
+            size_info = (
+                f"  {len(content.encode('utf-8', errors='replace')) / 1024:.1f} KB"
+            )
             res_str = f"[written: {write_res.path}{size_info}]\n{write_res.diff[:1200] if write_res.diff else '(new file)'}"
             linter_err = _run_auto_linter(write_res.path)
             if linter_err:
@@ -1392,10 +1349,10 @@ class CodeAgent:
                     )
                 )
                 diff_str = "".join(diff_lines)
-                size_info = f"  {len(content.encode('utf-8', errors='replace')) / 1024:.1f} KB"
-                res_str = (
-                    f"[multi-patched: {path}{size_info}]\n{diff_str[:1200]}"
+                size_info = (
+                    f"  {len(content.encode('utf-8', errors='replace')) / 1024:.1f} KB"
                 )
+                res_str = f"[multi-patched: {path}{size_info}]\n{diff_str[:1200]}"
                 linter_err = _run_auto_linter(path)
                 if linter_err:
                     res_str += f"\n\n[AUTO-REFLECTION ERROR] Linter detected issues after your edit:\n{linter_err}"
@@ -1414,9 +1371,7 @@ class CodeAgent:
 
             context_str = call.get("context")
             context = (
-                int(context_str)
-                if context_str and context_str.isdigit()
-                else None
+                int(context_str) if context_str and context_str.isdigit() else None
             )
 
             head_limit_str = call.get("head_limit")
@@ -1426,9 +1381,7 @@ class CodeAgent:
                 else 250
             )
 
-            r = run_grep(
-                pattern, path, glob_pattern, output_mode, context, head_limit
-            )
+            r = run_grep(pattern, path, glob_pattern, output_mode, context, head_limit)
             if not r.ok:
                 return f"[TOOL ERROR] {r.message}"
             return f"[grep: {pattern!r} in {r.path}]\n{r.content}"
@@ -1461,7 +1414,9 @@ class CodeAgent:
             r_web = fetch_url(url)
             if not r_web.ok:
                 return f"[TOOL ERROR] {r_web.message}"
-            return f"[fetched: {r_web.url}  title={r_web.title!r}]\n{r_web.content[:6000]}"
+            return (
+                f"[fetched: {r_web.url}  title={r_web.title!r}]\n{r_web.content[:6000]}"
+            )
 
         elif tool == "web_extract":
             url = _extract_tag(call["raw_text"], "url")
@@ -1497,9 +1452,9 @@ class CodeAgent:
                 or call.get("code")
                 or ""
             )
-            choices_raw = _extract_tag(
-                call["raw_text"], "choices"
-            ) or call.get("choices", "")
+            choices_raw = _extract_tag(call["raw_text"], "choices") or call.get(
+                "choices", ""
+            )
 
             from dct.core.theme import con, C
 
@@ -1511,9 +1466,7 @@ class CodeAgent:
             if isinstance(choices_raw, list):
                 choices = choices_raw
             elif isinstance(choices_raw, str) and choices_raw.strip():
-                choices = [
-                    c.strip() for c in choices_raw.split(",") if c.strip()
-                ]
+                choices = [c.strip() for c in choices_raw.split(",") if c.strip()]
 
             if choices:
                 for idx, c in enumerate(choices, 1):
@@ -1558,9 +1511,7 @@ class CodeAgent:
             return "[SUCCESS] Notebook updated."
         elif tool == "update_plan":
             plan = (
-                call.get("plan")
-                or _extract_tag(call.get("raw_text", ""), "plan")
-                or ""
+                call.get("plan") or _extract_tag(call.get("raw_text", ""), "plan") or ""
             )
             explanation = (
                 call.get("explanation")
@@ -1588,7 +1539,9 @@ class CodeAgent:
 
         text_parts = []
         for m in dropped:
-            text_parts.append(f"{m.get('role', 'unknown').upper()}:\n{m.get('content', '')}\n\n")
+            text_parts.append(
+                f"{m.get('role', 'unknown').upper()}:\n{m.get('content', '')}\n\n"
+            )
         text = "".join(text_parts)
 
         if len(text) > 60000:
@@ -1654,9 +1607,7 @@ class CodeAgent:
             total_chars = sum(len(m.get("content") or "") for m in msgs)
             if total_chars > 120000:  # Roughly 30k tokens
                 # Collect non-system message indices oldest-first
-                non_sys = [
-                    i for i, m in enumerate(msgs) if m.get("role") != "system"
-                ]
+                non_sys = [i for i, m in enumerate(msgs) if m.get("role") != "system"]
                 dropped: list[dict] = []
                 for i in sorted(non_sys):
                     if total_chars <= 80000 or len(msgs) - len(dropped) <= 3:
@@ -1673,9 +1624,7 @@ class CodeAgent:
                         "\n\n[System] Context limit reached. Summarizing older interactions...\n"
                     )
                     summary = self._summarize_dropped(dropped)
-                    insert_idx = (
-                        1 if msgs and msgs[0].get("role") == "system" else 0
-                    )
+                    insert_idx = 1 if msgs and msgs[0].get("role") == "system" else 0
                     msgs.insert(
                         insert_idx,
                         {
@@ -1706,7 +1655,9 @@ class CodeAgent:
                             idx = self.buffer.find(self.start_tag)
                             if idx == -1:
                                 for i in range(1, len(self.start_tag)):
-                                    if self.buffer.endswith(self.start_tag[:i]) and self.start_tag.startswith(self.buffer[-i:]):
+                                    if self.buffer.endswith(
+                                        self.start_tag[:i]
+                                    ) and self.start_tag.startswith(self.buffer[-i:]):
                                         safe_len = len(self.buffer) - i
                                         if safe_len > 0:
                                             self.callback(self.buffer[:safe_len])
@@ -1716,18 +1667,20 @@ class CodeAgent:
                                 self.buffer = ""
                             else:
                                 self.callback(self.buffer[:idx])
-                                self.buffer = self.buffer[idx + len(self.start_tag):]
+                                self.buffer = self.buffer[idx + len(self.start_tag) :]
                                 self.in_block = True
                         else:
                             idx = self.buffer.find(self.end_tag)
                             if idx == -1:
                                 for i in range(1, len(self.end_tag)):
-                                    if self.buffer.endswith(self.end_tag[:i]) and self.end_tag.startswith(self.buffer[-i:]):
+                                    if self.buffer.endswith(
+                                        self.end_tag[:i]
+                                    ) and self.end_tag.startswith(self.buffer[-i:]):
                                         self.buffer = self.buffer[-i:]
                                         return
                                 self.buffer = ""
                             else:
-                                self.buffer = self.buffer[idx + len(self.end_tag):]
+                                self.buffer = self.buffer[idx + len(self.end_tag) :]
                                 self.in_block = False
 
                 def flush(self):
@@ -1818,9 +1771,7 @@ class CodeAgent:
                         {
                             "tool": tool_name,
                             "arguments": {
-                                k: v
-                                for k, v in call.items()
-                                if k != "raw_text"
+                                k: v for k, v in call.items() if k != "raw_text"
                             },
                         },
                     )
@@ -1882,9 +1833,7 @@ class CodeAgent:
                 "tool_call",
                 {
                     "tool": tool_name,
-                    "arguments": {
-                        k: v for k, v in call.items() if k != "raw_text"
-                    },
+                    "arguments": {k: v for k, v in call.items() if k != "raw_text"},
                 },
             )
             if self.on_tool:

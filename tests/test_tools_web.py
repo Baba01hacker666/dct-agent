@@ -4,9 +4,7 @@ from dct.tools.web import _strip_html, _extract_title, fetch_url
 
 
 def test_strip_html_basic():
-    html = (
-        "<html><body><h1>Hello World</h1><p>This is a test.</p></body></html>"
-    )
+    html = "<html><body><h1>Hello World</h1><p>This is a test.</p></body></html>"
     text = _strip_html(html)
     assert "Hello World" in text
     assert "This is a test." in text
@@ -55,7 +53,9 @@ def test_strip_html_decomposes_layout_and_scripts():
 
 
 def test_strip_html_entity_unescaping():
-    html = "Hello &amp; welcome &lt;back&gt;! Here is a &#39;quote&#39; and &nbsp; space."
+    html = (
+        "Hello &amp; welcome &lt;back&gt;! Here is a &#39;quote&#39; and &nbsp; space."
+    )
     text = _strip_html(html)
     assert "Hello & welcome <back>! Here is a 'quote' and   space." in text
 
@@ -116,7 +116,9 @@ def test_fetch_url_html(mock_validate_url, mock_get_validated_response):
     mock_validate_url.return_value = None
     mock_response = MagicMock()
     mock_response.headers = {"content-type": "text/html"}
-    mock_response.text = "<html><head><title>Test</title></head><body><p>Content</p></body></html>"
+    mock_response.text = (
+        "<html><head><title>Test</title></head><body><p>Content</p></body></html>"
+    )
     mock_response.url = "https://example.com"
     mock_response.status_code = 200
     mock_get_validated_response.return_value = mock_response
@@ -137,7 +139,9 @@ def test_fetch_url_plain_text(mock_validate_url, mock_get_validated_response):
     mock_validate_url.return_value = None
     mock_response = MagicMock()
     mock_response.headers = {"content-type": "text/plain"}
-    mock_response.text = "<html><body>Plain text content that might look like HTML</body></html>"
+    mock_response.text = (
+        "<html><body>Plain text content that might look like HTML</body></html>"
+    )
     mock_response.url = "https://example.com"
     mock_response.status_code = 200
     mock_get_validated_response.return_value = mock_response
@@ -163,9 +167,7 @@ def test_fetch_url_validation_error(mock_validate_url):
 
 @patch("dct.tools.web._get_validated_response")
 @patch("dct.tools.web.validate_url")
-def test_fetch_url_request_exception(
-    mock_validate_url, mock_get_validated_response
-):
+def test_fetch_url_request_exception(mock_validate_url, mock_get_validated_response):
     mock_validate_url.return_value = None
     mock_get_validated_response.side_effect = httpx.RequestError(
         "Connection error", request=MagicMock()

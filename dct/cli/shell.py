@@ -251,16 +251,8 @@ class Shell:
         if not self.active:
             return f"  [{C['warn']}]no active server · /add <host> <port> [alias][/{C['warn']}]"
         st = self.active.status
-        stc = (
-            C["ok"]
-            if st == "online"
-            else C["err"] if st == "offline" else C["dim"]
-        )
-        ag = (
-            f"  [{C['purple']}][AGENT][/{C['purple']}]"
-            if self.agent_mode
-            else ""
-        )
+        stc = C["ok"] if st == "online" else C["err"] if st == "offline" else C["dim"]
+        ag = f"  [{C['purple']}][AGENT][/{C['purple']}]" if self.agent_mode else ""
         tok_est = self.session.token_estimate
         turns = self.session.user_turns
         return (
@@ -409,9 +401,7 @@ class Shell:
             except Exception as e:
                 return role, f"[ERROR] {str(e)}"
 
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=len(members)
-        ) as ex:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(members)) as ex:
             futures = {ex.submit(run_member, m): m for m in members}
             for fut in concurrent.futures.as_completed(futures):
                 member = futures[fut]
@@ -452,9 +442,7 @@ class Shell:
             section(f"error: {role}")
             con.print(f"[{C['err']}]{err_text}[/{C['err']}]")
 
-        ok(
-            f"squad {squad_name}: {len(results)}/{len(members)} completed successfully"
-        )
+        ok(f"squad {squad_name}: {len(results)}/{len(members)} completed successfully")
 
     def _run_orchestrate(self, goal: str):
         """Hierarchical orchestration: decompose goal → execute tasks in waves → synthesize."""
@@ -537,9 +525,7 @@ class Shell:
                 "id": tid,
                 "desc": attrs.get("desc", ""),
                 "deps": [
-                    d.strip()
-                    for d in attrs.get("deps", "").split(",")
-                    if d.strip()
+                    d.strip() for d in attrs.get("deps", "").split(",") if d.strip()
                 ],
                 "model": attrs.get("model", self.model),
                 "body": body,
@@ -547,9 +533,7 @@ class Shell:
             }
 
         if not tasks:
-            err(
-                "no tasks parsed from the plan — try again with a clearer goal"
-            )
+            err("no tasks parsed from the plan — try again with a clearer goal")
             return
 
         con.print(f"  [{C['ok']}]parsed {len(tasks)} subtasks[/{C['ok']}]")
@@ -573,13 +557,10 @@ class Shell:
             ready = [
                 tid
                 for tid, t in tasks.items()
-                if tid not in completed
-                and all(d in completed for d in t["deps"])
+                if tid not in completed and all(d in completed for d in t["deps"])
             ]
             if not ready:
-                err(
-                    "deadlock detected — some task dependencies cannot be resolved"
-                )
+                err("deadlock detected — some task dependencies cannot be resolved")
                 break
 
             section(f"wave {wave_num}  ·  {len(ready)} tasks in parallel")
@@ -632,9 +613,7 @@ class Shell:
                 except Exception as e:
                     return tid, f"[ERROR] {str(e)}"
 
-            with concurrent.futures.ThreadPoolExecutor(
-                max_workers=len(ready)
-            ) as ex:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=len(ready)) as ex:
                 futures = {ex.submit(execute_task, tid): tid for tid in ready}
                 for fut in concurrent.futures.as_completed(futures):
                     tid = futures[fut]
@@ -653,12 +632,8 @@ class Shell:
         summary_parts = []
         for tid in sorted(tasks.keys(), key=int):
             t = tasks[tid]
-            result_preview = (
-                t["result"][:500] if t["result"] else "(no output)"
-            )
-            summary_parts.append(
-                f"## Task {tid}: {t['desc']}\n{result_preview}"
-            )
+            result_preview = t["result"][:500] if t["result"] else "(no output)"
+            summary_parts.append(f"## Task {tid}: {t['desc']}\n{result_preview}")
 
         summary = "\n\n".join(summary_parts)
         con.print(f"[{C['code']}]{summary[:4000]}[/{C['code']}]")
@@ -767,21 +742,19 @@ class Shell:
                 text = document.text_before_cursor.lstrip()
                 if not text.startswith("/"):
                     return
-                
+
                 parts = text.split()
                 if len(parts) > 1 and not document.text_before_cursor.endswith(" "):
                     return
-                    
+
                 cmd_typed = parts[0] if parts else ""
                 if document.text_before_cursor.endswith(" ") or not cmd_typed:
                     return
-                    
+
                 for cmd, desc in COMMAND_HELP.items():
                     if cmd.startswith(cmd_typed):
                         yield Completion(
-                            cmd,
-                            start_position=-len(cmd_typed),
-                            display_meta=desc
+                            cmd, start_position=-len(cmd_typed), display_meta=desc
                         )
 
         completer = SlashCommandCompleter()
@@ -796,7 +769,7 @@ class Shell:
                     multiline=False,
                     style=style,
                     completer=completer,
-                    complete_while_typing=True
+                    complete_while_typing=True,
                 )
                 raw = raw.strip()
 
@@ -866,16 +839,12 @@ class Shell:
                 if (
                     target_idx is None
                     and len(user_msgs) > 1
-                    and (
-                        lo.startswith("/rewind") or lo.startswith("/rewindto")
-                    )
+                    and (lo.startswith("/rewind") or lo.startswith("/rewindto"))
                 ):
                     con.print(
                         f"\n  [{C['accent']}]Select a message to rewind and resume from:[/{C['accent']}]"
                     )
-                    for display_idx, (orig_idx, content) in enumerate(
-                        user_msgs, 1
-                    ):
+                    for display_idx, (orig_idx, content) in enumerate(user_msgs, 1):
                         truncated = content.replace("\n", " ")[:60]
                         con.print(
                             f"    [{C['yellow']}]{display_idx}[/{C['yellow']}]: {truncated}..."
@@ -915,9 +884,7 @@ class Shell:
 
                 self.session.messages = self.session.messages[:orig_idx]
                 raw = raw_prompt
-                con.print(
-                    f"  [{C['dim']}]resuming from: {raw[:60]}…[/{C['dim']}]"
-                )
+                con.print(f"  [{C['dim']}]resuming from: {raw[:60]}…[/{C['dim']}]")
                 self._chat(raw)
                 continue
 
@@ -939,14 +906,10 @@ class Shell:
                 try:
                     edited = session.prompt(
                         "edit> ",
-                        default=self.session.messages[last_ai_idx].get(
-                            "content", ""
-                        ),
+                        default=self.session.messages[last_ai_idx].get("content", ""),
                         multiline=True,
                     )
-                    self.session.messages[last_ai_idx][
-                        "content"
-                    ] = edited.strip()
+                    self.session.messages[last_ai_idx]["content"] = edited.strip()
                     ok("AI response updated in session memory")
                 except (KeyboardInterrupt, EOFError):
                     warn("edit cancelled")
@@ -980,9 +943,7 @@ class Shell:
                     ["git", "diff", "--cached"], capture_output=True, text=True
                 ).stdout
                 if not diff:
-                    warn(
-                        "no staged changes. staging all modified tracked files..."
-                    )
+                    warn("no staged changes. staging all modified tracked files...")
                     subprocess.run(["git", "add", "-u"])
                     diff = subprocess.run(
                         ["git", "diff", "--cached"],
@@ -1000,9 +961,7 @@ class Shell:
                     "Do not include any explanations or markdown blocks. Just the message itself.\n"
                     f"DIFF:\n{diff}"
                 )
-                con.print(
-                    f"  [{C['dim']}]generating commit message...[/{C['dim']}]"
-                )
+                con.print(f"  [{C['dim']}]generating commit message...[/{C['dim']}]")
                 try:
                     from dct.core.client import chat_once
 
@@ -1017,9 +976,7 @@ class Shell:
                         f"\n[{C['accent']}]Generated Message:[/{C['accent']}]\n{msg}\n"
                     )
                     confirm = (
-                        session.prompt(
-                            "Commit with this message? [Y/n/e(dit)]> "
-                        )
+                        session.prompt("Commit with this message? [Y/n/e(dit)]> ")
                         .strip()
                         .lower()
                     )
@@ -1058,17 +1015,13 @@ class Shell:
                 if not s:
                     err(f"server not found: {target}")
                     continue
-                con.print(
-                    f"\n  [{C['dim']}]probing {server_tag(s)}…[/{C['dim']}]"
-                )
+                con.print(f"\n  [{C['dim']}]probing {server_tag(s)}…[/{C['dim']}]")
                 rows = probe_endpoints_detail(s)
                 show_probe_detail(rows)
                 probe_server(s)
                 self.registry.save()
                 if s.status == "online":
-                    ok(
-                        f"online  ·  {len(s.models)} model(s)  ·  {s.latency_ms}ms"
-                    )
+                    ok(f"online  ·  {len(s.models)} model(s)  ·  {s.latency_ms}ms")
                 else:
                     err("offline")
 
@@ -1118,35 +1071,25 @@ class Shell:
                     tls=use_tls,
                     tls_verify=not no_tls_verify,
                 )
-                con.print(
-                    f"  [{C['dim']}]probing {srv.alias}…[/{C['dim']}]", end=" "
-                )
+                con.print(f"  [{C['dim']}]probing {srv.alias}…[/{C['dim']}]", end=" ")
                 res = probe_server(srv)
                 self.registry.save()
                 if res["ok"]:
                     con.print(f"[{C['ok']}]online[/{C['ok']}]")
-                    ok(
-                        f"added: {server_tag(srv)}  ·  {len(srv.models)} model(s)"
-                    )
+                    ok(f"added: {server_tag(srv)}  ·  {len(srv.models)} model(s)")
                     if not self.active:
                         self.active = srv
                         self.model = srv.best_model()
-                        ok(
-                            f"auto-selected as active server  ·  model: {self.model}"
-                        )
+                        ok(f"auto-selected as active server  ·  model: {self.model}")
                 else:
                     con.print(f"[{C['err']}]offline[/{C['err']}]")
-                    warn(
-                        f"added as {srv.alias} but unreachable — saved for later"
-                    )
+                    warn(f"added as {srv.alias} but unreachable — saved for later")
 
             # ── add-openai ──────────────────────────────────────────────
             elif lo.startswith("/add-openai "):
                 toks = raw[12:].strip().split()
                 if len(toks) < 2:
-                    warn(
-                        "usage: /add-openai <base_url> <api_key> [alias] [note]"
-                    )
+                    warn("usage: /add-openai <base_url> <api_key> [alias] [note]")
                     continue
                 base_url = toks[0]
                 api_key = toks[1]
@@ -1165,22 +1108,16 @@ class Shell:
                     api_key=api_key,
                     base_url=base_url,
                 )
-                con.print(
-                    f"  [{C['dim']}]probing {srv.alias}…[/{C['dim']}]", end=" "
-                )
+                con.print(f"  [{C['dim']}]probing {srv.alias}…[/{C['dim']}]", end=" ")
                 res = probe_server(srv)
                 self.registry.save()
                 if res["ok"]:
                     con.print(f"[{C['ok']}]online[/{C['ok']}]")
-                    ok(
-                        f"added: {server_tag(srv)}  ·  {len(srv.models)} model(s)"
-                    )
+                    ok(f"added: {server_tag(srv)}  ·  {len(srv.models)} model(s)")
                     if not self.active:
                         self.active = srv
                         self.model = srv.best_model()
-                        ok(
-                            f"auto-selected as active server  ·  model: {self.model}"
-                        )
+                        ok(f"auto-selected as active server  ·  model: {self.model}")
                 else:
                     con.print(f"[{C['err']}]offline[/{C['err']}]")
                     warn(
@@ -1206,9 +1143,7 @@ class Shell:
                 if name not in PROVIDER_PRESETS:
                     err(f"unknown provider: {name}")
                     hint("use /add-provider --list to see built-in presets")
-                    hint(
-                        "or /add-openai <base_url> <api_key> for custom endpoints"
-                    )
+                    hint("or /add-openai <base_url> <api_key> for custom endpoints")
                     continue
                 if len(toks) < 2:
                     warn(f"usage: /add-provider {name} <api_key> [alias]")
@@ -1233,15 +1168,11 @@ class Shell:
                 self.registry.save()
                 if res["ok"]:
                     con.print(f"[{C['ok']}]online[/{C['ok']}]")
-                    ok(
-                        f"added: {server_tag(srv)}  ·  {len(srv.models)} model(s)"
-                    )
+                    ok(f"added: {server_tag(srv)}  ·  {len(srv.models)} model(s)")
                     if not self.active:
                         self.active = srv
                         self.model = srv.best_model()
-                        ok(
-                            f"auto-selected as active server  ·  model: {self.model}"
-                        )
+                        ok(f"auto-selected as active server  ·  model: {self.model}")
                 else:
                     con.print(f"[{C['err']}]offline[/{C['err']}]")
                     warn(
@@ -1264,9 +1195,7 @@ class Shell:
                     self.active = self.registry.first_online()
                     if self.active:
                         self.model = self.active.best_model(self.model)
-                        info(
-                            f"auto-switched to {self.active.alias} · {self.model}"
-                        )
+                        info(f"auto-switched to {self.active.alias} · {self.model}")
 
             # ── use ──────────────────────────────────────────────────────
             elif lo.startswith("/use "):
@@ -1386,9 +1315,7 @@ class Shell:
                     target_srv = self.registry.resolve(toks[0])
                     model_name = toks[1]
                 else:
-                    warn(
-                        "usage: /delete <model>  or  /delete <alias|#> <model>"
-                    )
+                    warn("usage: /delete <model>  or  /delete <alias|#> <model>")
                     continue
                 if not target_srv:
                     err("server not found")
@@ -1431,9 +1358,7 @@ class Shell:
                     warn("nothing to copy yet")
                     continue
                 if copy_text(content):
-                    ok(
-                        f"copied {len(content)} chars to clipboard (session transcript)"
-                    )
+                    ok(f"copied {len(content)} chars to clipboard (session transcript)")
                 else:
                     warn("clipboard unavailable — printing transcript instead")
                     con.print(content)
@@ -1442,9 +1367,7 @@ class Shell:
             elif lo.startswith("/system "):
                 prompt = raw[8:].strip()
                 self.session.set_system(prompt)
-                ok(
-                    f"system prompt set ({len(prompt)} chars) · history cleared"
-                )
+                ok(f"system prompt set ({len(prompt)} chars) · history cleared")
 
             # ── prompt presets ───────────────────────────────────────────
             elif lo == "/prompts":
@@ -1496,9 +1419,7 @@ class Shell:
                     continue
                 name, desc = parts_sk[0].lower(), parts_sk[1]
                 if name in SKILL_PRESETS:
-                    warn(
-                        f"'{name}' is a built-in skill name — choose a different name"
-                    )
+                    warn(f"'{name}' is a built-in skill name — choose a different name")
                     continue
                 con.print(
                     f"  [{C['dim']}]enter system prompt (end with a line containing only ///)[/{C['dim']}]"
@@ -1563,9 +1484,7 @@ class Shell:
                 self.session.set_system(skill["prompt"])
                 if not self.agent_mode:
                     self.agent_mode = True
-                    con.print(
-                        f"  [{C['purple']}][AGENT ON][/{C['purple']}]", end=" "
-                    )
+                    con.print(f"  [{C['purple']}][AGENT ON][/{C['purple']}]", end=" ")
                 tag = "[custom] " if name in custom else ""
                 ok(f"loaded skill: {tag}{name} — {skill['desc']}")
 
@@ -1581,9 +1500,7 @@ class Shell:
                 section("agent squads")
                 for name, sq in squads.items():
                     members = sq.get("members", [])
-                    m_str = ", ".join(
-                        f"{m['role']}({m['model']})" for m in members
-                    )
+                    m_str = ", ".join(f"{m['role']}({m['model']})" for m in members)
                     con.print(
                         f"  [{C['accent']}]{name}[/{C['accent']}]  [{C['dim']}]{len(members)} agents: {m_str}[/{C['dim']}]"
                     )
@@ -1600,9 +1517,7 @@ class Shell:
                 squads[name] = {"members": []}
                 self.config.set("squads", squads)
                 self.config.save()
-                ok(
-                    f"squad created: {name}  (add members with /squad add {name} ...)"
-                )
+                ok(f"squad created: {name}  (add members with /squad add {name} ...)")
 
             elif lo.startswith("/squad add "):
                 toks = raw[11:].strip().split()
@@ -1714,9 +1629,7 @@ class Shell:
                     continue
                 members = squads[squad_name].get("members", [])
                 if not members:
-                    warn(
-                        f"squad '{squad_name}' has no members — use /squad add"
-                    )
+                    warn(f"squad '{squad_name}' has no members — use /squad add")
                     continue
                 self._run_squad(squad_name, members, task)
 
@@ -1729,9 +1642,7 @@ class Shell:
                     "  /squad add <name> <role> <model> [--provider <a>] [--skill <s>]"
                 )
                 hint("  /squad remove <name> <role>")
-                hint(
-                    "  /squad run <name> <task> — execute task with all squad members"
-                )
+                hint("  /squad run <name> <task> — execute task with all squad members")
 
             # ── orchestrate ─────────────────────────────────────────────
             elif lo.startswith("/orchestrate "):
@@ -1841,7 +1752,6 @@ class Shell:
                 )
 
             elif lo == "/chats":
-
                 import json
 
                 chats_dir = os.path.expanduser("~/.config/dct/chats")
@@ -1851,9 +1761,7 @@ class Shell:
                     reverse=True,
                 )
                 if not files:
-                    con.print(
-                        f"  [{C['dim']}]no saved chats found[/{C['dim']}]"
-                    )
+                    con.print(f"  [{C['dim']}]no saved chats found[/{C['dim']}]")
                     continue
                 section("saved chats")
                 for i, f in enumerate(files):
@@ -1882,9 +1790,7 @@ class Shell:
                                 )
                     except Exception:
                         pass
-                con.print(
-                    f"  [{C['dim']}]use /chat switch <id> to load[/{C['dim']}]"
-                )
+                con.print(f"  [{C['dim']}]use /chat switch <id> to load[/{C['dim']}]")
 
             elif lo.startswith("/chat switch "):
                 idx_str = raw[13:].strip()
@@ -1903,9 +1809,7 @@ class Shell:
 
                     fname = files[idx]
                     self.session = Session.load(os.path.join(chats_dir, fname))
-                    ok(
-                        f"loaded chat: {fname} ({self.session.user_turns} turns)"
-                    )
+                    ok(f"loaded chat: {fname} ({self.session.user_turns} turns)")
                 except Exception as e:
                     err(f"failed to switch chat: {e}")
 
@@ -1919,9 +1823,7 @@ class Shell:
                 )
                 ok(f"agent mode {state}")
                 if self.agent_mode:
-                    hint(
-                        "model can now run code, read/write files, search the web"
-                    )
+                    hint("model can now run code, read/write files, search the web")
                     hint("type /help agent for details")
 
             elif lo == "/agent status":
@@ -1992,10 +1894,13 @@ class Shell:
             # ── tasks ─────────────────────────────────────────────────────
             elif lo == "/verbose":
                 from dct.core.config import Config
+
                 cfg = Config()
                 is_verb = not cfg.get("verbose", False)
                 cfg.set("verbose", is_verb)
-                con.print(f"  [{C['ok']}]Verbose mode {'enabled' if is_verb else 'disabled'}[/{C['ok']}]")
+                con.print(
+                    f"  [{C['ok']}]Verbose mode {'enabled' if is_verb else 'disabled'}[/{C['ok']}]"
+                )
 
             elif lo == "/tasks":
                 from dct.tools.tasks import get_tracker
@@ -2028,7 +1933,7 @@ class Shell:
                     warn("usage: /vision <image_path> <prompt>")
                     continue
                 img_path = rest[1].split(None, 1)[0]
-                prompt = rest[1][len(img_path):].strip()
+                prompt = rest[1][len(img_path) :].strip()
                 if not prompt:
                     warn("usage: /vision <image_path> <prompt>")
                     continue
@@ -2224,9 +2129,7 @@ class Shell:
                 import httpx
 
                 if isinstance(e, httpx.RequestError):
-                    warn(
-                        f"\nConnection to {self.active.alias} lost mid-stream."
-                    )
+                    warn(f"\nConnection to {self.active.alias} lost mid-stream.")
                     # Re-probe and find a fallback
                     probe_server(self.active)
                     self.registry.save()
@@ -2234,9 +2137,7 @@ class Shell:
                     if fallback and fallback != self.active:
                         self.active = fallback
                         self.model = self.active.best_model(self.model)
-                        warn(
-                            f"Failing over to {self.active.alias} · {self.model}..."
-                        )
+                        warn(f"Failing over to {self.active.alias} · {self.model}...")
                         con.print(
                             f"\n  [{C['dim']}]{chr(9472) * 66}[/{C['dim']}]\n  ",
                             end="",
@@ -2254,9 +2155,7 @@ class Shell:
         con.print()
         if full:
             self.session.add("assistant", full)
-            write_trace_entry(
-                self.session, "model_response", {"content": full}
-            )
+            write_trace_entry(self.session, "model_response", {"content": full})
 
     def _run_agent(self, messages: list[dict], user_text: str):
         """Run the agentic loop."""
@@ -2287,13 +2186,13 @@ class Shell:
             from rich.syntax import Syntax
             from dct.core.config import Config
             import ast
-            
+
             con.print()
             try:
                 call = ast.literal_eval(args_str)
             except Exception:
                 call = {}
-                
+
             content = ""
             lang = "text"
             if "code" in call:
@@ -2312,35 +2211,52 @@ class Shell:
                 content = call["query"]
             elif args_str:
                 content = args_str
-                
+
             if content:
                 is_verbose = Config().get("verbose", False)
                 lines = content.splitlines()
                 if not is_verbose and len(lines) > 10:
-                    content = "\n".join(lines[:10]) + f"\n\n... [{len(lines)-10} more lines hidden. Use /verbose to show full]"
-                
+                    content = (
+                        "\n".join(lines[:10])
+                        + f"\n\n... [{len(lines) - 10} more lines hidden. Use /verbose to show full]"
+                    )
+
                 if lang in ("python", "bash"):
-                    display_content = Syntax(content, lang, theme="monokai", word_wrap=True)
+                    display_content = Syntax(
+                        content, lang, theme="monokai", word_wrap=True
+                    )
                 else:
                     display_content = content
-                    
-                panel = Panel(display_content, title=f"[{C['yellow']}]⚡ Tool:[/{C['yellow']}] [{C['fg']}]{tool_name}[/{C['fg']}]", border_style="yellow", expand=False)
+
+                panel = Panel(
+                    display_content,
+                    title=f"[{C['yellow']}]⚡ Tool:[/{C['yellow']}] [{C['fg']}]{tool_name}[/{C['fg']}]",
+                    border_style="yellow",
+                    expand=False,
+                )
                 con.print(panel)
             else:
-                con.print(f"\n  [{C['yellow']}]⚡ tool:[/{C['yellow']}] [{C['fg']}]{tool_name}[/{C['fg']}]")
+                con.print(
+                    f"\n  [{C['yellow']}]⚡ tool:[/{C['yellow']}] [{C['fg']}]{tool_name}[/{C['fg']}]"
+                )
 
         def _on_result(tool_name: str, result: str):
             from rich.panel import Panel
             from dct.core.config import Config
-            
+
             is_verbose = Config().get("verbose", False)
             lines = result.splitlines()
             if not is_verbose and len(lines) > 15:
-                content = "\n".join(lines[:15]) + f"\n\n... [{len(lines)-15} more lines hidden. Use /verbose to show full output]"
+                content = (
+                    "\n".join(lines[:15])
+                    + f"\n\n... [{len(lines) - 15} more lines hidden. Use /verbose to show full output]"
+                )
             else:
                 content = result
-                
-            panel = Panel(content, title=f"Result: {tool_name}", border_style="blue", expand=False)
+
+            panel = Panel(
+                content, title=f"Result: {tool_name}", border_style="blue", expand=False
+            )
             con.print()
             con.print(panel)
             con.print(f"  [{C['dim']}]continuing…[/{C['dim']}]")
@@ -2422,13 +2338,13 @@ class Shell:
             from rich.syntax import Syntax
             from dct.core.config import Config
             import ast
-            
+
             con.print()
             try:
                 call = ast.literal_eval(args_str)
             except Exception:
                 call = {}
-                
+
             content = ""
             lang = "text"
             if "code" in call:
@@ -2447,35 +2363,52 @@ class Shell:
                 content = call["query"]
             elif args_str:
                 content = args_str
-                
+
             if content:
                 is_verbose = Config().get("verbose", False)
                 lines = content.splitlines()
                 if not is_verbose and len(lines) > 10:
-                    content = "\n".join(lines[:10]) + f"\n\n... [{len(lines)-10} more lines hidden. Use /verbose to show full]"
-                
+                    content = (
+                        "\n".join(lines[:10])
+                        + f"\n\n... [{len(lines) - 10} more lines hidden. Use /verbose to show full]"
+                    )
+
                 if lang in ("python", "bash"):
-                    display_content = Syntax(content, lang, theme="monokai", word_wrap=True)
+                    display_content = Syntax(
+                        content, lang, theme="monokai", word_wrap=True
+                    )
                 else:
                     display_content = content
-                    
-                panel = Panel(display_content, title=f"[{C['yellow']}]⚡ Tool:[/{C['yellow']}] [{C['fg']}]{tool_name}[/{C['fg']}]", border_style="yellow", expand=False)
+
+                panel = Panel(
+                    display_content,
+                    title=f"[{C['yellow']}]⚡ Tool:[/{C['yellow']}] [{C['fg']}]{tool_name}[/{C['fg']}]",
+                    border_style="yellow",
+                    expand=False,
+                )
                 con.print(panel)
             else:
-                con.print(f"\n  [{C['yellow']}]⚡ tool:[/{C['yellow']}] [{C['fg']}]{tool_name}[/{C['fg']}]")
+                con.print(
+                    f"\n  [{C['yellow']}]⚡ tool:[/{C['yellow']}] [{C['fg']}]{tool_name}[/{C['fg']}]"
+                )
 
         def _on_result(tool_name: str, result: str):
             from rich.panel import Panel
             from dct.core.config import Config
-            
+
             is_verbose = Config().get("verbose", False)
             lines = result.splitlines()
             if not is_verbose and len(lines) > 15:
-                content = "\n".join(lines[:15]) + f"\n\n... [{len(lines)-15} more lines hidden. Use /verbose to show full output]"
+                content = (
+                    "\n".join(lines[:15])
+                    + f"\n\n... [{len(lines) - 15} more lines hidden. Use /verbose to show full output]"
+                )
             else:
                 content = result
-                
-            panel = Panel(content, title=f"Result: {tool_name}", border_style="blue", expand=False)
+
+            panel = Panel(
+                content, title=f"Result: {tool_name}", border_style="blue", expand=False
+            )
             con.print()
             con.print(panel)
             con.print(f"  [{C['dim']}]continuing…[/{C['dim']}]")
@@ -2488,9 +2421,7 @@ class Shell:
                 user_system_prompt=self.session.system_prompt or "",
             )
             system_msg = {"role": "system", "content": dynamic_prompt}
-            non_system_msgs = [
-                m for m in messages if m.get("role") != "system"
-            ]
+            non_system_msgs = [m for m in messages if m.get("role") != "system"]
             agent_msgs = [system_msg] + non_system_msgs
 
             con.print(
@@ -2528,18 +2459,12 @@ class Shell:
                         "Please continue working on the goal until it is fully finished.",
                     )
                 else:
-                    warn(
-                        "Reached maximum goal iterations safety limit. Stopping."
-                    )
+                    warn("Reached maximum goal iterations safety limit. Stopping.")
             except KeyboardInterrupt:
-                con.print(
-                    f"\n  [{C['dim']}]Goal cancelled by user.[/{C['dim']}]"
-                )
+                con.print(f"\n  [{C['dim']}]Goal cancelled by user.[/{C['dim']}]")
                 break
             except Exception as e:
-                con.print(
-                    f"\n  [{C['err']}][GOAL ERROR]: {str(e)}[/{C['err']}]"
-                )
+                con.print(f"\n  [{C['err']}][GOAL ERROR]: {str(e)}[/{C['err']}]")
                 break
 
         # After goal finishes, explicitly run the learning loop
@@ -2552,9 +2477,7 @@ class Shell:
             return
 
         # Build message history with the side question appended
-        messages = self.session.as_messages() + [
-            {"role": "user", "content": msg_txt}
-        ]
+        messages = self.session.as_messages() + [{"role": "user", "content": msg_txt}]
 
         con.print(
             f"\n  [{C['purple']}][BTW MODE][/{C['purple']}]  [{C['dim']}]{self.active.alias} · {self.model} · {ts()}[/{C['dim']}]"
@@ -2589,9 +2512,7 @@ class Shell:
                 import httpx
 
                 if isinstance(e, httpx.RequestError):
-                    warn(
-                        f"\nConnection to {self.active.alias} lost mid-stream."
-                    )
+                    warn(f"\nConnection to {self.active.alias} lost mid-stream.")
                     # Re-probe and find a fallback
                     probe_server(self.active)
                     self.registry.save()
@@ -2599,9 +2520,7 @@ class Shell:
                     if fallback and fallback != self.active:
                         self.active = fallback
                         self.model = self.active.best_model(self.model)
-                        warn(
-                            f"Failing over to {self.active.alias} · {self.model}..."
-                        )
+                        warn(f"Failing over to {self.active.alias} · {self.model}...")
                         con.print(
                             f"\n  [{C['dim']}]{chr(9472) * 66}[/{C['dim']}]\n  ",
                             end="",
@@ -2630,9 +2549,7 @@ class Shell:
 
         def _send(s: Server):
             m = s.best_model(self.model)
-            msgs = self.session.as_messages() + [
-                {"role": "user", "content": msg_text}
-            ]
+            msgs = self.session.as_messages() + [{"role": "user", "content": msg_text}]
             full = ""
             con.print(
                 f"\n  [{C['accent']}]{s.alias}[/{C['accent']}]"
@@ -2654,8 +2571,7 @@ class Shell:
                 replies[s.alias] = full
 
         threads = [
-            threading.Thread(target=_send, args=(s,), daemon=True)
-            for s in targets
+            threading.Thread(target=_send, args=(s,), daemon=True) for s in targets
         ]
         for t in threads:
             t.start()

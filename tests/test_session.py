@@ -13,9 +13,7 @@ def test_write_trace_entry_disabled(monkeypatch, tmp_path):
     monkeypatch.setattr(session_module, "_cfg", DummyConfig())
 
     session = Session(name="test_sess")
-    monkeypatch.setattr(
-        os.path, "expanduser", lambda x: x.replace("~", str(tmp_path))
-    )
+    monkeypatch.setattr(os.path, "expanduser", lambda x: x.replace("~", str(tmp_path)))
     write_trace_entry(session, "test", {"msg": "hello"})
     assert not (tmp_path / ".config/dct/transcripts").exists()
 
@@ -32,9 +30,7 @@ def test_write_trace_entry_enabled(monkeypatch, tmp_path):
     # name test/sess-<>_ will test sanitization: c.isalnum() or c in ("-", "_")
     # t e s t s e s s - _
     session = Session(name="test/sess-<>_")
-    monkeypatch.setattr(
-        os.path, "expanduser", lambda x: x.replace("~", str(tmp_path))
-    )
+    monkeypatch.setattr(os.path, "expanduser", lambda x: x.replace("~", str(tmp_path)))
     write_trace_entry(session, "test", {"msg": "hello"})
 
     log_dir = tmp_path / ".config/dct/transcripts"
@@ -59,9 +55,7 @@ def test_write_trace_entry_config_exception(monkeypatch, tmp_path):
     monkeypatch.setattr(session_module, "_get_cfg", mock_get_cfg)
 
     session = Session(name="test_sess")
-    monkeypatch.setattr(
-        os.path, "expanduser", lambda x: x.replace("~", str(tmp_path))
-    )
+    monkeypatch.setattr(os.path, "expanduser", lambda x: x.replace("~", str(tmp_path)))
     # Should not raise exception
     write_trace_entry(session, "test", {"msg": "hello"})
     assert not (tmp_path / ".config/dct/transcripts").exists()
@@ -77,9 +71,7 @@ def test_write_trace_entry_write_exception(monkeypatch, tmp_path):
     monkeypatch.setattr(session_module, "_cfg", DummyConfig())
 
     session = Session(name="test_sess")
-    monkeypatch.setattr(
-        os.path, "expanduser", lambda x: x.replace("~", str(tmp_path))
-    )
+    monkeypatch.setattr(os.path, "expanduser", lambda x: x.replace("~", str(tmp_path)))
 
     # Mock open to raise exception
     with patch("builtins.open", mock_open()) as mocked_file:

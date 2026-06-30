@@ -62,13 +62,13 @@ def _post_stream(
 def _inject_prompt_caching(messages: list[dict], model: str) -> list[dict]:
     """Inject Anthropic's cache_control block into Claude requests."""
     import copy
-    
+
     if "claude" not in model.lower():
         return messages
-        
+
     msgs = copy.deepcopy(messages)
     breakpoints_added = 0
-    
+
     # 1. System prompt (usually at index 0)
     for m in msgs:
         if m["role"] == "system" and breakpoints_added < 4:
@@ -77,7 +77,7 @@ def _inject_prompt_caching(messages: list[dict], model: str) -> list[dict]:
                     {
                         "type": "text",
                         "text": m["content"],
-                        "cache_control": {"type": "ephemeral"}
+                        "cache_control": {"type": "ephemeral"},
                     }
                 ]
                 breakpoints_added += 1
@@ -98,7 +98,7 @@ def _inject_prompt_caching(messages: list[dict], model: str) -> list[dict]:
             targets.append(user_indices[-3])
         elif len(user_indices) > 1:
             targets.append(user_indices[-2])
-            
+
     for idx in targets:
         if breakpoints_added >= 4:
             break
@@ -108,7 +108,7 @@ def _inject_prompt_caching(messages: list[dict], model: str) -> list[dict]:
                 {
                     "type": "text",
                     "text": m["content"],
-                    "cache_control": {"type": "ephemeral"}
+                    "cache_control": {"type": "ephemeral"},
                 }
             ]
             breakpoints_added += 1
@@ -118,7 +118,7 @@ def _inject_prompt_caching(messages: list[dict], model: str) -> list[dict]:
                     block["cache_control"] = {"type": "ephemeral"}
                     breakpoints_added += 1
                     break
-                    
+
     return msgs
 
 
@@ -135,10 +135,11 @@ def chat_stream(
     if srv.provider == "openrouter":
         headers["HTTP-Referer"] = "https://github.com/doraemon-cyber-team/dct"
         headers["X-Title"] = "DCT Agent"
-        
+
     messages = _inject_prompt_caching(messages, model)
-    
+
     from dct.core.config import Config
+
     cfg = Config()
     payload = {
         "model": model,
@@ -165,12 +166,16 @@ def chat_stream(
                             "id": tc.get("id"),
                             "function": {
                                 "name": tc.get("function", {}).get("name", ""),
-                                "arguments": tc.get("function", {}).get("arguments", "")
-                            }
+                                "arguments": tc.get("function", {}).get(
+                                    "arguments", ""
+                                ),
+                            },
                         }
                     else:
                         if tc.get("function", {}).get("arguments"):
-                            tool_calls_buffer[idx]["function"]["arguments"] += tc["function"]["arguments"]
+                            tool_calls_buffer[idx]["function"]["arguments"] += tc[
+                                "function"
+                            ]["arguments"]
 
             content = _extract_stream_text(delta)
             if content:
@@ -180,23 +185,23 @@ def chat_stream(
         yield {"tool_calls": list(tool_calls_buffer.values())}
 
 
-def chat_once(srv: "Server", model: str, messages: list[dict], tools: list[dict] | None = None) -> str | dict:
+def chat_once(
+    srv: "Server", model: str, messages: list[dict], tools: list[dict] | None = None
+) -> str | dict:
     """Non-streaming chat — returns full reply as string."""
     url = f"{srv.base_url()}/chat/completions"
     headers = {"Authorization": f"Bearer {srv.api_key}"}
     if srv.provider == "openrouter":
         headers["HTTP-Referer"] = "https://github.com/doraemon-cyber-team/dct"
         headers["X-Title"] = "DCT Agent"
-        
+
     messages = _inject_prompt_caching(messages, model)
-    
+
     payload = {"model": model, "messages": messages, "stream": False}
     if tools:
         payload["tools"] = tools
 
-    r = http.client.post(
-        url, headers=headers, json=payload, timeout=CHAT_TIMEOUT
-    )
+    r = http.client.post(url, headers=headers, json=payload, timeout=CHAT_TIMEOUT)
     r.raise_for_status()
     data = r.json()
     if "choices" in data and len(data["choices"]) > 0:
@@ -249,7 +254,9 @@ def pull_stream(srv: "Server", model: str) -> Iterator[dict]:
     yield {"status": "success"}
 
 
-def get_embeddings(srv: "Server", text: str, model: str = "text-embedding-3-small") -> list[float]:
+def get_embeddings(
+    srv: "Server", text: str, model: str = "text-embedding-3-small"
+) -> list[float]:
     url = f"{srv.base_url()}/embeddings"
     headers = {"Authorization": f"Bearer {srv.api_key}"}
     if srv.provider == "openrouter":

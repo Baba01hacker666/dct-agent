@@ -76,6 +76,7 @@ def chat_stream(
 
     url = f"{srv.base_url()}/api/chat"
     from dct.core.config import Config
+
     cfg = Config()
     payload: dict = {
         "model": model,
@@ -154,9 +155,7 @@ def list_models(srv: "Server") -> list[dict]:
 def show_model(srv: "Server", model: str) -> dict:
     r = http.client.post(
         f"{srv.base_url()}/api/show",
-        **_request_kwargs(
-            srv, {"json": {"name": model}, "timeout": DEFAULT_TIMEOUT}
-        ),
+        **_request_kwargs(srv, {"json": {"name": model}, "timeout": DEFAULT_TIMEOUT}),
     )
     r.raise_for_status()
     return r.json()
@@ -172,8 +171,7 @@ def delete_model(srv: "Server", model: str) -> bool:
             ),
         )
         return r.is_success
-    except Exception as e:
-        logger.error(f"Failed to delete model {model}: {e}")
+    except Exception:
         return False
 
 
@@ -203,7 +201,9 @@ def pull_stream(srv: "Server", model: str) -> Iterator[dict]:
     yield from _post_stream(url, payload, PULL_TIMEOUT, srv)
 
 
-def get_embeddings(srv: "Server", text: str, model: str = "nomic-embed-text") -> list[float]:
+def get_embeddings(
+    srv: "Server", text: str, model: str = "nomic-embed-text"
+) -> list[float]:
     kwargs = _request_kwargs(srv)
     kwargs["json"] = {"model": model, "prompt": text}
     kwargs["timeout"] = 15

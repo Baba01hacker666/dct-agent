@@ -74,9 +74,7 @@ def _run(
         return "", str(e), -1, False
 
 
-def run_python(
-    code: str, timeout: int = 30, cwd: str | None = None
-) -> ExecResult:
+def run_python(code: str, timeout: int = 30, cwd: str | None = None) -> ExecResult:
     """Execute Python code in a dedicated virtual environment with auto-pip installation."""
     code = textwrap.dedent(code)
     t0 = time.time()
@@ -93,17 +91,13 @@ def run_python(
     try:
         if not os.path.exists(venv_python):
             os.makedirs(os.path.dirname(venv_dir), exist_ok=True)
-            subprocess.run(
-                [sys.executable, "-m", "venv", venv_dir], check=True
-            )
+            subprocess.run([sys.executable, "-m", "venv", venv_dir], check=True)
     except Exception:
         logger.debug("Failed to set up venv at %s", venv_dir, exc_info=True)
         use_venv = False
 
     python_bin = (
-        venv_python
-        if (use_venv and os.path.exists(venv_python))
-        else sys.executable
+        venv_python if (use_venv and os.path.exists(venv_python)) else sys.executable
     )
 
     # Allow up to 3 auto-install retries for cases where code requires multiple missing packages
@@ -148,9 +142,7 @@ def run_python(
             )
             if m:
                 missing_module = m.group(1)
-                package_name = MODULE_MAPPING.get(
-                    missing_module, missing_module
-                )
+                package_name = MODULE_MAPPING.get(missing_module, missing_module)
 
                 # Prevent infinite loops installing the same package
                 if package_name in installed_packages:
@@ -168,7 +160,9 @@ def run_python(
                         retries += 1
                         continue  # Retry running the python code
                 except Exception:
-                    logger.debug("Failed to pip install %s", package_name, exc_info=True)
+                    logger.debug(
+                        "Failed to pip install %s", package_name, exc_info=True
+                    )
         break
 
     if installed_packages:
@@ -186,9 +180,7 @@ def run_python(
     )
 
 
-def run_bash(
-    code: str, timeout: int = 30, cwd: str | None = None
-) -> ExecResult:
+def run_bash(code: str, timeout: int = 30, cwd: str | None = None) -> ExecResult:
     """Execute bash script."""
     code = textwrap.dedent(code)
     with tempfile.NamedTemporaryFile(
@@ -269,9 +261,7 @@ def prepare_background_command(
         try:
             if not os.path.exists(venv_python):
                 os.makedirs(os.path.dirname(venv_dir), exist_ok=True)
-                subprocess.run(
-                    [sys.executable, "-m", "venv", venv_dir], check=True
-                )
+                subprocess.run([sys.executable, "-m", "venv", venv_dir], check=True)
         except Exception:
             use_venv = False
 

@@ -5,9 +5,7 @@ from dct.core.config import Config, DEFAULTS
 
 def test_config_load_success(tmp_path):
     config_file = tmp_path / "config.json"
-    config_file.write_text(
-        json.dumps({"history_limit": 50, "temperature": 0.5})
-    )
+    config_file.write_text(json.dumps({"history_limit": 50, "temperature": 0.5}))
 
     config = Config(str(config_file))
 

@@ -24,9 +24,11 @@ from dct.cli.shell import Shell
 class RichArgumentParser(argparse.ArgumentParser):
     def error(self, message: str) -> None:
         from dct.core.theme import err
+
         err(f"argument error: {message}")
         self.print_help(sys.stderr)
         sys.exit(2)
+
 
 def port_type(v: str) -> int:
     try:
@@ -65,9 +67,7 @@ Interactive mode (default):
 Inside the shell type /help for all commands.
         """,
     )
-    p.add_argument(
-        "-H", "--host", default="", help="initial/primary server host"
-    )
+    p.add_argument("-H", "--host", default="", help="initial/primary server host")
     p.add_argument(
         "-p",
         "--port",
@@ -87,9 +87,7 @@ Inside the shell type /help for all commands.
         action="store_true",
         help="disable autonomous agent mode on startup",
     )
-    p.add_argument(
-        "--version", action="store_true", help="print version and exit"
-    )
+    p.add_argument("--version", action="store_true", help="print version and exit")
 
     sub = p.add_subparsers(dest="cmd")
 
@@ -117,17 +115,13 @@ Inside the shell type /help for all commands.
         "add-openai",
         help="register OpenAI-compatible provider (DeepSeek, Qwen, etc.)",
     )
-    pai.add_argument(
-        "base_url", help="API base URL (e.g. https://api.deepseek.com)"
-    )
+    pai.add_argument("base_url", help="API base URL (e.g. https://api.deepseek.com)")
     pai.add_argument("key", help="API key")
     pai.add_argument("alias", nargs="?", default="")
     pai.add_argument("note", nargs="?", default="")
 
     # add-provider (convenience)
-    pap = sub.add_parser(
-        "add-provider", help="register from built-in provider presets"
-    )
+    pap = sub.add_parser("add-provider", help="register from built-in provider presets")
     pap.add_argument("name", help="provider name (deepseek, qwen, groq, etc.)")
     pap.add_argument("key", help="API key")
     pap.add_argument("alias", nargs="?", default="")
@@ -219,10 +213,7 @@ def main():
         return
 
     if args.cmd == "add-openai":
-        alias = (
-            args.alias
-            or args.base_url.split("://")[-1].split("/")[0].split(".")[0]
-        )
+        alias = args.alias or args.base_url.split("://")[-1].split("/")[0].split(".")[0]
         srv = registry.add(
             "api",
             443,
@@ -249,10 +240,7 @@ def main():
         name = args.name.lower()
         if name not in PROVIDER_PRESETS:
             err(f"unknown provider: {name}")
-            info(
-                "built-in presets: "
-                + ", ".join(sorted(PROVIDER_PRESETS.keys()))
-            )
+            info("built-in presets: " + ", ".join(sorted(PROVIDER_PRESETS.keys())))
             sys.exit(1)
         preset = PROVIDER_PRESETS[name]
         alias = args.alias or name
@@ -336,9 +324,7 @@ def main():
         if not s:
             err(f"server not found: {args.target}")
             sys.exit(1)
-        con.print(
-            f"\n  [{C['accent']}]pull[/{C['accent']}] {args.model} → {s.alias}\n"
-        )
+        con.print(f"\n  [{C['accent']}]pull[/{C['accent']}] {args.model} → {s.alias}\n")
         try:
             last = ""
             for chunk in pull_stream(s, args.model):
@@ -433,9 +419,7 @@ def main():
         )
         results = probe_all(registry)
         online = len(registry.online())
-        con.print(
-            f"  [{C['ok']}]{online}[/{C['ok']}] [{C['dim']}]online[/{C['dim']}]"
-        )
+        con.print(f"  [{C['ok']}]{online}[/{C['ok']}] [{C['dim']}]online[/{C['dim']}]")
 
     shell = Shell(registry)
     if args.no_agent:
@@ -443,5 +427,6 @@ def main():
     shell.init(init_alias=init_alias, init_model=args.model)
     shell.run()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

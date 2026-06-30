@@ -40,9 +40,7 @@ class Session:
         try:
             self.save(os.path.join(chats_dir, f"{self.name}.json"))
         except Exception:
-            logger.debug(
-                "Autosave failed for session %s", self.name, exc_info=True
-            )
+            logger.debug("Autosave failed for session %s", self.name, exc_info=True)
 
     def add(self, role: str, content: str):
         self.messages.append({"role": role, "content": content})
@@ -51,9 +49,7 @@ class Session:
     def clear(self, keep_system: bool = True):
         self.messages = []
         if keep_system and self.system_prompt:
-            self.messages.append(
-                {"role": "system", "content": self.system_prompt}
-            )
+            self.messages.append({"role": "system", "content": self.system_prompt})
         self._autosave()
 
     def set_system(self, prompt: str):
@@ -162,9 +158,7 @@ def write_trace_entry(session: "Session", entry_type: str, data: dict):
 
     session_id = session.name or f"session_{int(session.created_at)}"
     # Sanitize filename
-    session_id = "".join(
-        c for c in session_id if c.isalnum() or c in ("-", "_")
-    )
+    session_id = "".join(c for c in session_id if c.isalnum() or c in ("-", "_"))
     log_file = os.path.join(log_dir, f"{session_id}.jsonl")
 
     trace_data = {
