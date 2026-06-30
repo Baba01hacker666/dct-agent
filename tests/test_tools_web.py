@@ -1,5 +1,5 @@
 from unittest.mock import patch, MagicMock
-from requests.exceptions import RequestException
+import httpx
 from dct.tools.web import _strip_html, _extract_title, fetch_url
 
 
@@ -167,8 +167,8 @@ def test_fetch_url_request_exception(
     mock_validate_url, mock_get_validated_response
 ):
     mock_validate_url.return_value = None
-    mock_get_validated_response.side_effect = RequestException(
-        "Connection error"
+    mock_get_validated_response.side_effect = httpx.RequestError(
+        "Connection error", request=MagicMock()
     )
 
     result = fetch_url("https://example.com")
