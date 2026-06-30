@@ -48,6 +48,20 @@ class TestUrlValidator:
         assert validate_url("not-a-url") is not None
         assert validate_url("") is not None
 
+    def test_handles_dns_resolution_failure(self, monkeypatch):
+        from dct.tools.url_validator import validate_url
+        import socket
+
+        def mock_getaddrinfo(*args, **kwargs):
+            raise socket.gaierror("Name or service not known")
+
+        monkeypatch.setattr(socket, "getaddrinfo", mock_getaddrinfo)
+
+        err = validate_url("http://nonexistent.domain.example.com")
+        assert err is not None
+        assert "DNS resolution failed" in err
+        assert "nonexistent.domain.example.com" in err
+
     def test_ssrf_applied_in_fetch_url(self):
         from dct.tools.web import fetch_url
 
@@ -67,7 +81,7 @@ class TestUrlValidator:
         def fake_get(*args, **kwargs):
             return Response()
 
-        monkeypatch.setattr("dct.tools.web.requests.get", fake_get)
+        monkeypatch.setattr("dct.tools.web.requests.Session.get", fake_get)
         res = fetch_url("https://example.com/start")
         assert not res.ok
         assert "Blocked" in res.message or "internal" in res.message.lower()
@@ -95,7 +109,7 @@ class TestUrlValidator:
         def fake_get(*args, **kwargs):
             return responses.pop(0)
 
-        monkeypatch.setattr("dct.tools.web.requests.get", fake_get)
+        monkeypatch.setattr("dct.tools.web.requests.Session.get", fake_get)
         res = fetch_url("https://example.com/start")
         assert res.ok
         assert res.url == "https://example.com/final"
