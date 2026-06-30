@@ -2,17 +2,19 @@
 
 import sys
 import os
-import tempfile
 import pytest
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+)
 
-from dct.tools.files import read_file, ReadResult, fmt_size, _is_binary
+from dct.tools.files import read_file, ReadResult, fmt_size, _is_binary  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_file(tmp_path, name, content, binary=False):
     """Create a file in tmp_path and return its path string."""
@@ -32,6 +34,7 @@ def _make_lines(n):
 # ---------------------------------------------------------------------------
 # Basic reads
 # ---------------------------------------------------------------------------
+
 
 class TestBasicRead:
     def test_read_simple_file(self, tmp_path):
@@ -79,6 +82,7 @@ class TestBasicRead:
 # Binary detection
 # ---------------------------------------------------------------------------
 
+
 class TestBinaryDetection:
     def test_binary_file_rejected(self, tmp_path):
         data = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
@@ -98,15 +102,25 @@ class TestBinaryDetection:
 
     def test_binary_detection_utility(self, tmp_path):
         from pathlib import Path
+
         bin_path = _make_file(tmp_path, "b.bin", b"\x00\x01\x02", binary=True)
         txt_path = _make_file(tmp_path, "t.txt", "hello")
         assert _is_binary(Path(bin_path))
         assert not _is_binary(Path(txt_path))
 
+    def test_binary_detection_error_path(self, tmp_path):
+        # Passing a non-existent file should return False
+        non_existent_path = tmp_path / "does_not_exist.txt"
+        assert not _is_binary(non_existent_path)
+
+        # Passing a directory should return False
+        assert not _is_binary(tmp_path)
+
 
 # ---------------------------------------------------------------------------
 # Line slicing — start_line / end_line
 # ---------------------------------------------------------------------------
+
 
 class TestLineSlicing:
     @pytest.fixture(autouse=True)
@@ -153,6 +167,7 @@ class TestLineSlicing:
 # Tail slicing
 # ---------------------------------------------------------------------------
 
+
 class TestTailSlicing:
     @pytest.fixture(autouse=True)
     def make_test_file(self, tmp_path):
@@ -190,6 +205,7 @@ class TestTailSlicing:
 # Line limit / truncation
 # ---------------------------------------------------------------------------
 
+
 class TestLineLimit:
     def test_truncation(self, tmp_path):
         content = _make_lines(3000)
@@ -218,6 +234,7 @@ class TestLineLimit:
 # Size limits
 # ---------------------------------------------------------------------------
 
+
 class TestSizeLimits:
     def test_reject_oversized_file(self, tmp_path):
         # Create a file just over 512KB
@@ -244,6 +261,7 @@ class TestSizeLimits:
 # ---------------------------------------------------------------------------
 # Edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestEdgeCases:
     def test_single_line_no_newline(self, tmp_path):
@@ -276,6 +294,7 @@ class TestEdgeCases:
 # ---------------------------------------------------------------------------
 # fmt_size utility
 # ---------------------------------------------------------------------------
+
 
 class TestFmtSize:
     def test_bytes(self):
