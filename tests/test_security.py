@@ -67,7 +67,7 @@ class TestUrlValidator:
         def fake_get(*args, **kwargs):
             return Response()
 
-        monkeypatch.setattr("dct.tools.web.requests.get", fake_get)
+        monkeypatch.setattr("dct.tools.web.requests.Session.get", fake_get)
         res = fetch_url("https://example.com/start")
         assert not res.ok
         assert "Blocked" in res.message or "internal" in res.message.lower()
@@ -95,7 +95,7 @@ class TestUrlValidator:
         def fake_get(*args, **kwargs):
             return responses.pop(0)
 
-        monkeypatch.setattr("dct.tools.web.requests.get", fake_get)
+        monkeypatch.setattr("dct.tools.web.requests.Session.get", fake_get)
         res = fetch_url("https://example.com/start")
         assert res.ok
         assert res.url == "https://example.com/final"
