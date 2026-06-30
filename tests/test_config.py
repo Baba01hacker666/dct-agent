@@ -47,28 +47,33 @@ def test_config_save(tmp_path):
     assert saved_data["history_limit"] == 200
 
 
-@patch("dct.core.config.open")
-def test_config_generic_exception(mock_open, tmp_path, caplog):
-    # Make open raise a generic exception to trigger the exception block in _load
-    # Note os.makedirs is outside the try block, so we patch open instead
-    mock_open.side_effect = Exception("Generic error")
+@patch("dct.core.config.logger")
+def test_config_generic_exception(mock_logger, tmp_path):
+    """Open raises a generic Exception; should log and fallback to defaults."""
+    with patch("dct.core.config.open") as mock_open:
+        mock_open.side_effect = Exception("Generic error")
 
-    config_file = tmp_path / "config.json"
-    config = Config(str(config_file))
+        config_file = tmp_path / "config.json"
+        config = Config(str(config_file))
 
-    # Should fallback to defaults instead of crashing
-    assert config.get("history_limit") == DEFAULTS["history_limit"]
-    assert "Failed to load config from" in caplog.text
+        # Should fallback to defaults instead of crashing
+        assert config.get("history_limit") == DEFAULTS["history_limit"]
+        mock_logger.exception.assert_called_once()
+        assert "Failed to load config from" in str(mock_logger.exception.call_args)
 
 
-@patch("dct.core.config.json.dump")
-def test_config_save_generic_exception(mock_json_dump, tmp_path, caplog):
-    mock_json_dump.side_effect = Exception("Generic save error")
-    config_file = tmp_path / "config.json"
-    config = Config(str(config_file))
+@patch("dct.core.config.logger")
+def test_config_save_generic_exception(mock_logger, tmp_path):
+    """json.dump raises generic Exception during save; should log."""
+    with patch("dct.core.config.json.dump") as mock_dump:
+        mock_dump.side_effect = Exception("Generic save error")
+        config_file = tmp_path / "config.json"
+        config = Config(str(config_file))
 
-    config.save()
-    assert "Failed to save config to" in caplog.text
+        config.save()
+        mock_logger.exception.assert_called_once()
+        assert "Failed to save config to" in str(mock_logger.exception.call_args)
+
 
 def test_config_getitem_setitem(tmp_path):
     config_file = tmp_path / "config.json"
