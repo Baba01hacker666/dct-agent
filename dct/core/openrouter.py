@@ -19,6 +19,14 @@ OPENROUTER_REFERER = "https://github.com/doraemon-cyber-team/dct"
 OPENROUTER_TITLE = "DCT Agent"
 
 
+def _get_headers(srv: "Server") -> dict:
+    headers = {"Authorization": f"Bearer {srv.api_key}"} if srv.api_key else {}
+    if srv.provider == "openrouter":
+        headers["HTTP-Referer"] = OPENROUTER_REFERER
+        headers["X-Title"] = OPENROUTER_TITLE
+    return headers
+
+
 def _extract_stream_text(delta: dict) -> str:
     """
     Normalize streaming delta content from providers that may return:
@@ -74,10 +82,7 @@ def chat_stream(
     Raises on HTTP error.
     """
     url = f"{srv.base_url()}/chat/completions"
-    headers = {"Authorization": f"Bearer {srv.api_key}"}
-    if srv.provider == "openrouter":
-        headers["HTTP-Referer"] = OPENROUTER_REFERER
-        headers["X-Title"] = OPENROUTER_TITLE
+    headers = _get_headers(srv)
     from dct.core.config import Config
 
     cfg = Config()
@@ -133,10 +138,7 @@ def chat_once(
 ) -> str | dict:
     """Non-streaming chat — returns full reply as string."""
     url = f"{srv.base_url()}/chat/completions"
-    headers = {"Authorization": f"Bearer {srv.api_key}"}
-    if srv.provider == "openrouter":
-        headers["HTTP-Referer"] = OPENROUTER_REFERER
-        headers["X-Title"] = OPENROUTER_TITLE
+    headers = _get_headers(srv)
     payload = {"model": model, "messages": messages, "stream": False}
     if tools:
         payload["tools"] = tools
@@ -160,7 +162,7 @@ def chat_once(
 # ── Models ───────────────────────────────────────────────────────────────────
 def list_models(srv: "Server") -> list[dict]:
     url = f"{srv.base_url()}/models"
-    headers = {"Authorization": f"Bearer {srv.api_key}"} if srv.api_key else {}
+    headers = _get_headers(srv)
     r = http.client.get(url, headers=headers, timeout=DEFAULT_TIMEOUT)
     r.raise_for_status()
     # OpenRouter returns { "data": [ { "id": "model/name", ... } ] }
@@ -203,10 +205,7 @@ def get_embeddings(
     srv: "Server", text: str, model: str = "text-embedding-3-small"
 ) -> list[float]:
     url = f"{srv.base_url()}/embeddings"
-    headers = {"Authorization": f"Bearer {srv.api_key}"}
-    if srv.provider == "openrouter":
-        headers["HTTP-Referer"] = OPENROUTER_REFERER
-        headers["X-Title"] = OPENROUTER_TITLE
+    headers = _get_headers(srv)
     payload = {"model": model, "input": text}
     r = http.client.post(url, headers=headers, json=payload, timeout=15)
     r.raise_for_status()
