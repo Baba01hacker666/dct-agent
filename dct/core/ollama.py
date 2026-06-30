@@ -10,7 +10,7 @@ from typing import Iterator, TYPE_CHECKING, Any
 from dct.core import http
 
 if TYPE_CHECKING:
-    from dct.core.registry import Server
+    from dct.core.registry import Server  # noqa: F401
 
 CHAT_TIMEOUT = 180
 PULL_TIMEOUT = 600
