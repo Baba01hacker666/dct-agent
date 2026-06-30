@@ -48,6 +48,20 @@ class TestUrlValidator:
         assert validate_url("not-a-url") is not None
         assert validate_url("") is not None
 
+    def test_handles_dns_resolution_failure(self, monkeypatch):
+        from dct.tools.url_validator import validate_url
+        import socket
+
+        def mock_getaddrinfo(*args, **kwargs):
+            raise socket.gaierror("Name or service not known")
+
+        monkeypatch.setattr(socket, "getaddrinfo", mock_getaddrinfo)
+
+        err = validate_url("http://nonexistent.domain.example.com")
+        assert err is not None
+        assert "DNS resolution failed" in err
+        assert "nonexistent.domain.example.com" in err
+
     def test_ssrf_applied_in_fetch_url(self):
         from dct.tools.web import fetch_url
 
