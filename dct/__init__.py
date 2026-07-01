@@ -3,5 +3,5 @@ DCT Agent — Doraemon Cyber Team
 Multi-server Ollama agent with coding tools.
 """
 
-__version__ = "3.2.0"
+__version__ = "3.2.1"
 __author__ = "baba01hacker / DoraemonCyberTeam"
