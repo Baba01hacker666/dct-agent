@@ -547,6 +547,15 @@ class Shell:
                 f"  [{acc}]{tid}.[/{acc}] [{fg}]{t['desc']}[/{fg}] [{C['purple']}]{t['model']}[/{C['purple']}][{dim}]{deps_str}[/{dim}]"
             )
 
+        unique_models = {t["model"] or self.model for t in tasks.values()}
+        model_router = {}
+        for m in unique_models:
+            route_res = self.registry.route(model=m)
+            if route_res:
+                model_router[m] = route_res[0]
+            else:
+                model_router[m] = self.active
+
         # ── Phase 3: Execute in waves ───────────────────────────────────
         completed: set = set()
         wave_num = 0
@@ -593,11 +602,7 @@ class Shell:
 
                 # Resolve dynamic swarm routing
                 task_model = t["model"] or self.model
-                server_to_use = self.active
-                for s in self.registry.servers:
-                    if s.status == "online" and task_model in s.models:
-                        server_to_use = s
-                        break
+                server_to_use = model_router.get(task_model, self.active)
 
                 assert server_to_use is not None
                 agent = CodeAgent(
