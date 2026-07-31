@@ -13,6 +13,7 @@ from prompt_toolkit.styles import Style
 from prompt_toolkit.completion import Completer, Completion
 import os
 
+import concurrent.futures
 import threading
 from typing import Optional
 
@@ -331,7 +332,6 @@ class Shell:
         from dct.agent.codeagent import CodeAgent
         from dct.agent.session import Session
         from dct.core.client import chat_stream as client_chat_stream
-        import concurrent.futures
 
         section(f"squad: {squad_name}  ·  {len(members)} agents")
         con.print(f"  [{C['dim']}]task: {task}[/{C['dim']}]")
@@ -449,7 +449,6 @@ class Shell:
         from dct.agent.codeagent import CodeAgent
         from dct.agent.session import Session
         from dct.core.client import chat_stream as client_chat_stream
-        import concurrent.futures
 
         if not self.active:
             err("no active server — /use <alias> first")
