@@ -26,6 +26,13 @@ dependencies = [
     "aiohttp>=3.9.0",
 ]
 
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "flake8>=6.0.0",
+]
+
 [project.urls]
 Homepage = "https://github.com/Baba01hacker666/dct-agent"
 Issues = "https://github.com/Baba01hacker666/dct-agent/issues"
