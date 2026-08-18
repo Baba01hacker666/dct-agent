@@ -491,12 +491,12 @@ class Shell:
             "user", f"Goal: {goal}\n\nDecompose this into parallel subtasks."
         )
 
-        plan_text = ""
+        plan_chunks = []
         try:
             for chunk in client_chat_stream(
                 self.active, self.model, planner_session.as_messages()
             ):
-                plan_text += chunk
+                plan_chunks.append(chunk)
                 con.print(f"[{C['dim']}]{chunk}[/{C['dim']}]", end="")
             con.print()
         except Exception as e:
@@ -504,6 +504,8 @@ class Shell:
             return
 
         # ── Phase 2: Parse plan ─────────────────────────────────────────
+        plan_text = "".join(plan_chunks)
+
         tasks: dict[str, dict] = {}
         import re
 
