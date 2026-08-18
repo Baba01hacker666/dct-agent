@@ -213,7 +213,7 @@ def get_system_prompt(session, user_system_prompt: str = "") -> str:
 
     os_info = os.uname().sysname if hasattr(os, "uname") else os.name
     cwd = os.getcwd()
-    now = time.strftime("%Y-%m-%d %H:%M:%S")
+    today = time.strftime("%Y-%m-%d")
     mode = session.mode.upper()
     plan_file = session.agent_plan_file
 
@@ -222,7 +222,7 @@ def get_system_prompt(session, user_system_prompt: str = "") -> str:
 [ENVIRONMENT]
 OS: {os_info}
 Current Working Directory: {cwd}
-Current Time: {now}
+Date: {today}
 Current Mode: {mode}
 """
 
