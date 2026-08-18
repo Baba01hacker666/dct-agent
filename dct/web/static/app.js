@@ -1,7 +1,6 @@
 /**
  * DCT-Agent Web UI Client Logic
- * Handles real-time SSE streaming, tool visualizer, server/model management,
- * slash commands, task boards, and interactive agent communication.
+ * Mobile-First Autonomous Agent Interface
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -14,28 +13,40 @@ document.addEventListener('DOMContentLoaded', () => {
   const planModeBanner = document.getElementById('planModeBanner');
   const exitPlanModeBtn = document.getElementById('exitPlanModeBtn');
 
-  const taskList = document.getElementById('taskList');
-  const taskCountBadge = document.getElementById('taskCountBadge');
   const sidebar = document.getElementById('sidebar');
   const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
   const sidebarBackdrop = document.getElementById('sidebarBackdrop');
   const sidebarCloseBtn = document.getElementById('sidebarCloseBtn');
+  const openTasksDrawerBtn = document.getElementById('openTasksDrawerBtn');
+  const headerNewSessionBtn = document.getElementById('headerNewSessionBtn');
+
+  const taskList = document.getElementById('taskList');
+  const taskCountBadge = document.getElementById('taskCountBadge');
+  const headerTaskCount = document.getElementById('headerTaskCount');
+  const taskIndicatorDot = document.getElementById('taskIndicatorDot');
+
   const serverList = document.getElementById('serverList');
   const probeAllBtn = document.getElementById('probeAllBtn');
   const openAddServerModalBtn = document.getElementById('openAddServerModalBtn');
   const clearChatBtn = document.getElementById('clearChatBtn');
   const newSessionBtn = document.getElementById('newSessionBtn');
+  const sidebarSystemInfo = document.getElementById('sidebarSystemInfo');
 
   const chatFeed = document.getElementById('chatFeed');
   const welcomeCard = document.getElementById('welcomeCard');
+  const scrollToBottomBtn = document.getElementById('scrollToBottomBtn');
+
   const composerForm = document.getElementById('composerForm');
   const messageInput = document.getElementById('messageInput');
   const sendBtn = document.getElementById('sendBtn');
   const stopBtn = document.getElementById('stopBtn');
+  const slashHelperBtn = document.getElementById('slashHelperBtn');
   const tokenCounter = document.getElementById('tokenCounter');
+  const composerModePill = document.getElementById('composerModePill');
 
   const slashAutocomplete = document.getElementById('slashAutocomplete');
   const autocompleteItems = document.getElementById('autocompleteItems');
+  const closeAutocompleteBtn = document.getElementById('closeAutocompleteBtn');
 
   const addServerModal = document.getElementById('addServerModal');
   const closeAddServerModalBtn = document.getElementById('closeAddServerModalBtn');
@@ -47,6 +58,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const askUserChoices = document.getElementById('askUserChoices');
   const askUserCustomInput = document.getElementById('askUserCustomInput');
   const submitAskUserBtn = document.getElementById('submitAskUserBtn');
+
+  const toastContainer = document.getElementById('toastContainer');
 
   // Application State
   let state = {
@@ -73,6 +86,21 @@ document.addEventListener('DOMContentLoaded', () => {
     { cmd: '/help', desc: 'Display full command and tool help' },
   ];
 
+  // ── Toast Notification Helper ─────────────────────────────────────────────
+  function showToast(text, icon = 'ℹ️') {
+    if (!toastContainer) return;
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.innerHTML = `<span>${icon}</span> <span>${escapeHtml(text)}</span>`;
+    toastContainer.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(-10px)';
+      toast.style.transition = 'all 0.2s ease';
+      setTimeout(() => toast.remove(), 200);
+    }, 2500);
+  }
+
   // ── Initialization ────────────────────────────────────────────────────────
   async function init() {
     setupEventListeners();
@@ -92,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Auto-resize textarea & keyboard shortcuts
     messageInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+      if (e.key === 'Enter' && !e.shiftKey && window.innerWidth > 768) {
         e.preventDefault();
         sendMessage();
       }
@@ -100,15 +128,47 @@ document.addEventListener('DOMContentLoaded', () => {
 
     messageInput.addEventListener('input', () => {
       messageInput.style.height = 'auto';
-      messageInput.style.height = Math.min(messageInput.scrollHeight, 180) + 'px';
+      messageInput.style.height = Math.min(messageInput.scrollHeight, 140) + 'px';
       handleSlashAutocomplete();
     });
+
+    // Slash Helper Button (/)
+    if (slashHelperBtn) {
+      slashHelperBtn.addEventListener('click', () => {
+        if (slashAutocomplete.style.display === 'block') {
+          slashAutocomplete.style.display = 'none';
+        } else {
+          messageInput.value = '/';
+          handleSlashAutocomplete();
+          messageInput.focus();
+        }
+      });
+    }
+
+    if (closeAutocompleteBtn) {
+      closeAutocompleteBtn.addEventListener('click', () => {
+        slashAutocomplete.style.display = 'none';
+      });
+    }
+
+    // Scroll to Bottom Button
+    chatFeed.addEventListener('scroll', () => {
+      const dist = chatFeed.scrollHeight - chatFeed.scrollTop - chatFeed.clientHeight;
+      if (dist > 180) {
+        scrollToBottomBtn.style.display = 'flex';
+      } else {
+        scrollToBottomBtn.style.display = 'none';
+      }
+    });
+
+    scrollToBottomBtn.addEventListener('click', scrollToBottom);
 
     // Stop Streaming
     stopBtn.addEventListener('click', () => {
       if (state.abortController) {
         state.abortController.abort();
         setStreaming(false);
+        showToast('Generation stopped', '⏹');
       }
     });
 
@@ -116,12 +176,14 @@ document.addEventListener('DOMContentLoaded', () => {
     serverSelect.addEventListener('change', async () => {
       const alias = serverSelect.value;
       await apiPost('/api/select', { alias });
+      showToast(`Switched to server: ${alias}`, '🌐');
       await fetchStatus();
     });
 
     modelSelect.addEventListener('change', async () => {
       const model = modelSelect.value;
       await apiPost('/api/select', { model });
+      showToast(`Model set to: ${model}`, '⚡');
       await fetchStatus();
     });
 
@@ -130,18 +192,21 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await apiPost('/api/toggle_agent', { enabled: !state.agentMode });
       state.agentMode = res.agent_mode;
       updateModeUI();
+      showToast(state.agentMode ? 'Autonomous Agent Mode ON' : 'Direct Chat Mode ON', state.agentMode ? '🤖' : '💬');
     });
 
     planModeBtn.addEventListener('click', async () => {
       const res = await apiPost('/api/toggle_plan', {});
       state.sessionMode = res.session_mode;
       updateModeUI();
+      showToast(state.sessionMode === 'plan' ? 'Plan Mode Activated' : 'Plan Mode Deactivated', '📋');
     });
 
     exitPlanModeBtn.addEventListener('click', async () => {
       const res = await apiPost('/api/toggle_plan', { mode: 'execute' });
       state.sessionMode = res.session_mode;
       updateModeUI();
+      showToast('Exited Plan Mode', '🚀');
     });
 
     // Mobile Sidebar Drawer
@@ -162,6 +227,14 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
           openMobileSidebar();
         }
+      });
+    }
+
+    if (openTasksDrawerBtn) {
+      openTasksDrawerBtn.addEventListener('click', () => {
+        openMobileSidebar();
+        const tracker = document.querySelector('.task-tracker-section');
+        if (tracker) tracker.scrollIntoView({ behavior: 'smooth' });
       });
     }
 
@@ -186,10 +259,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Sidebar buttons
     probeAllBtn.addEventListener('click', async () => {
       probeAllBtn.style.transform = 'rotate(360deg)';
+      showToast('Probing all servers…', '🔄');
       await apiPost('/api/servers/probe', {});
       probeAllBtn.style.transform = 'none';
       await fetchServers();
       await fetchStatus();
+      showToast('Probe completed', '✅');
     });
 
     clearChatBtn.addEventListener('click', () => {
@@ -201,6 +276,10 @@ document.addEventListener('DOMContentLoaded', () => {
       clearConversation();
       if (window.innerWidth <= 768) closeMobileSidebar();
     });
+
+    if (headerNewSessionBtn) {
+      headerNewSessionBtn.addEventListener('click', clearConversation);
+    }
 
     // Quick Prompts
     document.querySelectorAll('.quick-prompt-btn').forEach((btn) => {
@@ -234,12 +313,14 @@ document.addEventListener('DOMContentLoaded', () => {
       const alias = document.getElementById('serverAliasInput').value;
       const apiKey = document.getElementById('serverApiKeyInput').value;
 
+      showToast('Registering server…', '⏳');
       const res = await apiPost('/api/servers/add', { host, port, alias, api_key: apiKey });
       if (res.ok) {
         addServerModal.style.display = 'none';
         addServerForm.reset();
         await fetchServers();
         await fetchStatus();
+        showToast(`Server ${alias || host} added successfully!`, '✅');
       } else {
         alert(res.error || 'Failed to add server');
       }
@@ -259,7 +340,7 @@ document.addEventListener('DOMContentLoaded', () => {
         filtered.forEach((item) => {
           const el = document.createElement('div');
           el.className = 'autocomplete-item';
-          el.innerHTML = `<strong>${escapeHtml(item.cmd)}</strong> <span>${escapeHtml(item.desc)}</span>`;
+          el.innerHTML = `<strong>${escapeHtml(item.cmd)}</strong> <span style="font-size: 11px; color: var(--text-muted);">${escapeHtml(item.desc)}</span>`;
           el.addEventListener('click', () => {
             messageInput.value = item.cmd;
             slashAutocomplete.style.display = 'none';
@@ -286,9 +367,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Status Pill
       if (data.active_server && data.active_server.status === 'online') {
-        serverStatusPill.innerHTML = `<span class="status-dot"></span><span class="status-label">${escapeHtml(data.active_server.alias)} (${data.active_server.latency_ms}ms)</span>`;
+        serverStatusPill.innerHTML = `<span class="status-dot"></span><span class="status-label">${escapeHtml(data.active_server.alias)} · ${data.active_server.latency_ms}ms</span>`;
       } else {
-        serverStatusPill.innerHTML = `<span class="status-dot offline"></span><span class="status-label">Offline / No Server</span>`;
+        serverStatusPill.innerHTML = `<span class="status-dot offline"></span><span class="status-label">Offline</span>`;
+      }
+
+      if (sidebarSystemInfo) {
+        sidebarSystemInfo.textContent = `${data.online_servers_count}/${data.servers_count} nodes online`;
       }
 
       updateModeUI();
@@ -317,18 +402,23 @@ document.addEventListener('DOMContentLoaded', () => {
         // Sidebar Server List
         const srvCard = document.createElement('div');
         srvCard.className = `server-item ${s.is_active ? 'active' : ''}`;
+        const isOnline = s.status === 'online';
         srvCard.innerHTML = `
-          <div>
+          <div class="server-info-col">
             <div class="server-name">${escapeHtml(s.alias)}</div>
-            <div class="server-meta">${escapeHtml(s.host)}:${s.port} · ${s.models.length} models</div>
+            <div class="server-meta">${escapeHtml(s.host)}:${s.port} · ${s.models.length} model(s)</div>
           </div>
-          <div class="server-latency">${s.status === 'online' ? `${s.latency_ms}ms` : 'offline'}</div>
+          <div class="server-latency ${isOnline ? '' : 'offline'}">${isOnline ? `${s.latency_ms}ms` : 'offline'}</div>
         `;
         srvCard.addEventListener('click', async () => {
           await apiPost('/api/select', { alias: s.alias });
           await fetchServers();
           await fetchStatus();
-          if (window.innerWidth <= 768) closeMobileSidebar();
+          showToast(`Active server: ${s.alias}`, '🌐');
+          if (window.innerWidth <= 768) {
+            sidebar.classList.remove('open');
+            sidebarBackdrop.classList.remove('active');
+          }
         });
         serverList.appendChild(srvCard);
       });
@@ -374,9 +464,22 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderTasks(tasks) {
-    taskCountBadge.textContent = `${tasks.length} tasks`;
+    const total = tasks ? tasks.length : 0;
+    const activeCount = tasks ? tasks.filter((t) => t.status === 'in_progress').length : 0;
+    taskCountBadge.textContent = `${total} task${total === 1 ? '' : 's'}`;
+    if (headerTaskCount) headerTaskCount.textContent = total;
+
+    if (taskIndicatorDot) {
+      taskIndicatorDot.style.display = activeCount > 0 ? 'block' : 'none';
+    }
+
     if (!tasks || tasks.length === 0) {
-      taskList.innerHTML = `<div class="empty-state">No active tasks. Start a request to see the agent decompose goals!</div>`;
+      taskList.innerHTML = `
+        <div class="empty-state compact">
+          <span class="empty-icon">🎯</span>
+          <p>No active tasks. Ask the agent a goal to decompose subtasks!</p>
+        </div>
+      `;
       return;
     }
 
@@ -399,8 +502,10 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateModeUI() {
     if (state.agentMode) {
       agentModeBtn.classList.add('active');
+      if (composerModePill) composerModePill.textContent = '🤖 Agent Mode';
     } else {
       agentModeBtn.classList.remove('active');
+      if (composerModePill) composerModePill.textContent = '💬 Direct Chat Mode';
     }
 
     if (state.sessionMode === 'plan') {
@@ -579,7 +684,7 @@ document.addEventListener('DOMContentLoaded', () => {
     card.innerHTML = `
       <div class="tool-header">
         <div class="tool-badge">
-          <span>⚡ Running tool:</span>
+          <span>⚡ Running:</span>
           <code>${escapeHtml(toolName)}</code>
         </div>
         <span class="tool-toggle-icon">▼</span>
@@ -613,7 +718,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const row = document.createElement('div');
     row.className = 'message-row assistant';
     row.innerHTML = `
-      <div class="message-bubble" style="border-color: var(--accent-rose); background-color: rgba(244, 63, 94, 0.1);">
+      <div class="message-bubble" style="border-color: var(--accent-rose); background-color: rgba(244, 63, 94, 0.08);">
         <strong style="color: var(--accent-rose);">Error:</strong> ${escapeHtml(errMsg)}
       </div>
     `;
@@ -628,6 +733,7 @@ document.addEventListener('DOMContentLoaded', () => {
       chatFeed.appendChild(welcomeCard);
       welcomeCard.style.display = 'block';
     }
+    showToast('Conversation cleared', '🗑️');
     await fetchStatus();
     await fetchTasks();
   }
@@ -647,7 +753,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="code-container">
           <div class="code-header">
             <span>${lang || 'text'}</span>
-            <button class="copy-btn" onclick="navigator.clipboard.writeText(this.closest('.code-container').querySelector('code').innerText)">Copy</button>
+            <button class="copy-btn" onclick="navigator.clipboard.writeText(this.closest('.code-container').querySelector('code').innerText); window.dctShowToast && window.dctShowToast('Code copied!', '📋')">Copy</button>
           </div>
           <pre><code>${code.trim()}</code></pre>
         </div>
@@ -662,19 +768,21 @@ document.addEventListener('DOMContentLoaded', () => {
     html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
 
     // Headers
-    html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
-    html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
-    html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+    html = html.replace(/^### (.*$)/gim, '<h3 style="margin: 8px 0 4px 0; font-size: 14px;">$1</h3>');
+    html = html.replace(/^## (.*$)/gim, '<h2 style="margin: 10px 0 6px 0; font-size: 15px;">$1</h2>');
+    html = html.replace(/^# (.*$)/gim, '<h1 style="margin: 12px 0 8px 0; font-size: 16px;">$1</h1>');
 
     // Lists
     html = html.replace(/^\s*-\s+(.*$)/gim, '<li>$1</li>');
-    html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+    html = html.replace(/(<li>.*<\/li>)/s, '<ul style="margin: 6px 0; padding-left: 20px;">$1</ul>');
 
     // Line breaks
     html = html.replace(/\n\n/g, '<br><br>');
 
     return html;
   }
+
+  window.dctShowToast = showToast;
 
   function escapeHtml(str) {
     if (!str) return '';

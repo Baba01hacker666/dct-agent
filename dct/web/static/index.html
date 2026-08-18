@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#090d14">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>DCT-Agent · Autonomous AI System</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,35 +16,49 @@
   <div class="app-layout">
     <!-- Top Navigation Header -->
     <header class="app-header">
-      <div class="header-left">
-        <button id="sidebarToggleBtn" class="sidebar-toggle-btn" aria-label="Toggle navigation drawer" title="Menu">
-          <span class="hamburger-line"></span>
-          <span class="hamburger-line"></span>
-          <span class="hamburger-line"></span>
-        </button>
+      <div class="header-main-row">
+        <div class="header-left">
+          <button id="sidebarToggleBtn" class="header-icon-btn sidebar-toggle-btn" aria-label="Open menu and tasks" title="Menu & Tasks">
+            <span class="hamburger-line"></span>
+            <span class="hamburger-line"></span>
+            <span class="hamburger-line"></span>
+            <span class="task-indicator-dot" id="taskIndicatorDot" style="display: none;"></span>
+          </button>
 
-        <div class="header-brand">
-          <div class="logo-badge">
-            <span class="logo-icon">⚡</span>
-            <span class="logo-title">DCT-AGENT</span>
-            <span class="version-tag">v3.2.1</span>
+          <div class="header-brand">
+            <div class="logo-badge">
+              <span class="logo-icon">⚡</span>
+              <span class="logo-title">DCT-AGENT</span>
+              <span class="version-tag">v3.2.1</span>
+            </div>
+            <div class="server-status-pill" id="serverStatusPill" title="Server Connection Status">
+              <span class="status-dot"></span>
+              <span class="status-label">Checking...</span>
+            </div>
           </div>
-          <div class="server-status-pill" id="serverStatusPill">
-            <span class="status-dot"></span>
-            <span class="status-label">Checking servers...</span>
-          </div>
+        </div>
+
+        <div class="header-right">
+          <button id="headerNewSessionBtn" class="header-icon-btn" title="New Session" aria-label="New Session">
+            <span>✨</span>
+          </button>
+          <button id="openTasksDrawerBtn" class="header-tasks-pill" title="View Active Tasks">
+            <span class="tasks-pill-icon">📋</span>
+            <span class="tasks-pill-text" id="headerTaskCount">0</span>
+          </button>
         </div>
       </div>
 
-      <div class="header-controls" id="headerControls">
-        <div class="control-group">
-          <label for="serverSelect">Server</label>
-          <select id="serverSelect" class="select-dropdown"></select>
+      <!-- Quick Controls Toolbar (Fluid & Horizontally Scrollable on Mobile) -->
+      <div class="header-controls-bar" id="headerControlsBar">
+        <div class="control-item">
+          <span class="control-prefix">Host:</span>
+          <select id="serverSelect" class="select-dropdown" aria-label="Select Server"></select>
         </div>
 
-        <div class="control-group">
-          <label for="modelSelect">Model</label>
-          <select id="modelSelect" class="select-dropdown"></select>
+        <div class="control-item">
+          <span class="control-prefix">Model:</span>
+          <select id="modelSelect" class="select-dropdown" aria-label="Select Model"></select>
         </div>
 
         <div class="mode-toggles">
@@ -49,7 +66,7 @@
             <span class="mode-icon">🤖</span>
             <span class="mode-text">Agent</span>
           </button>
-          <button id="planModeBtn" class="mode-btn" title="Toggle Plan Mode (read-only safe exploration)">
+          <button id="planModeBtn" class="mode-btn" title="Toggle Safe Plan Mode (read-only exploration)">
             <span class="mode-icon">📋</span>
             <span class="mode-text">Plan</span>
           </button>
@@ -62,88 +79,173 @@
 
     <!-- Main Workspace -->
     <div class="main-workspace">
-      <!-- Left Sidebar: Tasks & Server Management -->
+      <!-- Left Sidebar / Mobile Drawer -->
       <aside class="sidebar" id="sidebar">
-        <div class="sidebar-top-mobile">
-          <div class="sidebar-mobile-title">Menu & Settings</div>
-          <button class="sidebar-close-btn" id="sidebarCloseBtn" aria-label="Close sidebar">✕</button>
+        <div class="sidebar-drawer-header">
+          <div class="sidebar-drawer-title">
+            <span class="drawer-icon">⚡</span>
+            <span>Console & Management</span>
+          </div>
+          <button class="header-icon-btn sidebar-close-btn" id="sidebarCloseBtn" aria-label="Close menu">✕</button>
         </div>
 
-        <div class="sidebar-section">
-          <div class="sidebar-header">
-            <h3>⚡ Task Tracker</h3>
-            <span class="badge" id="taskCountBadge">0 tasks</span>
+        <!-- Task Tracker Section -->
+        <div class="sidebar-section task-tracker-section">
+          <div class="sidebar-section-header">
+            <div class="section-title-wrap">
+              <span class="section-icon">📋</span>
+              <h3>Task Tracker</h3>
+            </div>
+            <span class="badge" id="taskCountBadge">0 active</span>
           </div>
           <div class="task-list" id="taskList">
-            <div class="empty-state">No active tasks. Start a request to see the agent decompose goals!</div>
+            <div class="empty-state compact">
+              <span class="empty-icon">🎯</span>
+              <p>No active tasks. Ask the agent a goal to decompose subtasks!</p>
+            </div>
           </div>
         </div>
 
+        <!-- Registered Servers Section -->
         <div class="sidebar-section">
-          <div class="sidebar-header">
-            <h3>🌐 Registered Servers</h3>
-            <button id="probeAllBtn" class="action-icon-btn" title="Probe all servers">🔄</button>
+          <div class="sidebar-section-header">
+            <div class="section-title-wrap">
+              <span class="section-icon">🌐</span>
+              <h3>Servers & Nodes</h3>
+            </div>
+            <button id="probeAllBtn" class="action-icon-btn" title="Probe all servers" aria-label="Probe servers">🔄</button>
           </div>
           <div class="server-list" id="serverList"></div>
-          <button id="openAddServerModalBtn" class="btn btn-secondary btn-block">+ Add Server / Provider</button>
+          <button id="openAddServerModalBtn" class="btn btn-secondary btn-block btn-touch">+ Add Server / Provider</button>
+        </div>
+
+        <!-- Session Tools Section -->
+        <div class="sidebar-section session-section">
+          <div class="sidebar-section-header">
+            <div class="section-title-wrap">
+              <span class="section-icon">⚙️</span>
+              <h3>Session Controls</h3>
+            </div>
+          </div>
+          <div class="session-actions-grid">
+            <button id="clearChatBtn" class="btn btn-ghost btn-touch" title="Clear conversation history">
+              <span>🗑️</span>
+              <span>Clear History</span>
+            </button>
+            <button id="newSessionBtn" class="btn btn-ghost btn-touch" title="Start fresh session">
+              <span>✨</span>
+              <span>New Session</span>
+            </button>
+          </div>
         </div>
 
         <div class="sidebar-footer">
-          <button id="clearChatBtn" class="btn btn-ghost btn-sm" title="Clear conversation">🗑️ Clear Chat</button>
-          <button id="newSessionBtn" class="btn btn-ghost btn-sm" title="Start fresh session">✨ New Session</button>
+          <span class="footer-note">DCT-Agent · Multi-node swarm</span>
+          <span class="footer-meta" id="sidebarSystemInfo">Ready</span>
         </div>
       </aside>
 
       <!-- Center Chat Area -->
       <main class="chat-container">
+        <!-- Plan Mode Warning Banner -->
         <div class="plan-mode-banner" id="planModeBanner" style="display: none;">
           <span class="banner-icon">🛡️</span>
           <div class="banner-content">
-            <strong>Plan Mode Active:</strong> Destructive commands and file modifications are locked. Agent is generating a strategic implementation plan.
+            <strong>Plan Mode Active:</strong> Destructive execution is locked. The agent explores safely and generates an architectural plan.
           </div>
-          <button id="exitPlanModeBtn" class="btn btn-sm btn-outline">Exit Plan Mode</button>
+          <button id="exitPlanModeBtn" class="btn btn-sm btn-outline btn-touch">Exit</button>
         </div>
 
+        <!-- Chat Messages Feed -->
         <div class="chat-feed" id="chatFeed">
+          <!-- Compact Welcome Card -->
           <div class="welcome-card" id="welcomeCard">
-            <div class="welcome-icon">🚀</div>
-            <h2>Welcome to DCT-Agent</h2>
-            <p>Your multi-server autonomous development agent. Type a goal or chat message below to start executing tasks on this machine.</p>
-            <div class="quick-prompts">
-              <button class="quick-prompt-btn" data-prompt="Analyze the git repository structure and list top files">📁 Analyze repo structure</button>
-              <button class="quick-prompt-btn" data-prompt="Run the pytest suite and show test results">🧪 Run pytest suite</button>
-              <button class="quick-prompt-btn" data-prompt="/servers">🌐 Show server status</button>
-              <button class="quick-prompt-btn" data-prompt="Create a step-by-step task plan to audit system performance">📋 Plan system audit</button>
+            <div class="welcome-header-wrap">
+              <div class="welcome-icon">⚡</div>
+              <div>
+                <h2>DCT-Agent</h2>
+                <p>Autonomous multi-server AI developer. Give a goal or select a quick starter:</p>
+              </div>
+            </div>
+
+            <!-- Quick Action Chips -->
+            <div class="quick-prompts-scroller">
+              <div class="quick-prompts">
+                <button class="quick-prompt-btn" data-prompt="Analyze the git repository structure and list top files">
+                  <span class="chip-icon">📁</span>
+                  <span class="chip-text">Analyze repo</span>
+                </button>
+                <button class="quick-prompt-btn" data-prompt="Run pytest test suite and summarize test results">
+                  <span class="chip-icon">🧪</span>
+                  <span class="chip-text">Run tests</span>
+                </button>
+                <button class="quick-prompt-btn" data-prompt="Review recent git commits and check for potential bugs">
+                  <span class="chip-icon">🔍</span>
+                  <span class="chip-text">Review code</span>
+                </button>
+                <button class="quick-prompt-btn" data-prompt="Create a step-by-step task plan to audit system performance">
+                  <span class="chip-icon">📋</span>
+                  <span class="chip-text">Plan audit</span>
+                </button>
+                <button class="quick-prompt-btn" data-prompt="/servers">
+                  <span class="chip-icon">🌐</span>
+                  <span class="chip-text">Server status</span>
+                </button>
+                <button class="quick-prompt-btn" data-prompt="Search for TODOs and open fixups across the codebase">
+                  <span class="chip-icon">🐛</span>
+                  <span class="chip-text">Find TODOs</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Input Composer -->
+        <!-- Floating Scroll to Bottom Button -->
+        <button id="scrollToBottomBtn" class="scroll-bottom-btn" aria-label="Scroll to bottom" style="display: none;">
+          <span>↓</span>
+        </button>
+
+        <!-- Fixed Bottom Composer -->
         <div class="composer-container">
+          <!-- Slash Commands Popover -->
           <div class="slash-autocomplete" id="slashAutocomplete" style="display: none;">
-            <div class="autocomplete-header">Available Commands</div>
+            <div class="autocomplete-header">
+              <span>Slash Commands</span>
+              <button class="close-autocomplete-btn" id="closeAutocompleteBtn">✕</button>
+            </div>
             <div class="autocomplete-items" id="autocompleteItems"></div>
           </div>
 
           <form class="composer-form" id="composerForm">
+            <button type="button" id="slashHelperBtn" class="composer-btn-secondary" title="Open Slash Commands (/)" aria-label="Slash commands">
+              <span>/</span>
+            </button>
+
             <textarea
               id="messageInput"
               class="composer-textarea"
-              placeholder="Ask a question, enter a coding task, or type / for commands..."
+              placeholder="Ask a question or enter a coding goal..."
               rows="1"
               autofocus
             ></textarea>
+
             <div class="composer-actions">
-              <button type="button" id="stopBtn" class="btn btn-danger btn-icon" style="display: none;" title="Stop generation">⏹️ Stop</button>
-              <button type="submit" id="sendBtn" class="btn btn-primary btn-icon" title="Send message (Enter)">
-                <span class="btn-text">Send</span>
+              <button type="button" id="stopBtn" class="btn btn-danger btn-send" style="display: none;" title="Stop generation" aria-label="Stop generation">
+                <span class="btn-icon">⏹</span>
+              </button>
+              <button type="submit" id="sendBtn" class="btn btn-primary btn-send" title="Send message (Enter)" aria-label="Send message">
                 <span class="btn-icon">➤</span>
               </button>
             </div>
           </form>
+
           <div class="composer-footer">
-            <span>Press <strong>Enter</strong> to send, <strong>Shift+Enter</strong> for newline, <strong>/</strong> for slash commands</span>
-            <span id="tokenCounter" class="token-counter">0 turns · ~0 tok</span>
+            <div class="composer-meta-left">
+              <span class="composer-mode-pill" id="composerModePill">🤖 Agent Mode</span>
+            </div>
+            <div class="composer-meta-right">
+              <span id="tokenCounter" class="token-counter">0 turns · ~0 tok</span>
+            </div>
           </div>
         </div>
       </main>
@@ -154,8 +256,11 @@
   <div class="modal-overlay" id="addServerModal" style="display: none;">
     <div class="modal-card">
       <div class="modal-header">
-        <h3>Add Server / LLM Provider</h3>
-        <button class="modal-close-btn" id="closeAddServerModalBtn">✕</button>
+        <div class="modal-title-wrap">
+          <span class="modal-icon">🌐</span>
+          <h3>Add Server / LLM Node</h3>
+        </div>
+        <button class="modal-close-btn" id="closeAddServerModalBtn" aria-label="Close modal">✕</button>
       </div>
       <form id="addServerForm">
         <div class="form-group">
@@ -175,8 +280,8 @@
           <input type="password" id="serverApiKeyInput" placeholder="Bearer sk-...">
         </div>
         <div class="modal-actions">
-          <button type="button" class="btn btn-ghost" id="cancelAddServerBtn">Cancel</button>
-          <button type="submit" class="btn btn-primary">Add & Probe Server</button>
+          <button type="button" class="btn btn-ghost btn-touch" id="cancelAddServerBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-touch">Add & Probe Server</button>
         </div>
       </form>
     </div>
@@ -186,18 +291,24 @@
   <div class="modal-overlay" id="askUserModal" style="display: none;">
     <div class="modal-card">
       <div class="modal-header">
-        <h3>❓ Agent Confirmation Required</h3>
+        <div class="modal-title-wrap">
+          <span class="modal-icon">❓</span>
+          <h3>Agent Input Required</h3>
+        </div>
       </div>
       <div class="modal-body">
         <p id="askUserQuestion" class="ask-question-text"></p>
         <div class="ask-choices" id="askUserChoices"></div>
-        <input type="text" id="askUserCustomInput" class="composer-textarea" placeholder="Or type custom answer here...">
+        <input type="text" id="askUserCustomInput" class="composer-textarea modal-input" placeholder="Or type your custom response...">
       </div>
       <div class="modal-actions">
-        <button type="button" class="btn btn-primary" id="submitAskUserBtn">Submit Answer</button>
+        <button type="button" class="btn btn-primary btn-touch btn-block" id="submitAskUserBtn">Submit Answer</button>
       </div>
     </div>
   </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
 
   <script src="/static/app.js"></script>
 </body>
