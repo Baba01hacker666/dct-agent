@@ -250,6 +250,12 @@ Pass the `tool_name` parameter and provide arguments in `kwargs`:
 - repo_map(path: str) — Generate a semantic map of all classes and functions
 - goto_definition(path: str, line: int, column: int) — Find definition of a symbol
 - find_references(path: str, line: int, column: int) — Find all references to a symbol
+- task_create(subject: str, description: str, active_form: str) — Create and track a structured task
+- task_update(task_id: str, status: str, subject: str, description: str) — Update task status (pending/in_progress/completed)
+- task_list() — List all tracked tasks and their status
+- task_get(task_id: str) — Get details of a tracked task
+- sleep(seconds: float) — Safely pause execution for up to 60s
+- tool_search(query: str) — Search available tools, arguments, and usage examples
 - update_plan(plan: str, explanation: str) — Track steps and progress in a markdown plan
 - notebook_edit(path: str, index: int, mode: str, source: str) — Edit jupyter notebooks
 - web_extract(url: str, selector: str) — Fetch webpage and optionally extract via CSS selector
@@ -303,8 +309,11 @@ You can use tools by emitting structured XML tags in your response.
   <tool>goto_definition</tool><path>...</path><line>...</line><column>0</column> — Find definition
   <tool>find_references</tool><path>...</path><line>...</line><column>0</column> — Find references
   <tool>task_create</tool><subject>...</subject><description>...</description> — Create tasks
-  <tool>task_update</tool><id>...</id><status>...</status>       — Update task
+  <tool>task_update</tool><task_id>...</task_id><status>...</status>       — Update task
   <tool>task_list</tool>                                         — List tasks
+  <tool>task_get</tool><task_id>...</task_id>                    — Get task details
+  <tool>sleep</tool><seconds>...</seconds>                       — Sleep/pause execution
+  <tool>tool_search</tool><query>...</query>                     — Search tool definitions
   <tool>notebook_edit</tool><path>...</path><index>...</index><mode>replace|insert|delete</mode><source>...</source> — Edit notebooks
   <tool>web_extract</tool><url>...</url><selector>...</selector> — Fetch webpage
   <tool>grep</tool><pattern>...</pattern><path>...</path><glob>...</glob><output_mode>content</output_mode><context>2</context>  — regex search
@@ -1528,6 +1537,294 @@ class CodeAgent:
             with open(plan_file, "w", encoding="utf-8") as f:
                 f.write(plan)
             return f"[SUCCESS] Plan updated. Explanation: {explanation}"
+
+        elif tool == "task_create":
+            from dct.tools.tasks import get_tracker
+
+            subject = (
+                call.get("subject")
+                or _extract_tag(call.get("raw_text", ""), "subject")
+                or ""
+            )
+            description = (
+                call.get("description")
+                or _extract_tag(call.get("raw_text", ""), "description")
+                or ""
+            )
+            active_form = (
+                call.get("active_form")
+                or _extract_tag(call.get("raw_text", ""), "active_form")
+                or None
+            )
+            if not subject:
+                return "[TOOL ERROR] <subject> is required for task_create."
+            task = get_tracker().create(
+                subject=subject, description=description, active_form=active_form
+            )
+            return f"[SUCCESS] Created Task #{task.id}: {task.subject}"
+
+        elif tool == "task_update":
+            from dct.tools.tasks import get_tracker
+
+            task_id = (
+                call.get("task_id")
+                or call.get("id")
+                or _extract_tag(call.get("raw_text", ""), "task_id")
+                or _extract_tag(call.get("raw_text", ""), "id")
+                or ""
+            )
+            status = (
+                call.get("status")
+                or _extract_tag(call.get("raw_text", ""), "status")
+                or None
+            )
+            subject = (
+                call.get("subject")
+                or _extract_tag(call.get("raw_text", ""), "subject")
+                or None
+            )
+            description = (
+                call.get("description")
+                or _extract_tag(call.get("raw_text", ""), "description")
+                or None
+            )
+            if not task_id:
+                return "[TOOL ERROR] <task_id> or <id> is required for task_update."
+            task = get_tracker().update(
+                task_id, status=status, subject=subject, description=description
+            )
+            if not task:
+                return f"[TOOL ERROR] Task with ID {task_id} not found."
+            return f"[SUCCESS] Updated Task #{task.id} (Status: {task.status})"
+
+        elif tool == "task_list":
+            from dct.tools.tasks import get_tracker
+
+            return get_tracker().summary()
+
+        elif tool == "task_get":
+            from dct.tools.tasks import get_tracker
+
+            task_id = (
+                call.get("task_id")
+                or call.get("id")
+                or _extract_tag(call.get("raw_text", ""), "task_id")
+                or _extract_tag(call.get("raw_text", ""), "id")
+                or ""
+            )
+            if not task_id:
+                return "[TOOL ERROR] <task_id> or <id> is required for task_get."
+            task = get_tracker().get(task_id)
+            if not task:
+                return f"[TOOL ERROR] Task with ID {task_id} not found."
+            return (
+                f"[TASK #{task.id}]\nSubject: {task.subject}\nStatus: {task.status}\n"
+                f"Description: {task.description}\nActive Form: {task.active_form or 'None'}"
+            )
+
+        elif tool == "sleep":
+            sec_str = (
+                call.get("seconds")
+                or _extract_tag(call.get("raw_text", ""), "seconds")
+                or "1"
+            )
+            try:
+                sec = float(sec_str)
+            except ValueError:
+                return "[TOOL ERROR] <seconds> must be a valid number."
+            sec = min(max(0.0, sec), 60.0)
+            time.sleep(sec)
+            return f"[SUCCESS] Slept for {sec:.1f} second(s)."
+
+        elif tool == "tool_search":
+            query = (
+                call.get("query")
+                or _extract_tag(call.get("raw_text", ""), "query")
+                or ""
+            ).lower().strip()
+            tool_catalog = [
+                {
+                    "name": "run_python",
+                    "desc": "Execute Python 3 code in a local subprocess with auto-pip installer",
+                    "params": "code: str, background: bool",
+                    "example": "<tool>run_python</tool><code>print(1+1)</code>",
+                },
+                {
+                    "name": "run_bash",
+                    "desc": "Execute bash commands/scripts",
+                    "params": "code: str, background: bool",
+                    "example": "<tool>run_bash</tool><code>ls -la</code>",
+                },
+                {
+                    "name": "run_shell",
+                    "desc": "Execute system shell command",
+                    "params": "command: str, background: bool",
+                    "example": "<tool>run_shell</tool><code>curl -s https://api.ipify.org</code>",
+                },
+                {
+                    "name": "read_file",
+                    "desc": "Read a file from disk with optional start_line, end_line, and tail",
+                    "params": "path: str, start_line: int, end_line: int, tail: int",
+                    "example": "<tool>read_file</tool><path>main.py</path>",
+                },
+                {
+                    "name": "write_file",
+                    "desc": "Create or overwrite a file with given code/content",
+                    "params": "path: str, code: str",
+                    "example": "<tool>write_file</tool><path>test.txt</path><code>hello</code>",
+                },
+                {
+                    "name": "patch_file",
+                    "desc": "Find exact <old> text in file and replace with <new> text",
+                    "params": "path: str, old: str, new: str",
+                    "example": "<tool>patch_file</tool><path>app.py</path><old>v1</old><new>v2</new>",
+                },
+                {
+                    "name": "multi_patch_file",
+                    "desc": "Apply multiple non-contiguous patches to a file",
+                    "params": "path: str, patches: list[dict]",
+                    "example": "<tool>multi_patch_file</tool><path>app.py</path><patch><old>a</old><new>b</new></patch>",
+                },
+                {
+                    "name": "grep",
+                    "desc": "Fast regex search across files powered by ripgrep",
+                    "params": "pattern: str, path: str, glob: str, output_mode: str, context: int",
+                    "example": "<tool>grep</tool><pattern>def main</pattern><path>.</path>",
+                },
+                {
+                    "name": "glob",
+                    "desc": "Fast file discovery using ripgrep --files",
+                    "params": "pattern: str, path: str",
+                    "example": "<tool>glob</tool><pattern>*.py</pattern>",
+                },
+                {
+                    "name": "repo_map",
+                    "desc": "Generate semantic structural map of all Python classes and functions in repo",
+                    "params": "path: str",
+                    "example": "<tool>repo_map</tool><path>.</path>",
+                },
+                {
+                    "name": "goto_definition",
+                    "desc": "Find symbol definition via LSP/Jedi",
+                    "params": "path: str, line: int, column: int",
+                    "example": "<tool>goto_definition</tool><path>app.py</path><line>10</line><column>4</column>",
+                },
+                {
+                    "name": "find_references",
+                    "desc": "Find all references to a symbol via LSP/Jedi",
+                    "params": "path: str, line: int, column: int",
+                    "example": "<tool>find_references</tool><path>app.py</path><line>10</line><column>4</column>",
+                },
+                {
+                    "name": "task_create",
+                    "desc": "Create and track a task in session task manager",
+                    "params": "subject: str, description: str, active_form: str",
+                    "example": "<tool>task_create</tool><subject>Refactor parser</subject><description>Add missing keys</description>",
+                },
+                {
+                    "name": "task_update",
+                    "desc": "Update status of an existing task (pending, in_progress, completed)",
+                    "params": "task_id: str, status: str, subject: str, description: str",
+                    "example": "<tool>task_update</tool><task_id>1</task_id><status>completed</status>",
+                },
+                {
+                    "name": "task_list",
+                    "desc": "List all tracked tasks with their status",
+                    "params": "none",
+                    "example": "<tool>task_list</tool>",
+                },
+                {
+                    "name": "task_get",
+                    "desc": "Get full details of a specific task by ID",
+                    "params": "task_id: str",
+                    "example": "<tool>task_get</tool><task_id>1</task_id>",
+                },
+                {
+                    "name": "sleep",
+                    "desc": "Pause execution safely for up to 60 seconds",
+                    "params": "seconds: float",
+                    "example": "<tool>sleep</tool><seconds>2</seconds>",
+                },
+                {
+                    "name": "fetch_url",
+                    "desc": "Fetch contents of a web URL with SSRF protections",
+                    "params": "url: str",
+                    "example": "<tool>fetch_url</tool><url>https://example.com</url>",
+                },
+                {
+                    "name": "web_search",
+                    "desc": "Search DuckDuckGo web search",
+                    "params": "query: str",
+                    "example": "<tool>web_search</tool><query>python asyncio</query>",
+                },
+                {
+                    "name": "web_extract",
+                    "desc": "Fetch web page and extract content using BeautifulSoup CSS selector",
+                    "params": "url: str, selector: str",
+                    "example": "<tool>web_extract</tool><url>https://news.ycombinator.com</url><selector>.titleline</selector>",
+                },
+                {
+                    "name": "notebook_edit",
+                    "desc": "Edit Jupyter notebook cells (.ipynb)",
+                    "params": "path: str, index: int, mode: str, source: str",
+                    "example": "<tool>notebook_edit</tool><path>test.ipynb</path><index>0</index><mode>replace</mode><source>print(1)</source>",
+                },
+                {
+                    "name": "ask_user",
+                    "desc": "Ask the human user a clarifying question with optional choices",
+                    "params": "question: str, choices: str",
+                    "example": "<tool>ask_user</tool><question>Proceed with deletion?</question><choices>yes,no</choices>",
+                },
+                {
+                    "name": "run_subagent",
+                    "desc": "Spawn an isolated sub-agent for delegated tasks",
+                    "params": "instruction: str, model: str, skill: str, background: bool",
+                    "example": "<tool>run_subagent</tool><instruction>Run unit tests</instruction>",
+                },
+                {
+                    "name": "run_swarm",
+                    "desc": "Spawn parallel swarm of specialized agent personas",
+                    "params": "instruction: str, members: str",
+                    "example": "<tool>run_swarm</tool><instruction>Review PR</instruction><members>tester\\nreviewer</members>",
+                },
+                {
+                    "name": "enter_plan_mode",
+                    "desc": "Enter PLAN mode to explore codebase and write plan before making edits",
+                    "params": "none",
+                    "example": "<tool>enter_plan_mode</tool>",
+                },
+                {
+                    "name": "exit_plan_mode",
+                    "desc": "Exit PLAN mode once user approves plan",
+                    "params": "none",
+                    "example": "<tool>exit_plan_mode</tool>",
+                },
+                {
+                    "name": "DONE",
+                    "desc": "Signal completion of agent task",
+                    "params": "none",
+                    "example": "<tool>DONE</tool>",
+                },
+            ]
+            if not query:
+                matches = tool_catalog
+            else:
+                matches = [
+                    t
+                    for t in tool_catalog
+                    if query in t["name"].lower()
+                    or query in t["desc"].lower()
+                    or query in t["params"].lower()
+                ]
+            if not matches:
+                return f"[TOOL SEARCH] No tools found matching '{query}'."
+            lines = [f"[TOOL SEARCH RESULTS ({len(matches)} matches)]"]
+            for m in matches:
+                lines.append(
+                    f"• {m['name']}({m['params']})\n  Description: {m['desc']}\n  Example: {m['example']}"
+                )
+            return "\n\n".join(lines)
+
         elif tool == "DONE":
             return "__DONE__"
 

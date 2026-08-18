@@ -164,6 +164,17 @@ def parse_tool_call(text: str) -> Optional[dict]:
         "old_text",
         "new_text",
         "selector",
+        "subject",
+        "task_id",
+        "status",
+        "seconds",
+        "line",
+        "column",
+        "active_form",
+        "choices",
+        "index",
+        "mode",
+        "source",
     ]
     for k in keys:
         result[k] = None

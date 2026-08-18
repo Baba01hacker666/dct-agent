@@ -79,3 +79,6 @@ patch_tests.py
 test_server.py
 setup_tools.sh
 test.json
+fix_*.py
+update_*.py
+
