@@ -657,6 +657,118 @@ class Shell:
             f"orchestration complete: {len(completed)}/{len(tasks)} tasks in {wave_num} waves"
         )
 
+    def _run_discussion_group(self, topic: str):
+        """Run an autonomous multi-agent group discussion/debate on the shared board."""
+        from dct.agent.session import Session
+        from dct.core.client import chat_stream as client_chat_stream
+        from dct.tools.board import get_board
+
+        if not self.active:
+            err("no active server — /use <alias> first")
+            return
+
+        board = get_board()
+        channel = "discussion"
+        section(f"agents discussion group  ·  channel: #{channel}")
+        con.print(f"  [{C['accent']}]topic:[/{C['accent']}] [{C['fg']}]{topic}[/{C['fg']}]")
+        con.print(f"  [{C['dim']}]{'─' * 66}[/{C['dim']}]")
+
+        # Initial prompt on board
+        board.post(sender="moderator", content=f"Discussion Topic: {topic}", channel=channel)
+
+        personas = [
+            {
+                "role": "Architect",
+                "focus": "Focus on high-level system design, modularity, scalability, and structural trade-offs.",
+            },
+            {
+                "role": "Engineer",
+                "focus": "Focus on concrete implementation details, API simplicity, robustness, and performance.",
+            },
+            {
+                "role": "Reviewer",
+                "focus": "Focus on edge cases, security vulnerabilities, testing strategies, and potential failure modes.",
+            },
+        ]
+
+        # Round 1: Individual perspectives
+        section("round 1: initial perspectives")
+        for p in personas:
+            role = p["role"]
+            con.print(f"  [{C['purple']}]🤖 @{role}[/{C['purple']}] is analyzing…")
+            prompt = (
+                f"You are the {role} in an elite multi-agent panel. {p['focus']}\n\n"
+                f"Topic for discussion:\n{topic}\n\n"
+                "Give your direct perspective, recommendations, and trade-offs. Be specific, concise (under 200 words), and highly actionable."
+            )
+            s = Session()
+            s.set_system(prompt)
+            s.add("user", "Present your initial thoughts to the panel.")
+            try:
+                reply_parts = []
+                for chunk in client_chat_stream(self.active, self.model, s.as_messages()):
+                    reply_parts.append(chunk)
+                full_reply = "".join(reply_parts).strip()
+                msg = board.post(sender=role, content=full_reply, channel=channel)
+                con.print(
+                    f"  [{C['ok']}]✓[/{C['ok']}] [{C['purple']}][{msg.id}] @{role}:[/{C['purple']}]\n    [{C['fg']}]{full_reply}[/{C['fg']}]\n"
+                )
+            except Exception as e:
+                err(f"@{role} failed: {e}")
+
+        # Round 2: Peer Review & Debate
+        section("round 2: peer review & critique")
+        board_context = board.format_for_prompt(channel=channel, limit=6)
+        for p in personas:
+            role = p["role"]
+            con.print(f"  [{C['purple']}]🤖 @{role}[/{C['purple']}] is reviewing peer proposals…")
+            prompt = (
+                f"You are the {role} in the multi-agent panel. {p['focus']}\n\n"
+                f"Topic: {topic}\n\n"
+                f"Current discussion board state:\n{board_context}\n\n"
+                "Review the points made by other members. Agree where valid, point out risks or gaps, and refine your recommendations. Be concise (under 150 words)."
+            )
+            s = Session()
+            s.set_system(prompt)
+            s.add("user", "Respond to the other panel members.")
+            try:
+                reply_parts = []
+                for chunk in client_chat_stream(self.active, self.model, s.as_messages()):
+                    reply_parts.append(chunk)
+                full_reply = "".join(reply_parts).strip()
+                msg = board.post(sender=role, content=full_reply, channel=channel)
+                con.print(
+                    f"  [{C['ok']}]✓[/{C['ok']}] [{C['purple']}][{msg.id}] @{role}:[/{C['purple']}]\n    [{C['fg']}]{full_reply}[/{C['fg']}]\n"
+                )
+            except Exception as e:
+                err(f"@{role} failed: {e}")
+
+        # Round 3: Synthesis & Consensus
+        section("round 3: final consensus")
+        final_board = board.format_for_prompt(channel=channel, limit=10)
+        synth_prompt = (
+            f"You are the Discussion Moderator.\n\n"
+            f"Topic: {topic}\n\n"
+            f"Full discussion transcript:\n{final_board}\n\n"
+            "Synthesize the panel's discussion into a unified, actionable consensus with:\n"
+            "1. Core Agreement / Recommended Strategy\n"
+            "2. Critical Trade-offs & Risks Identified\n"
+            "3. Immediate Actionable Next Steps"
+        )
+        s = Session()
+        s.set_system(synth_prompt)
+        s.add("user", "Synthesize final consensus.")
+        try:
+            synth_parts = []
+            for chunk in client_chat_stream(self.active, self.model, s.as_messages()):
+                synth_parts.append(chunk)
+            final_consensus = "".join(synth_parts).strip()
+            board.post(sender="consensus", content=final_consensus, channel=channel)
+            con.print(f"[{C['code']}]{final_consensus}[/{C['code']}]")
+            ok(f"discussion completed in #{channel} — all messages saved to board")
+        except Exception as e:
+            err(f"synthesis failed: {e}")
+
     def run(self):
         history_file = os.path.join(
             os.path.expanduser("~"), ".config", "dct", "history"
@@ -731,6 +843,11 @@ class Shell:
             "/squad run": "Run an agent squad",
             "/swarm": "Alias for /squad commands",
             "/team": "Alias for /squad commands",
+            "/board": "View or post to AI agents discussion board",
+            "/board post": "Post message to discussion board",
+            "/board channels": "List discussion board channels",
+            "/board clear": "Clear discussion board messages",
+            "/discuss": "Spawn multi-agent debate/discussion group on a topic",
             "/orchestrate": "Orchestrate multiple agents",
             "/editai": "Edit the last AI response",
             "/retry": "Regenerate the last AI response",
@@ -1664,6 +1781,92 @@ class Shell:
                     warn("usage: /orchestrate <goal>")
                     continue
                 self._run_orchestrate(goal)
+
+            # ── board (AI Agents Discussion Board) ──────────────────────
+            elif lo == "/board" or lo.startswith("/board "):
+                from dct.tools.board import get_board
+                import time
+
+                board = get_board()
+                toks = raw[6:].strip().split()
+                sub = toks[0].lower() if toks else ""
+
+                if sub in ("channels", "list"):
+                    section("agent discussion board channels")
+                    channels = board.list_channels()
+                    for ch in channels:
+                        t_str = time.strftime(
+                            "%Y-%m-%d %H:%M:%S", time.localtime(ch["last_activity"])
+                        )
+                        con.print(
+                            f"  [{C['accent']}]{'#' + ch['channel']}[/{C['accent']}]  [{C['fg']}]{ch['message_count']} msgs[/{C['fg']}]  [{C['dim']}]latest: @{ch['latest_sender']} ({t_str})[/{C['dim']}]"
+                        )
+                        if ch.get("latest_preview"):
+                            con.print(f"    [{C['dim']}]{ch['latest_preview']}[/{C['dim']}]")
+                    hint("use /board <channel> to view messages · /board post <channel> <message>")
+
+                elif sub == "clear":
+                    ch_target = toks[1].lower() if len(toks) > 1 else None
+                    board.clear(channel=ch_target)
+                    ok(
+                        f"cleared discussion messages in {'#' + ch_target if ch_target else 'all channels'}"
+                    )
+
+                elif sub == "post":
+                    if len(toks) < 2:
+                        warn("usage: /board post [channel] <message>")
+                        continue
+                    if (
+                        len(toks) >= 3
+                        and not toks[1].startswith('"')
+                        and not toks[1].startswith("'")
+                    ):
+                        target_ch = toks[1].lower().lstrip("#")
+                        msg_body = " ".join(toks[2:])
+                    else:
+                        target_ch = "general"
+                        msg_body = " ".join(toks[1:])
+                    msg_obj = board.post(
+                        sender="user", content=msg_body, channel=target_ch
+                    )
+                    ok(f"posted message to #{target_ch} (ID: {msg_obj.id})")
+
+                else:
+                    target_ch = toks[0].lower().lstrip("#") if toks else "general"
+                    msgs = board.read(channel=target_ch, limit=15)
+                    section(f"discussion board: #{target_ch}")
+                    if not msgs:
+                        con.print(
+                            f"  [{C['dim']}](no messages in #{target_ch} yet)[/{C['dim']}]"
+                        )
+                        hint(f"post with /board post {target_ch} <message>")
+                    else:
+                        for m in msgs:
+                            t_str = time.strftime(
+                                "%H:%M:%S", time.localtime(m["timestamp"])
+                            )
+                            reply_info = (
+                                f" [{C['dim']}](reply to {m['reply_to']})[/{C['dim']}]"
+                                if m.get("reply_to")
+                                else ""
+                            )
+                            sender_color = (
+                                C["purple"] if m["sender"] != "user" else C["accent"]
+                            )
+                            con.print(
+                                f"  [{C['dim']}][{m['id']}][/{C['dim']}] [{sender_color}]@{m['sender']}[/{sender_color}]{reply_info} [{C['dim']}]{t_str}[/{C['dim']}]:\n"
+                                f"    [{C['fg']}]{m['content']}[/{C['fg']}]\n"
+                            )
+
+            # ── discuss / debate (multi-agent discussion group) ─────────
+            elif lo.startswith("/discuss ") or lo.startswith("/debate "):
+                cut = 9 if lo.startswith("/discuss ") else 8
+                topic = raw[cut:].strip()
+                if not topic:
+                    warn("usage: /discuss <topic or question>")
+                    continue
+                self._run_discussion_group(topic)
+
             elif lo.startswith("/save "):
                 fname = raw[6:].strip()
                 try:

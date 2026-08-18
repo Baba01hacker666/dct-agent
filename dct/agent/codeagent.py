@@ -275,9 +275,17 @@ Pass the `tool_name` parameter and provide arguments in `kwargs`:
 - enter_plan_mode() — Enter PLAN mode to explore and write a plan before coding
 - exit_plan_mode() — Exit PLAN mode once a plan is approved
 - skill_list() — List available built-in and custom skills
-- skill_load(name: str) — Apply a skill to current session
-- skill_create(name: str, description: str, prompt: str) — Create or update a custom skill autonomously
-- DONE() — Finish your work
+- skill_load(name: str) — Load a specialized skill persona
+- skill_create(name: str, description: str, prompt: str) — Create a custom skill
+"""
+        if conf.get("enable_agent_board", False):
+            prompt += """- board_post(content: str, channel: str, sender: str, reply_to: str) — Post messages/reviews to the AI agents discussion board
+- board_read(channel: str, limit: int, search: str) — Read recent messages or peer reviews from the AI agents discussion board
+- board_list_channels() — List all active discussion topics and channels on the board
+- board_clear(channel: str) — Clear messages in a discussion channel
+"""
+
+        prompt += """- DONE() — Finish your work
 """
         if conf.get("enable_persona", True):
             prompt += "- core_memory_manage(action: str, section: str, old_text: str, new_text: str) — Autonomously update your core identity/memory\n"
@@ -332,9 +340,17 @@ You can use tools by emitting structured XML tags in your response.
   <tool>enter_plan_mode</tool>                   — Enter PLAN mode
   <tool>exit_plan_mode</tool>                    — Exit PLAN mode
   <tool>skill_list</tool>                        — List skills
-  <tool>skill_load</tool><name>...</name>        — Apply skill
-  <tool>skill_create</tool><name>...</name><prompt>...</prompt> — Create custom skill
-  <tool>DONE</tool>                              — Finish execution
+  <tool>skill_load</tool><name>...</name>        — Load a skill persona
+  <tool>skill_create</tool><name>...</name><description>...</description><prompt>...</prompt> — Create custom skill
+"""
+        if conf.get("enable_agent_board", False):
+            prompt += """  <tool>board_post</tool><channel>general</channel><sender>agent</sender><content>...</content> — Post to agents discussion board
+  <tool>board_read</tool><channel>general</channel><limit>10</limit> — Read agents discussion board
+  <tool>board_list_channels</tool>               — List discussion channels
+  <tool>board_clear</tool><channel>general</channel> — Clear board channel
+"""
+
+        prompt += """  <tool>DONE</tool>                              — Finish execution
 """
         if conf.get("enable_persona", True):
             prompt += "  <tool>core_memory_manage</tool><action>append|replace|rewrite</action><section>...</section><new_text>...</new_text> — Update memory\n"
@@ -1051,6 +1067,118 @@ class CodeAgent:
                         return f"[TOOL ERROR] Failed to write to task stdin: {str(e)}"
 
             return f"[TOOL ERROR] Background task with ID {tid} not found."
+
+        elif tool == "board_post":
+            from dct.core.config import Config
+            from dct.tools.board import get_board
+
+            if not Config().get("enable_agent_board", False):
+                return "[TOOL ERROR] Agent discussion board feature is disabled in config. Enable with /config set enable_agent_board true"
+
+            content = (
+                call.get("content")
+                or _extract_tag(call.get("raw_text", ""), "content")
+                or call.get("code")
+                or ""
+            )
+            channel = (
+                call.get("channel")
+                or _extract_tag(call.get("raw_text", ""), "channel")
+                or "general"
+            )
+            sender = (
+                call.get("sender")
+                or _extract_tag(call.get("raw_text", ""), "sender")
+                or getattr(self, "model", "agent")
+            )
+            reply_to = (
+                call.get("reply_to")
+                or _extract_tag(call.get("raw_text", ""), "reply_to")
+                or None
+            )
+
+            if not content:
+                return "[TOOL ERROR] <content> is required for board_post."
+
+            board = get_board()
+            msg = board.post(
+                sender=sender,
+                content=content,
+                channel=channel,
+                reply_to=reply_to,
+            )
+            return f"[SUCCESS] Posted to #{msg.channel} as @{msg.sender} (ID: {msg.id})"
+
+        elif tool == "board_read":
+            from dct.core.config import Config
+            from dct.tools.board import get_board
+
+            if not Config().get("enable_agent_board", False):
+                return "[TOOL ERROR] Agent discussion board feature is disabled in config. Enable with /config set enable_agent_board true"
+
+            channel = (
+                call.get("channel")
+                or _extract_tag(call.get("raw_text", ""), "channel")
+                or "general"
+            )
+            limit_str = (
+                call.get("limit")
+                or _extract_tag(call.get("raw_text", ""), "limit")
+                or "10"
+            )
+            search = (
+                call.get("search")
+                or _extract_tag(call.get("raw_text", ""), "search")
+                or None
+            )
+
+            try:
+                limit = int(limit_str)
+            except ValueError:
+                limit = 10
+
+            board = get_board()
+            if search:
+                msgs = board.read(channel=channel, limit=limit, search=search)
+                if not msgs:
+                    return f"No messages found matching '{search}' in #{channel}."
+                lines = [f"[AGENT DISCUSSION BOARD #{channel} (search: {search})]"]
+                for m in msgs:
+                    lines.append(f"- [{m['id']}] @{m['sender']}: {m['content']}")
+                return "\n".join(lines)
+
+            return board.format_for_prompt(channel=channel, limit=limit)
+
+        elif tool == "board_list_channels":
+            from dct.core.config import Config
+            from dct.tools.board import get_board
+
+            if not Config().get("enable_agent_board", False):
+                return "[TOOL ERROR] Agent discussion board feature is disabled in config. Enable with /config set enable_agent_board true"
+
+            channels = get_board().list_channels()
+            lines = ["[ACTIVE DISCUSSION CHANNELS]"]
+            for ch in channels:
+                lines.append(
+                    f"• #{ch['channel']} — {ch['message_count']} msgs (Latest: @{ch['latest_sender']}: {ch['latest_preview']})"
+                )
+            return "\n".join(lines)
+
+        elif tool == "board_clear":
+            from dct.core.config import Config
+            from dct.tools.board import get_board
+
+            if not Config().get("enable_agent_board", False):
+                return "[TOOL ERROR] Agent discussion board feature is disabled in config. Enable with /config set enable_agent_board true"
+
+            channel = (
+                call.get("channel")
+                or _extract_tag(call.get("raw_text", ""), "channel")
+                or None
+            )
+            get_board().clear(channel=channel)
+            ch_label = f"#{channel}" if channel else "all channels"
+            return f"[SUCCESS] Cleared discussion messages in {ch_label}."
 
         if tool in (
             "run_python",
@@ -1786,6 +1914,30 @@ class CodeAgent:
                     "desc": "Spawn parallel swarm of specialized agent personas",
                     "params": "instruction: str, members: str",
                     "example": "<tool>run_swarm</tool><instruction>Review PR</instruction><members>tester\\nreviewer</members>",
+                },
+                {
+                    "name": "board_post",
+                    "desc": "Post message, review, or proposal to shared AI agent discussion board",
+                    "params": "content: str, channel: str, sender: str, reply_to: str",
+                    "example": "<tool>board_post</tool><channel>arch</channel><content>Proposed schema change</content>",
+                },
+                {
+                    "name": "board_read",
+                    "desc": "Read recent discussion messages or peer reviews from shared board",
+                    "params": "channel: str, limit: int, search: str",
+                    "example": "<tool>board_read</tool><channel>arch</channel><limit>5</limit>",
+                },
+                {
+                    "name": "board_list_channels",
+                    "desc": "List active discussion channels/topics on board",
+                    "params": "none",
+                    "example": "<tool>board_list_channels</tool>",
+                },
+                {
+                    "name": "board_clear",
+                    "desc": "Clear discussion messages in a channel",
+                    "params": "channel: str",
+                    "example": "<tool>board_clear</tool><channel>general</channel>",
                 },
                 {
                     "name": "enter_plan_mode",

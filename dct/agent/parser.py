@@ -175,6 +175,13 @@ def parse_tool_call(text: str) -> Optional[dict]:
         "index",
         "mode",
         "source",
+        "channel",
+        "sender",
+        "content",
+        "reply_to",
+        "tags",
+        "limit",
+        "search",
     ]
     for k in keys:
         result[k] = None

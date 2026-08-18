@@ -59,7 +59,24 @@ document.addEventListener('DOMContentLoaded', () => {
   const askUserCustomInput = document.getElementById('askUserCustomInput');
   const submitAskUserBtn = document.getElementById('submitAskUserBtn');
 
+  // Discussion Board Modal Elements
+  const headerBoardBtn = document.getElementById('headerBoardBtn');
+  const openBoardBtn = document.getElementById('openBoardBtn');
+  const sidebarOpenBoardBtn = document.getElementById('sidebarOpenBoardBtn');
+  const boardModal = document.getElementById('boardModal');
+  const closeBoardModalBtn = document.getElementById('closeBoardModalBtn');
+  const boardChannelSelect = document.getElementById('boardChannelSelect');
+  const refreshBoardBtn = document.getElementById('refreshBoardBtn');
+  const clearBoardChannelBtn = document.getElementById('clearBoardChannelBtn');
+  const boardMessagesContainer = document.getElementById('boardMessagesContainer');
+  const boardPostForm = document.getElementById('boardPostForm');
+  const boardPostInput = document.getElementById('boardPostInput');
+
   const toastContainer = document.getElementById('toastContainer');
+
+  // Skills Elements
+  const activeSkillBadge = document.getElementById('activeSkillBadge');
+  const skillChipsGrid = document.getElementById('skillChipsGrid');
 
   // Application State
   let state = {
@@ -106,6 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     await fetchStatus();
     await fetchServers();
+    await fetchSkills();
     await fetchTasks();
     await fetchHistory();
   }
@@ -325,6 +343,59 @@ document.addEventListener('DOMContentLoaded', () => {
         alert(res.error || 'Failed to add server');
       }
     });
+
+    // Discussion Board Events
+    if (headerBoardBtn) {
+      headerBoardBtn.addEventListener('click', openBoardModal);
+    }
+    if (openBoardBtn) {
+      openBoardBtn.addEventListener('click', openBoardModal);
+    }
+    if (sidebarOpenBoardBtn) {
+      sidebarOpenBoardBtn.addEventListener('click', () => {
+        openBoardModal();
+        if (window.innerWidth <= 768) closeMobileSidebar();
+      });
+    }
+    if (closeBoardModalBtn) {
+      closeBoardModalBtn.addEventListener('click', () => {
+        boardModal.style.display = 'none';
+      });
+    }
+    if (boardChannelSelect) {
+      boardChannelSelect.addEventListener('change', () => {
+        fetchBoardMessages(boardChannelSelect.value);
+      });
+    }
+    if (refreshBoardBtn) {
+      refreshBoardBtn.addEventListener('click', () => {
+        fetchBoardChannels();
+        fetchBoardMessages(boardChannelSelect.value || 'general');
+        showToast('Board refreshed', '🔄');
+      });
+    }
+    if (clearBoardChannelBtn) {
+      clearBoardChannelBtn.addEventListener('click', async () => {
+        const ch = boardChannelSelect.value || 'general';
+        if (confirm(`Clear all messages in #${ch}?`)) {
+          await apiPost('/api/board/clear', { channel: ch });
+          await fetchBoardMessages(ch);
+          showToast(`Cleared #${ch}`, '🗑️');
+        }
+      });
+    }
+    if (boardPostForm) {
+      boardPostForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const content = boardPostInput.value.trim();
+        if (!content) return;
+        const ch = boardChannelSelect.value || 'general';
+        await apiPost('/api/board/post', { channel: ch, content, sender: 'user' });
+        boardPostInput.value = '';
+        await fetchBoardMessages(ch);
+        showToast('Message posted to board', '💬');
+      });
+    }
 
     submitAskUserBtn.addEventListener('click', submitAskUser);
   }
@@ -820,6 +891,144 @@ document.addEventListener('DOMContentLoaded', () => {
     if (val) {
       await apiPost('/api/ask_user_response', { answer: val });
       askUserModal.style.display = 'none';
+    }
+  }
+
+  // ── Discussion Board Handlers ─────────────────────────────────────────────
+  async function openBoardModal() {
+    boardModal.style.display = 'flex';
+    await fetchBoardChannels();
+    const currentCh = boardChannelSelect.value || 'general';
+    await fetchBoardMessages(currentCh);
+  }
+
+  async function fetchBoardChannels() {
+    try {
+      const res = await apiGet('/api/board/channels');
+      const channels = res.channels || [];
+      const currVal = boardChannelSelect.value;
+      boardChannelSelect.innerHTML = '';
+
+      let hasGeneral = false;
+      channels.forEach((ch) => {
+        if (ch.channel === 'general') hasGeneral = true;
+        const opt = document.createElement('option');
+        opt.value = ch.channel;
+        opt.textContent = `#${ch.channel} (${ch.message_count})`;
+        boardChannelSelect.appendChild(opt);
+      });
+
+      if (!hasGeneral) {
+        const opt = document.createElement('option');
+        opt.value = 'general';
+        opt.textContent = '#general (0)';
+        boardChannelSelect.insertBefore(opt, boardChannelSelect.firstChild);
+      }
+
+      if (currVal) {
+        boardChannelSelect.value = currVal;
+      }
+    } catch (e) {
+      console.error('fetchBoardChannels failed', e);
+    }
+  }
+
+  async function fetchBoardMessages(channel = 'general') {
+    try {
+      const res = await apiGet(`/api/board?channel=${encodeURIComponent(channel)}&limit=50`);
+      const messages = res.messages || [];
+      if (messages.length === 0) {
+        boardMessagesContainer.innerHTML = `
+          <div class="empty-state compact">
+            <span class="empty-icon">💬</span>
+            <p>No messages in #${escapeHtml(channel)} yet.</p>
+          </div>
+        `;
+        return;
+      }
+
+      boardMessagesContainer.innerHTML = '';
+      messages.forEach((m) => {
+        const card = document.createElement('div');
+        card.className = 'board-msg-card';
+        const isUser = m.sender === 'user';
+        const d = new Date(m.timestamp * 1000);
+        const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const replyHtml = m.reply_to ? `<span class="board-msg-reply-badge">reply to #${m.reply_to}</span>` : '';
+
+        card.innerHTML = `
+          <div class="board-msg-header">
+            <div class="board-msg-sender-wrap">
+              <span class="board-msg-sender ${isUser ? 'user' : ''}">@${escapeHtml(m.sender)}</span>
+              ${replyHtml}
+              <span class="board-msg-id">[#${m.id}]</span>
+            </div>
+            <span class="board-msg-time">${timeStr}</span>
+          </div>
+          <div class="board-msg-body">${escapeHtml(m.content)}</div>
+        `;
+        boardMessagesContainer.appendChild(card);
+      });
+      boardMessagesContainer.scrollTop = boardMessagesContainer.scrollHeight;
+    } catch (e) {
+      console.error('fetchBoardMessages failed', e);
+    }
+  }
+
+  // ── Agent Skills Handlers ─────────────────────────────────────────────────
+  async function fetchSkills() {
+    if (!skillChipsGrid) return;
+    try {
+      const res = await apiGet('/api/skills');
+      const skills = res.skills || [];
+      const currentSys = (res.current_system || '').trim();
+
+      skillChipsGrid.innerHTML = '';
+      let activeSkillName = null;
+
+      skills.forEach((s) => {
+        const btn = document.createElement('button');
+        btn.className = 'skill-chip-btn';
+        btn.innerHTML = `<span style="font-size: 13px;">🧠</span> <span>${escapeHtml(s.name)}</span>`;
+        btn.title = s.desc;
+
+        // Check if current system prompt matches this skill
+        if (currentSys && s.prompt && currentSys.includes(s.prompt.substring(0, 40))) {
+          btn.classList.add('active');
+          activeSkillName = s.name;
+        }
+
+        btn.addEventListener('click', async () => {
+          if (btn.classList.contains('active')) {
+            await apiPost('/api/skills/load', { name: '' });
+            showToast('Reset to default system prompt', '🔄');
+          } else {
+            await apiPost('/api/skills/load', { name: s.name });
+            showToast(`Loaded skill: ${s.name}`, '🧠');
+          }
+          await fetchSkills();
+          if (window.innerWidth <= 768) {
+            sidebar.classList.remove('open');
+            sidebarBackdrop.classList.remove('active');
+          }
+        });
+        skillChipsGrid.appendChild(btn);
+      });
+
+      if (activeSkillBadge) {
+        if (activeSkillName) {
+          activeSkillBadge.textContent = activeSkillName;
+          activeSkillBadge.className = 'badge badge-active';
+        } else if (currentSys) {
+          activeSkillBadge.textContent = 'Custom';
+          activeSkillBadge.className = 'badge badge-active';
+        } else {
+          activeSkillBadge.textContent = 'Default';
+          activeSkillBadge.className = 'badge badge-subtle';
+        }
+      }
+    } catch (e) {
+      console.error('fetchSkills failed', e);
     }
   }
 

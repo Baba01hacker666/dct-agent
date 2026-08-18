@@ -160,6 +160,9 @@ HELP_SECTIONS = {
       fetch_url           — fetch a URL (HTML → markdown)
       web_search          — DuckDuckGo search
       web_extract         — fetch URL + optional CSS selector extraction
+      board_post          — post to AI agents shared discussion board
+      board_read          — read from AI agents shared discussion board
+      board_list_channels — list discussion channels/topics on the board
       run_subagent        — spawn a sub-agent to delegate a sub-task
       bg_status           — check status/logs of background tasks
       bg_kill             — terminate a running background task
@@ -173,6 +176,10 @@ HELP_SECTIONS = {
       enter_plan_mode     — switch to read-only planning mode
       exit_plan_mode      — return to execution mode
       get_cwd             — get current working directory[/{C["dim"]}]
+
+  [{C["fg"]}]Discussion Board & Swarms:[/{C["fg"]}]
+      [{C["dim"]}]Use /board [channel] to view messages, /board post <msg> to post,
+      and /discuss <topic> to spawn an autonomous multi-agent panel debate.[/{C["dim"]}]
 
   [{C["fg"]}]Background tasks:[/{C["fg"]}]
       [{C["dim"]}]Add <background>true</background> to run_python/run_bash/run_shell

@@ -366,6 +366,121 @@ class AgentWebServer:
             return web.json_response({"ok": True, "message": "Response submitted to agent"})
         return web.json_response({"ok": False, "error": "Agent is not currently waiting for input"})
 
+    # ── AI Agents Discussion Board REST APIs ───────────────────────────────────
+
+    async def handle_get_board_messages(self, request: web.Request) -> web.Response:
+        from dct.tools.board import get_board
+
+        channel = request.query.get("channel", "general")
+        limit_str = request.query.get("limit", "50")
+        search = request.query.get("search")
+        try:
+            limit = int(limit_str)
+        except ValueError:
+            limit = 50
+        msgs = get_board().read(channel=channel, limit=limit, search=search)
+        return web.json_response({"channel": channel, "messages": msgs})
+
+    async def handle_post_board_message(self, request: web.Request) -> web.Response:
+        from dct.tools.board import get_board
+
+        try:
+            data = await request.json()
+        except Exception:
+            return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+
+        content = data.get("content", "").strip()
+        if not content:
+            return web.json_response(
+                {"ok": False, "error": "Content is required"}, status=400
+            )
+
+        sender = data.get("sender", "user").strip() or "user"
+        channel = data.get("channel", "general").strip() or "general"
+        reply_to = data.get("reply_to")
+        tags = data.get("tags", [])
+
+        msg = get_board().post(
+            sender=sender,
+            content=content,
+            channel=channel,
+            reply_to=reply_to,
+            tags=tags,
+        )
+        return web.json_response({"ok": True, "message": msg.to_dict()})
+
+    async def handle_get_board_channels(self, request: web.Request) -> web.Response:
+        from dct.tools.board import get_board
+
+        channels = get_board().list_channels()
+        return web.json_response({"channels": channels})
+
+    async def handle_clear_board(self, request: web.Request) -> web.Response:
+        from dct.tools.board import get_board
+
+        try:
+            data = await request.json()
+            channel = data.get("channel")
+        except Exception:
+            channel = None
+        get_board().clear(channel=channel)
+        return web.json_response(
+            {
+                "ok": True,
+                "message": f"Cleared board {'#' + channel if channel else 'all channels'}",
+            }
+        )
+
+    # ── Agent Skills REST APIs ────────────────────────────────────────────────
+
+    async def handle_get_skills(self, request: web.Request) -> web.Response:
+        from dct.core.config import Config
+
+        try:
+            from dct.cli.shell import SKILL_PRESETS
+        except ImportError:
+            SKILL_PRESETS = {}
+
+        conf = Config()
+        custom = conf.get("custom_skills", {})
+        skills = []
+        for name, data in SKILL_PRESETS.items():
+            skills.append({"name": name, "desc": data.get("desc", ""), "type": "builtin"})
+        for name, data in custom.items():
+            skills.append({"name": name, "desc": data.get("desc", ""), "type": "custom"})
+
+        return web.json_response({
+            "skills": skills,
+            "current_system": self.session.system_prompt,
+        })
+
+    async def handle_load_skill(self, request: web.Request) -> web.Response:
+        try:
+            data = await request.json()
+            name = data.get("name", "").strip()
+        except Exception:
+            return web.json_response({"ok": False, "error": "Invalid JSON payload"}, status=400)
+
+        if not name:
+            self.session.set_system("")
+            return web.json_response({"ok": True, "message": "Cleared active skill preset (default system prompt restored)"})
+
+        from dct.core.config import Config
+
+        try:
+            from dct.cli.shell import SKILL_PRESETS
+        except ImportError:
+            SKILL_PRESETS = {}
+
+        conf = Config()
+        custom = conf.get("custom_skills", {})
+        skill = custom.get(name) or SKILL_PRESETS.get(name)
+        if not skill:
+            return web.json_response({"ok": False, "error": f"Skill '{name}' not found"}, status=404)
+
+        self.session.set_system(skill["prompt"])
+        return web.json_response({"ok": True, "message": f"Loaded skill '{name}'", "skill": name})
+
     # ── SSE Real-Time Streaming Chat ──────────────────────────────────────────
 
     async def handle_chat_stream(self, request: web.Request) -> web.StreamResponse:
@@ -514,6 +629,12 @@ def create_app(registry: Optional[ServerRegistry] = None) -> web.Application:
     app.router.add_post("/api/sessions/switch", server.handle_switch_session)
     app.router.add_post("/api/clear", server.handle_clear)
     app.router.add_post("/api/ask_user_response", server.handle_ask_user_response)
+    app.router.add_get("/api/skills", server.handle_get_skills)
+    app.router.add_post("/api/skills/load", server.handle_load_skill)
+    app.router.add_get("/api/board", server.handle_get_board_messages)
+    app.router.add_post("/api/board/post", server.handle_post_board_message)
+    app.router.add_get("/api/board/channels", server.handle_get_board_channels)
+    app.router.add_post("/api/board/clear", server.handle_clear_board)
 
     # SSE Chat Stream
     app.router.add_post("/api/chat", server.handle_chat_stream)

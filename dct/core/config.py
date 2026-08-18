@@ -31,6 +31,7 @@ DEFAULTS = {
     "max_tokens": 4096,
     "project_root": "",
     "enable_approx_parser": False,
+    "enable_agent_board": False,
 }
 
 

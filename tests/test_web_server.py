@@ -69,7 +69,38 @@ def test_web_server_endpoints():
             sess_data = await res.json()
             assert "sessions" in sess_data
 
-            # 8. Test POST /api/clear
+            # 8. Test Skills API
+            res = await client.get("/api/skills")
+            assert res.status == 200
+            skills_data = await res.json()
+            assert "skills" in skills_data
+            assert len(skills_data["skills"]) > 0
+
+            res = await client.post("/api/skills/load", json={"name": "python"})
+            assert res.status == 200
+            load_data = await res.json()
+            assert load_data["ok"] is True
+
+            # 9. Test Board API
+            res = await client.post("/api/board/post", json={"channel": "webtest", "content": "Hello from web test", "sender": "Tester"})
+            assert res.status == 200
+            post_data = await res.json()
+            assert post_data["ok"] is True
+
+            res = await client.get("/api/board?channel=webtest")
+            assert res.status == 200
+            board_data = await res.json()
+            assert len(board_data["messages"]) == 1
+
+            res = await client.get("/api/board/channels")
+            assert res.status == 200
+            ch_data = await res.json()
+            assert len(ch_data["channels"]) > 0
+
+            res = await client.post("/api/board/clear", json={"channel": "webtest"})
+            assert res.status == 200
+
+            # 10. Test POST /api/clear
             res = await client.post("/api/clear")
             assert res.status == 200
             clear_data = await res.json()
