@@ -13,19 +13,27 @@
   <div class="app-layout">
     <!-- Top Navigation Header -->
     <header class="app-header">
-      <div class="header-brand">
-        <div class="logo-badge">
-          <span class="logo-icon">⚡</span>
-          <span class="logo-title">DCT-AGENT</span>
-          <span class="version-tag">v3.2.1</span>
-        </div>
-        <div class="server-status-pill" id="serverStatusPill">
-          <span class="status-dot"></span>
-          <span class="status-label">Checking servers...</span>
+      <div class="header-left">
+        <button id="sidebarToggleBtn" class="sidebar-toggle-btn" aria-label="Toggle navigation drawer" title="Menu">
+          <span class="hamburger-line"></span>
+          <span class="hamburger-line"></span>
+          <span class="hamburger-line"></span>
+        </button>
+
+        <div class="header-brand">
+          <div class="logo-badge">
+            <span class="logo-icon">⚡</span>
+            <span class="logo-title">DCT-AGENT</span>
+            <span class="version-tag">v3.2.1</span>
+          </div>
+          <div class="server-status-pill" id="serverStatusPill">
+            <span class="status-dot"></span>
+            <span class="status-label">Checking servers...</span>
+          </div>
         </div>
       </div>
 
-      <div class="header-controls">
+      <div class="header-controls" id="headerControls">
         <div class="control-group">
           <label for="serverSelect">Server</label>
           <select id="serverSelect" class="select-dropdown"></select>
@@ -39,20 +47,28 @@
         <div class="mode-toggles">
           <button id="agentModeBtn" class="mode-btn active" title="Toggle Autonomous Agent Mode (runs bash, python, edits files)">
             <span class="mode-icon">🤖</span>
-            <span class="mode-text">Agent Mode</span>
+            <span class="mode-text">Agent</span>
           </button>
           <button id="planModeBtn" class="mode-btn" title="Toggle Plan Mode (read-only safe exploration)">
             <span class="mode-icon">📋</span>
-            <span class="mode-text">Plan Mode</span>
+            <span class="mode-text">Plan</span>
           </button>
         </div>
       </div>
     </header>
 
+    <!-- Mobile Backdrop Overlay -->
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
     <!-- Main Workspace -->
     <div class="main-workspace">
       <!-- Left Sidebar: Tasks & Server Management -->
       <aside class="sidebar" id="sidebar">
+        <div class="sidebar-top-mobile">
+          <div class="sidebar-mobile-title">Menu & Settings</div>
+          <button class="sidebar-close-btn" id="sidebarCloseBtn" aria-label="Close sidebar">✕</button>
+        </div>
+
         <div class="sidebar-section">
           <div class="sidebar-header">
             <h3>⚡ Task Tracker</h3>

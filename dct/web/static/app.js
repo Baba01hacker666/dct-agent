@@ -16,6 +16,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const taskList = document.getElementById('taskList');
   const taskCountBadge = document.getElementById('taskCountBadge');
+  const sidebar = document.getElementById('sidebar');
+  const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
+  const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+  const sidebarCloseBtn = document.getElementById('sidebarCloseBtn');
   const serverList = document.getElementById('serverList');
   const probeAllBtn = document.getElementById('probeAllBtn');
   const openAddServerModalBtn = document.getElementById('openAddServerModalBtn');
@@ -140,6 +144,45 @@ document.addEventListener('DOMContentLoaded', () => {
       updateModeUI();
     });
 
+    // Mobile Sidebar Drawer
+    function openMobileSidebar() {
+      sidebar.classList.add('open');
+      sidebarBackdrop.classList.add('active');
+    }
+
+    function closeMobileSidebar() {
+      sidebar.classList.remove('open');
+      sidebarBackdrop.classList.remove('active');
+    }
+
+    if (sidebarToggleBtn) {
+      sidebarToggleBtn.addEventListener('click', () => {
+        if (sidebar.classList.contains('open')) {
+          closeMobileSidebar();
+        } else {
+          openMobileSidebar();
+        }
+      });
+    }
+
+    if (sidebarCloseBtn) {
+      sidebarCloseBtn.addEventListener('click', closeMobileSidebar);
+    }
+
+    if (sidebarBackdrop) {
+      sidebarBackdrop.addEventListener('click', closeMobileSidebar);
+    }
+
+    // Keyboard ESC to close modal/drawer
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeMobileSidebar();
+        addServerModal.style.display = 'none';
+        askUserModal.style.display = 'none';
+        slashAutocomplete.style.display = 'none';
+      }
+    });
+
     // Sidebar buttons
     probeAllBtn.addEventListener('click', async () => {
       probeAllBtn.style.transform = 'rotate(360deg)';
@@ -149,8 +192,15 @@ document.addEventListener('DOMContentLoaded', () => {
       await fetchStatus();
     });
 
-    clearChatBtn.addEventListener('click', clearConversation);
-    newSessionBtn.addEventListener('click', clearConversation);
+    clearChatBtn.addEventListener('click', () => {
+      clearConversation();
+      if (window.innerWidth <= 768) closeMobileSidebar();
+    });
+
+    newSessionBtn.addEventListener('click', () => {
+      clearConversation();
+      if (window.innerWidth <= 768) closeMobileSidebar();
+    });
 
     // Quick Prompts
     document.querySelectorAll('.quick-prompt-btn').forEach((btn) => {
@@ -166,6 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Modals
     openAddServerModalBtn.addEventListener('click', () => {
       addServerModal.style.display = 'flex';
+      if (window.innerWidth <= 768) closeMobileSidebar();
     });
 
     closeAddServerModalBtn.addEventListener('click', () => {
@@ -277,6 +328,7 @@ document.addEventListener('DOMContentLoaded', () => {
           await apiPost('/api/select', { alias: s.alias });
           await fetchServers();
           await fetchStatus();
+          if (window.innerWidth <= 768) closeMobileSidebar();
         });
         serverList.appendChild(srvCard);
       });

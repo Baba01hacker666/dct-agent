@@ -52,8 +52,10 @@ body {
   line-height: 1.5;
   font-size: 14px;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
 }
 
 /* ── App Layout ────────────────────────────────────────────────────────── */
@@ -61,30 +63,73 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 /* ── Top Header ────────────────────────────────────────────────────────── */
 .app-header {
-  height: var(--header-height);
+  min-height: var(--header-height);
   background-color: var(--bg-secondary);
   border-bottom: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
+  padding: 0 16px;
   z-index: 20;
+  gap: 12px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sidebar-toggle-btn {
+  display: none;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  width: 38px;
+  height: 38px;
+  cursor: pointer;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  color: var(--text-main);
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.sidebar-toggle-btn:hover, .sidebar-toggle-btn:active {
+  background-color: var(--bg-elevated);
+  border-color: var(--accent-cyan);
+}
+
+.hamburger-line {
+  width: 18px;
+  height: 2px;
+  background-color: var(--text-main);
+  border-radius: 2px;
+  transition: all 0.2s;
 }
 
 .header-brand {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
+  min-width: 0;
 }
 
 .logo-badge {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .logo-icon {
@@ -117,6 +162,10 @@ body {
   border-radius: 20px;
   font-size: 12px;
   color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
 }
 
 .status-dot {
@@ -209,6 +258,24 @@ body {
   overflow: hidden;
 }
 
+/* ── Mobile Sidebar Backdrop ───────────────────────────────────────────── */
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 35;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.sidebar-backdrop.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 /* ── Sidebar ───────────────────────────────────────────────────────────── */
 .sidebar {
   width: var(--sidebar-width);
@@ -217,8 +284,44 @@ body {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 16px;
   gap: 20px;
+  z-index: 10;
+}
+
+.sidebar-top-mobile {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.sidebar-mobile-title {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text-main);
+}
+
+.sidebar-close-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.sidebar-close-btn:hover, .sidebar-close-btn:active {
+  background-color: var(--bg-elevated);
+  color: var(--text-main);
 }
 
 .sidebar-section {
@@ -870,27 +973,208 @@ code {
 }
 
 /* ── Responsive Mobile Layout ──────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  :root {
+    --sidebar-width: 280px;
+  }
+}
+
 @media (max-width: 768px) {
+  :root {
+    --header-height: 56px;
+  }
+
   .app-header {
     padding: 0 12px;
-    height: auto;
-    flex-direction: column;
-    gap: 10px;
-    padding-bottom: 10px;
+    height: var(--header-height);
+    min-height: var(--header-height);
+    gap: 8px;
   }
-  
-  .main-workspace {
-    flex-direction: column;
+
+  .sidebar-toggle-btn {
+    display: flex;
+  }
+
+  .control-group label {
+    display: none;
+  }
+
+  .header-controls {
+    gap: 6px;
+  }
+
+  .select-dropdown {
+    padding: 5px 8px;
+    font-size: 12px;
+    max-width: 110px;
+    text-overflow: ellipsis;
+  }
+
+  .mode-btn {
+    padding: 5px 8px;
+    font-size: 11px;
+    gap: 4px;
+  }
+
+  .server-status-pill {
+    max-width: 130px;
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+
+  /* Off-canvas mobile slide-out drawer */
+  .sidebar-backdrop {
+    display: block;
+  }
+
+  .sidebar-top-mobile {
+    display: flex;
   }
 
   .sidebar {
-    width: 100%;
-    max-height: 200px;
-    border-right: none;
-    border-bottom: 1px solid var(--border-subtle);
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(320px, 86vw);
+    height: 100vh;
+    height: 100dvh;
+    z-index: 50;
+    transform: translateX(-100%);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: var(--shadow-lg);
+    background-color: var(--bg-secondary);
+    border-right: 1px solid var(--border-muted);
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .chat-feed {
+    padding: 16px 12px;
+    gap: 16px;
+  }
+
+  .message-row {
+    max-width: 100%;
+  }
+
+  .message-bubble {
+    padding: 12px 14px;
+    font-size: 13.5px;
+  }
+
+  .message-row.user .message-bubble {
+    max-width: 90%;
+  }
+
+  .welcome-card {
+    padding: 24px 16px;
+    margin: 8px auto;
+  }
+
+  .welcome-card h2 {
+    font-size: 18px;
+  }
+
+  .welcome-card p {
+    font-size: 13px;
+    margin-bottom: 18px;
   }
 
   .quick-prompts {
     grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .quick-prompt-btn {
+    padding: 10px 12px;
+    font-size: 12.5px;
+  }
+
+  .composer-container {
+    padding: 10px 12px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+
+  .slash-autocomplete {
+    left: 12px;
+    right: 12px;
+    width: auto;
+  }
+
+  .composer-form {
+    padding: 6px 10px;
+    gap: 8px;
+  }
+
+  /* 16px font-size prevents iOS Safari from automatically zooming into inputs */
+  .composer-textarea {
+    font-size: 16px;
+    padding: 6px 0;
+  }
+
+  .composer-footer {
+    font-size: 10px;
+    margin-top: 4px;
+  }
+
+  .modal-card {
+    width: 92vw;
+    max-width: 440px;
+    padding: 18px;
+    margin: 12px;
+  }
+
+  .form-group input,
+  .composer-textarea,
+  .ask-choice-btn {
+    font-size: 16px;
   }
 }
+
+@media (max-width: 480px) {
+  .logo-title {
+    font-size: 14px;
+  }
+
+  .version-tag {
+    display: none;
+  }
+
+  .server-status-pill {
+    display: none;
+  }
+
+  .select-dropdown {
+    max-width: 88px;
+    font-size: 11px;
+    padding: 4px 6px;
+  }
+
+  .mode-text {
+    display: none;
+  }
+
+  .mode-btn {
+    padding: 6px 8px;
+  }
+
+  .mode-icon {
+    font-size: 14px;
+  }
+
+  .btn .btn-text {
+    display: none;
+  }
+
+  .btn-icon {
+    padding: 8px 10px;
+  }
+
+  .composer-footer span:first-child {
+    display: none;
+  }
+}
+
