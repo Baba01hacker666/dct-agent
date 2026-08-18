@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DCT-Agent · Autonomous AI System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Top Navigation Header -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="logo-badge">
+          <span class="logo-icon">⚡</span>
+          <span class="logo-title">DCT-AGENT</span>
+          <span class="version-tag">v3.2.1</span>
+        </div>
+        <div class="server-status-pill" id="serverStatusPill">
+          <span class="status-dot"></span>
+          <span class="status-label">Checking servers...</span>
+        </div>
+      </div>
+
+      <div class="header-controls">
+        <div class="control-group">
+          <label for="serverSelect">Server</label>
+          <select id="serverSelect" class="select-dropdown"></select>
+        </div>
+
+        <div class="control-group">
+          <label for="modelSelect">Model</label>
+          <select id="modelSelect" class="select-dropdown"></select>
+        </div>
+
+        <div class="mode-toggles">
+          <button id="agentModeBtn" class="mode-btn active" title="Toggle Autonomous Agent Mode (runs bash, python, edits files)">
+            <span class="mode-icon">🤖</span>
+            <span class="mode-text">Agent Mode</span>
+          </button>
+          <button id="planModeBtn" class="mode-btn" title="Toggle Plan Mode (read-only safe exploration)">
+            <span class="mode-icon">📋</span>
+            <span class="mode-text">Plan Mode</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <div class="main-workspace">
+      <!-- Left Sidebar: Tasks & Server Management -->
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-section">
+          <div class="sidebar-header">
+            <h3>⚡ Task Tracker</h3>
+            <span class="badge" id="taskCountBadge">0 tasks</span>
+          </div>
+          <div class="task-list" id="taskList">
+            <div class="empty-state">No active tasks. Start a request to see the agent decompose goals!</div>
+          </div>
+        </div>
+
+        <div class="sidebar-section">
+          <div class="sidebar-header">
+            <h3>🌐 Registered Servers</h3>
+            <button id="probeAllBtn" class="action-icon-btn" title="Probe all servers">🔄</button>
+          </div>
+          <div class="server-list" id="serverList"></div>
+          <button id="openAddServerModalBtn" class="btn btn-secondary btn-block">+ Add Server / Provider</button>
+        </div>
+
+        <div class="sidebar-footer">
+          <button id="clearChatBtn" class="btn btn-ghost btn-sm" title="Clear conversation">🗑️ Clear Chat</button>
+          <button id="newSessionBtn" class="btn btn-ghost btn-sm" title="Start fresh session">✨ New Session</button>
+        </div>
+      </aside>
+
+      <!-- Center Chat Area -->
+      <main class="chat-container">
+        <div class="plan-mode-banner" id="planModeBanner" style="display: none;">
+          <span class="banner-icon">🛡️</span>
+          <div class="banner-content">
+            <strong>Plan Mode Active:</strong> Destructive commands and file modifications are locked. Agent is generating a strategic implementation plan.
+          </div>
+          <button id="exitPlanModeBtn" class="btn btn-sm btn-outline">Exit Plan Mode</button>
+        </div>
+
+        <div class="chat-feed" id="chatFeed">
+          <div class="welcome-card" id="welcomeCard">
+            <div class="welcome-icon">🚀</div>
+            <h2>Welcome to DCT-Agent</h2>
+            <p>Your multi-server autonomous development agent. Type a goal or chat message below to start executing tasks on this machine.</p>
+            <div class="quick-prompts">
+              <button class="quick-prompt-btn" data-prompt="Analyze the git repository structure and list top files">📁 Analyze repo structure</button>
+              <button class="quick-prompt-btn" data-prompt="Run the pytest suite and show test results">🧪 Run pytest suite</button>
+              <button class="quick-prompt-btn" data-prompt="/servers">🌐 Show server status</button>
+              <button class="quick-prompt-btn" data-prompt="Create a step-by-step task plan to audit system performance">📋 Plan system audit</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Input Composer -->
+        <div class="composer-container">
+          <div class="slash-autocomplete" id="slashAutocomplete" style="display: none;">
+            <div class="autocomplete-header">Available Commands</div>
+            <div class="autocomplete-items" id="autocompleteItems"></div>
+          </div>
+
+          <form class="composer-form" id="composerForm">
+            <textarea
+              id="messageInput"
+              class="composer-textarea"
+              placeholder="Ask a question, enter a coding task, or type / for commands..."
+              rows="1"
+              autofocus
+            ></textarea>
+            <div class="composer-actions">
+              <button type="button" id="stopBtn" class="btn btn-danger btn-icon" style="display: none;" title="Stop generation">⏹️ Stop</button>
+              <button type="submit" id="sendBtn" class="btn btn-primary btn-icon" title="Send message (Enter)">
+                <span class="btn-text">Send</span>
+                <span class="btn-icon">➤</span>
+              </button>
+            </div>
+          </form>
+          <div class="composer-footer">
+            <span>Press <strong>Enter</strong> to send, <strong>Shift+Enter</strong> for newline, <strong>/</strong> for slash commands</span>
+            <span id="tokenCounter" class="token-counter">0 turns · ~0 tok</span>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Add Server Modal -->
+  <div class="modal-overlay" id="addServerModal" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Add Server / LLM Provider</h3>
+        <button class="modal-close-btn" id="closeAddServerModalBtn">✕</button>
+      </div>
+      <form id="addServerForm">
+        <div class="form-group">
+          <label for="serverHostInput">Host / Endpoint URL</label>
+          <input type="text" id="serverHostInput" placeholder="e.g. 127.0.0.1 or https://openrouter.ai/api/v1" required>
+        </div>
+        <div class="form-group">
+          <label for="serverPortInput">Port</label>
+          <input type="number" id="serverPortInput" value="11434" required>
+        </div>
+        <div class="form-group">
+          <label for="serverAliasInput">Alias (Optional)</label>
+          <input type="text" id="serverAliasInput" placeholder="e.g. local-ollama or vps-gpu">
+        </div>
+        <div class="form-group">
+          <label for="serverApiKeyInput">API Key / Auth Token (Optional)</label>
+          <input type="password" id="serverApiKeyInput" placeholder="Bearer sk-...">
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="cancelAddServerBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary">Add & Probe Server</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Ask User Dialog Modal -->
+  <div class="modal-overlay" id="askUserModal" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>❓ Agent Confirmation Required</h3>
+      </div>
+      <div class="modal-body">
+        <p id="askUserQuestion" class="ask-question-text"></p>
+        <div class="ask-choices" id="askUserChoices"></div>
+        <input type="text" id="askUserCustomInput" class="composer-textarea" placeholder="Or type custom answer here...">
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-primary" id="submitAskUserBtn">Submit Answer</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

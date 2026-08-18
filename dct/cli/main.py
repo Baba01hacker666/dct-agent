@@ -151,6 +151,16 @@ Inside the shell type /help for all commands.
     pde.add_argument("target")
     pde.add_argument("model")
 
+    # web
+    pw = sub.add_parser("web", help="launch interactive web UI server")
+    pw.add_argument("--host", default="0.0.0.0", help="bind host (default: 0.0.0.0)")
+    pw.add_argument(
+        "--port",
+        default=8080,
+        type=port_type,
+        help="bind port (default: 8080)",
+    )
+
     return p
 
 
@@ -169,6 +179,12 @@ def main():
         return
 
     # ── Non-interactive one-shot commands ────────────────────────────────────
+    if args.cmd == "web":
+        from dct.web.server import run_server
+
+        run_server(host=args.host, port=args.port, registry=registry)
+        return
+
     if args.cmd == "add":
         srv = registry.add(
             args.host,
