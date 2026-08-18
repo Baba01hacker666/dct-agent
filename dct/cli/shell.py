@@ -74,6 +74,10 @@ PROMPT_PRESETS: dict[str, str] = {
 
 # Built-in OpenAI-compatible provider presets — just /add-provider <name> <key>
 PROVIDER_PRESETS: dict[str, dict] = {
+    "gemini": {
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "note": "Google Gemini",
+    },
     "deepseek": {
         "base_url": "https://api.deepseek.com/v1",
         "note": "DeepSeek",
