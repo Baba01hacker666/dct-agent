@@ -848,6 +848,11 @@ class Shell:
             "/board channels": "List discussion board channels",
             "/board clear": "Clear discussion board messages",
             "/discuss": "Spawn multi-agent debate/discussion group on a topic",
+            "/telegram": "Show Telegram Bot bridge status",
+            "/telegram start": "Start Telegram Bot bridge daemon",
+            "/telegram stop": "Stop Telegram Bot bridge daemon",
+            "/telegram token": "Set Telegram Bot token",
+            "/telegram allow": "Add user ID or username to whitelist",
             "/orchestrate": "Orchestrate multiple agents",
             "/editai": "Edit the last AI response",
             "/retry": "Regenerate the last AI response",
@@ -1866,6 +1871,82 @@ class Shell:
                     warn("usage: /discuss <topic or question>")
                     continue
                 self._run_discussion_group(topic)
+
+            # ── telegram bridge ─────────────────────────────────────────
+            elif lo == "/telegram" or lo.startswith("/telegram "):
+                from dct.telegram.bot import (
+                    get_telegram_bot,
+                    start_telegram_bridge,
+                    stop_telegram_bridge,
+                )
+                from dct.core.config import Config
+
+                cfg = Config()
+                toks = raw[9:].strip().split()
+                sub = toks[0].lower() if toks else ""
+
+                if sub == "start":
+                    custom_token = toks[1] if len(toks) > 1 else ""
+                    if custom_token:
+                        cfg.set("telegram_token", custom_token)
+                        cfg.save()
+                    token_to_use = custom_token or cfg.get("telegram_token", "")
+                    if not token_to_use:
+                        warn(
+                            "no telegram bot token configured. Usage: /telegram start <TOKEN> or /telegram token <TOKEN>"
+                        )
+                        continue
+                    bot = start_telegram_bridge(token=token_to_use)
+                    ok("started Telegram Bot bridge in background thread")
+                    hint("messages sent to your bot in Telegram will now interact with this DCT node!")
+
+                elif sub == "stop":
+                    stop_telegram_bridge()
+                    ok("stopped Telegram Bot bridge")
+
+                elif sub == "token":
+                    if len(toks) < 2:
+                        warn("usage: /telegram token <BOT_TOKEN>")
+                        continue
+                    new_token = toks[1].strip()
+                    cfg.set("telegram_token", new_token)
+                    cfg.save()
+                    ok("saved Telegram bot token in config")
+                    hint("start bridge anytime with /telegram start")
+
+                elif sub == "allow":
+                    if len(toks) < 2:
+                        warn("usage: /telegram allow <user_id_or_username>")
+                        continue
+                    new_user = toks[1].strip().lstrip("@")
+                    allowed_list = list(cfg.get("telegram_allowed_users", []))
+                    if new_user not in allowed_list:
+                        allowed_list.append(new_user)
+                        cfg.set("telegram_allowed_users", allowed_list)
+                        cfg.save()
+                    ok(f"added '{new_user}' to Telegram allowed users list")
+
+                else:
+                    bot = get_telegram_bot()
+                    is_running = bot is not None and bot._running
+                    token_set = bool(cfg.get("telegram_token", ""))
+                    allowed = cfg.get("telegram_allowed_users", [])
+                    section("telegram bot bridge status")
+                    st_str = (
+                        f"[{C['ok']}]RUNNING (Background)[/{C['ok']}]"
+                        if is_running
+                        else f"[{C['dim']}]STOPPED[/{C['dim']}]"
+                    )
+                    con.print(f"  [{C['accent']}]status:[/{C['accent']}] {st_str}")
+                    con.print(
+                        f"  [{C['accent']}]token:[/{C['accent']}]  {'●●●●●●●● (configured)' if token_set else 'none'}"
+                    )
+                    con.print(
+                        f"  [{C['accent']}]whitelist:[/{C['accent']}] {', '.join(allowed) if allowed else 'all users allowed (open)'}"
+                    )
+                    hint(
+                        "commands: /telegram start [token] · /telegram stop · /telegram token <token> · /telegram allow <user>"
+                    )
 
             elif lo.startswith("/save "):
                 fname = raw[6:].strip()

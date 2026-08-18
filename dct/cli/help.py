@@ -212,6 +212,27 @@ HELP_SECTIONS = {
       [{C["dim"]}]DuckDuckGo search.
       Example: /search CVE-2024-55556 Laravel[/{C["dim"]}]
 """,
+    "telegram": f"""
+[{C["accent"]}]── Telegram Bot Integration ──────────────────────────────────────[/{C["accent"]}]
+
+  [{C["fg"]}]/telegram[/{C["fg"]}]
+      [{C["dim"]}]Check status of the Telegram Bot bridge (daemon state, token, allowed users).[/{C["dim"]}]
+
+  [{C["fg"]}]/telegram start [token][/{C["fg"]}]
+      [{C["dim"]}]Start the Telegram bot background daemon. Receives messages and commands via Telegram.[/{C["dim"]}]
+
+  [{C["fg"]}]/telegram stop[/{C["fg"]}]
+      [{C["dim"]}]Stop the Telegram bot daemon.[/{C["dim"]}]
+
+  [{C["fg"]}]/telegram token <token>[/{C["fg"]}]
+      [{C["dim"]}]Configure and save your Telegram Bot API token from @BotFather.[/{C["dim"]}]
+
+  [{C["fg"]}]/telegram allow <user_id_or_username>[/{C["fg"]}]
+      [{C["dim"]}]Add a user ID or Telegram username to the authorized whitelist.[/{C["dim"]}]
+
+  [{C["fg"]}]One-shot CLI execution:[/{C["fg"]}]
+      [{C["dim"]}]python -m dct telegram [--token <TOKEN>] [--allowed-users <U1,U2>][/{C["dim"]}]
+""",
     "misc": f"""
 [{C["accent"]}]── Navigation ───────────────────────────────────────────[/{C["accent"]}]
 

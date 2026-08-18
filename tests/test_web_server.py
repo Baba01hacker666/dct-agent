@@ -97,10 +97,22 @@ def test_web_server_endpoints():
             ch_data = await res.json()
             assert len(ch_data["channels"]) > 0
 
-            res = await client.post("/api/board/clear", json={"channel": "webtest"})
+            # 10. Test Telegram API
+            res = await client.get("/api/telegram")
+            assert res.status == 200
+            tg_data = await res.json()
+            assert "running" in tg_data
+            assert "token_configured" in tg_data
+
+            res = await client.post("/api/telegram/config", json={"token": "1234:ABC", "allowed_users": "user1, user2"})
+            assert res.status == 200
+            cfg_res = await res.json()
+            assert cfg_res["ok"] is True
+
+            res = await client.post("/api/telegram/stop")
             assert res.status == 200
 
-            # 10. Test POST /api/clear
+            # 11. Test POST /api/clear
             res = await client.post("/api/clear")
             assert res.status == 200
             clear_data = await res.json()

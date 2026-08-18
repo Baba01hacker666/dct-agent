@@ -70,6 +70,11 @@ class TaskTracker:
                     return task
         return None
 
+    def clear(self) -> None:
+        with self._lock:
+            self.tasks.clear()
+            self._next_id = 1
+
     def summary(self) -> str:
         with self._lock:
             tasks = list(self.tasks)

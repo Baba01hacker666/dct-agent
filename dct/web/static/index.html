@@ -148,6 +148,19 @@
           <button id="sidebarOpenBoardBtn" class="btn btn-secondary btn-block btn-touch">Open Discussion Board</button>
         </div>
 
+        <!-- Telegram Bridge Section -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-header">
+            <div class="section-title-wrap">
+              <span class="section-icon">✈️</span>
+              <h3>Telegram Bot</h3>
+            </div>
+            <span class="badge badge-subtle" id="telegramStatusBadge">Stopped</span>
+          </div>
+          <p class="sidebar-meta-text">Control agent remotely from Telegram chats or mobile.</p>
+          <button id="openTelegramModalBtn" class="btn btn-secondary btn-block btn-touch">Configure Telegram</button>
+        </div>
+
         <!-- Session Tools Section -->
         <div class="sidebar-section session-section">
           <div class="sidebar-section-header">
@@ -372,6 +385,40 @@
         <div class="board-input-row">
           <input type="text" id="boardPostInput" class="composer-textarea board-input" placeholder="Post a message or directive to agents in this channel..." required>
           <button type="submit" id="boardPostSubmitBtn" class="btn btn-primary btn-touch">Post</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Telegram Integration Modal -->
+  <div class="modal-overlay" id="telegramModal" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <span class="modal-icon">✈️</span>
+          <div>
+            <h3 style="margin: 0;">Telegram Bot Bridge</h3>
+            <span class="modal-subtitle">Remote agent control & code execution</span>
+          </div>
+        </div>
+        <button class="modal-close-btn" id="closeTelegramModalBtn" aria-label="Close modal">✕</button>
+      </div>
+      <form id="telegramConfigForm">
+        <div class="form-group">
+          <label for="telegramTokenInput">Bot API Token (from @BotFather)</label>
+          <input type="password" id="telegramTokenInput" placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ...">
+        </div>
+        <div class="form-group">
+          <label for="telegramAllowedUsersInput">Allowed User Whitelist (Optional, comma-separated)</label>
+          <input type="text" id="telegramAllowedUsersInput" placeholder="e.g. 123456789, @my_username">
+          <span class="form-hint" style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 4px;">Leave empty to allow all incoming users.</span>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 16px;">
+          <button type="button" id="toggleTelegramDaemonBtn" class="btn btn-primary btn-block btn-touch">Start Telegram Bot</button>
+        </div>
+        <div class="modal-actions" style="margin-top: 16px;">
+          <button type="button" class="btn btn-ghost btn-touch" id="cancelTelegramBtn">Close</button>
+          <button type="submit" class="btn btn-secondary btn-touch">Save Settings</button>
         </div>
       </form>
     </div>

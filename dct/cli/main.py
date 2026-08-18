@@ -161,6 +161,15 @@ Inside the shell type /help for all commands.
         help="bind port (default: 8080)",
     )
 
+    # telegram
+    pt = sub.add_parser("telegram", help="launch autonomous Telegram bot bridge")
+    pt.add_argument("--token", default="", help="Telegram bot token from @BotFather")
+    pt.add_argument(
+        "--allowed-users",
+        default="",
+        help="comma-separated whitelist of allowed user IDs or usernames",
+    )
+
     return p
 
 
@@ -183,6 +192,36 @@ def main():
         from dct.web.server import run_server
 
         run_server(host=args.host, port=args.port, registry=registry)
+        return
+
+    if args.cmd == "telegram":
+        import os
+        from dct.core.config import Config
+        from dct.telegram.bot import TelegramBot
+        from dct.core.theme import con, C, BANNER, err, info
+
+        con.print(BANNER)
+        conf = Config()
+        token = (
+            args.token
+            or os.environ.get("TELEGRAM_BOT_TOKEN")
+            or conf.get("telegram_token", "")
+        )
+        if not token:
+            err("No Telegram bot token provided.")
+            info(
+                "Provide via --token, TELEGRAM_BOT_TOKEN env var, or '/config set telegram_token <TOKEN>'"
+            )
+            sys.exit(1)
+
+        allowed = (
+            [u.strip() for u in args.allowed_users.split(",") if u.strip()]
+            if args.allowed_users
+            else conf.get("telegram_allowed_users", [])
+        )
+        con.print(f"  [{C['ok']}]● Starting DCT Telegram Bot bridge…[/{C['ok']}]")
+        bot = TelegramBot(token=token, allowed_users=allowed, registry=registry)
+        bot.start()
         return
 
     if args.cmd == "add":

@@ -32,6 +32,9 @@ DEFAULTS = {
     "project_root": "",
     "enable_approx_parser": False,
     "enable_agent_board": False,
+    "telegram_token": "",
+    "telegram_allowed_users": [],
+    "telegram_enabled": False,
 }
 
 

@@ -78,6 +78,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const activeSkillBadge = document.getElementById('activeSkillBadge');
   const skillChipsGrid = document.getElementById('skillChipsGrid');
 
+  // Telegram Elements
+  const telegramStatusBadge = document.getElementById('telegramStatusBadge');
+  const openTelegramModalBtn = document.getElementById('openTelegramModalBtn');
+  const telegramModal = document.getElementById('telegramModal');
+  const closeTelegramModalBtn = document.getElementById('closeTelegramModalBtn');
+  const cancelTelegramBtn = document.getElementById('cancelTelegramBtn');
+  const telegramConfigForm = document.getElementById('telegramConfigForm');
+  const telegramTokenInput = document.getElementById('telegramTokenInput');
+  const telegramAllowedUsersInput = document.getElementById('telegramAllowedUsersInput');
+  const toggleTelegramDaemonBtn = document.getElementById('toggleTelegramDaemonBtn');
+
   // Application State
   let state = {
     servers: [],
@@ -124,6 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
     await fetchStatus();
     await fetchServers();
     await fetchSkills();
+    await fetchTelegramStatus();
     await fetchTasks();
     await fetchHistory();
   }
@@ -394,6 +406,55 @@ document.addEventListener('DOMContentLoaded', () => {
         boardPostInput.value = '';
         await fetchBoardMessages(ch);
         showToast('Message posted to board', '💬');
+      });
+    }
+
+    // Telegram Modal Events
+    if (openTelegramModalBtn) {
+      openTelegramModalBtn.addEventListener('click', async () => {
+        telegramModal.style.display = 'flex';
+        await fetchTelegramStatus();
+        if (window.innerWidth <= 768) closeMobileSidebar();
+      });
+    }
+    if (closeTelegramModalBtn) {
+      closeTelegramModalBtn.addEventListener('click', () => {
+        telegramModal.style.display = 'none';
+      });
+    }
+    if (cancelTelegramBtn) {
+      cancelTelegramBtn.addEventListener('click', () => {
+        telegramModal.style.display = 'none';
+      });
+    }
+    if (toggleTelegramDaemonBtn) {
+      toggleTelegramDaemonBtn.addEventListener('click', async () => {
+        const isRunning = toggleTelegramDaemonBtn.getAttribute('data-running') === 'true';
+        if (isRunning) {
+          await apiPost('/api/telegram/stop', {});
+          showToast('Telegram bot daemon stopped', '⏹');
+        } else {
+          const token = telegramTokenInput.value.trim();
+          const allowed = telegramAllowedUsersInput.value.trim();
+          const res = await apiPost('/api/telegram/start', { token, allowed_users: allowed });
+          if (res.ok) {
+            showToast('Telegram bot daemon started', '✈️');
+          } else {
+            alert(res.error || 'Failed to start Telegram bot');
+          }
+        }
+        await fetchTelegramStatus();
+      });
+    }
+    if (telegramConfigForm) {
+      telegramConfigForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const token = telegramTokenInput.value.trim();
+        const allowed = telegramAllowedUsersInput.value.trim();
+        await apiPost('/api/telegram/config', { token, allowed_users: allowed });
+        showToast('Telegram configuration saved', '✅');
+        await fetchTelegramStatus();
+        telegramModal.style.display = 'none';
       });
     }
 
@@ -1029,6 +1090,38 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (e) {
       console.error('fetchSkills failed', e);
+    }
+  }
+
+  // ── Telegram Bridge Handlers ──────────────────────────────────────────────
+  async function fetchTelegramStatus() {
+    try {
+      const res = await apiGet('/api/telegram');
+      const isRunning = res.running;
+      if (telegramStatusBadge) {
+        if (isRunning) {
+          telegramStatusBadge.textContent = 'Running';
+          telegramStatusBadge.className = 'badge badge-active';
+        } else {
+          telegramStatusBadge.textContent = 'Stopped';
+          telegramStatusBadge.className = 'badge badge-subtle';
+        }
+      }
+      if (toggleTelegramDaemonBtn) {
+        toggleTelegramDaemonBtn.setAttribute('data-running', isRunning ? 'true' : 'false');
+        if (isRunning) {
+          toggleTelegramDaemonBtn.textContent = 'Stop Telegram Bot';
+          toggleTelegramDaemonBtn.className = 'btn btn-danger btn-block btn-touch';
+        } else {
+          toggleTelegramDaemonBtn.textContent = 'Start Telegram Bot';
+          toggleTelegramDaemonBtn.className = 'btn btn-primary btn-block btn-touch';
+        }
+      }
+      if (telegramAllowedUsersInput && res.allowed_users) {
+        telegramAllowedUsersInput.value = res.allowed_users.join(', ');
+      }
+    } catch (e) {
+      console.error('fetchTelegramStatus failed', e);
     }
   }
 

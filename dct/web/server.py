@@ -431,6 +431,73 @@ class AgentWebServer:
             }
         )
 
+    # ── Telegram Bridge REST APIs ─────────────────────────────────────────────
+
+    async def handle_get_telegram(self, request: web.Request) -> web.Response:
+        from dct.core.config import Config
+        from dct.telegram.bot import get_telegram_bot
+
+        conf = Config()
+        bot = get_telegram_bot()
+        is_running = bot is not None and bot._running
+        token = conf.get("telegram_token", "")
+        allowed_users = conf.get("telegram_allowed_users", [])
+
+        return web.json_response({
+            "running": is_running,
+            "token_configured": bool(token),
+            "token_masked": f"{token[:4]}••••{token[-4:]}" if len(token) > 8 else ("configured" if token else ""),
+            "allowed_users": allowed_users,
+            "bot_info": bot.bot_info if bot and bot._running else {},
+        })
+
+    async def handle_start_telegram(self, request: web.Request) -> web.Response:
+        from dct.core.config import Config
+        from dct.telegram.bot import start_telegram_bridge
+
+        try:
+            data = await request.json()
+        except Exception:
+            data = {}
+
+        conf = Config()
+        token = data.get("token") or conf.get("telegram_token", "")
+        if not token:
+            return web.json_response({"ok": False, "error": "Telegram bot token is required"}, status=400)
+
+        if data.get("token"):
+            conf.set("telegram_token", data["token"])
+            conf.save()
+
+        allowed = data.get("allowed_users") or conf.get("telegram_allowed_users", [])
+        bot = start_telegram_bridge(token=token, allowed_users=allowed)
+        return web.json_response({"ok": True, "message": "Telegram bridge daemon started"})
+
+    async def handle_stop_telegram(self, request: web.Request) -> web.Response:
+        from dct.telegram.bot import stop_telegram_bridge
+
+        stop_telegram_bridge()
+        return web.json_response({"ok": True, "message": "Telegram bridge daemon stopped"})
+
+    async def handle_config_telegram(self, request: web.Request) -> web.Response:
+        from dct.core.config import Config
+
+        try:
+            data = await request.json()
+        except Exception:
+            return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+
+        conf = Config()
+        if "token" in data:
+            conf.set("telegram_token", data["token"].strip())
+        if "allowed_users" in data:
+            users = data["allowed_users"]
+            if isinstance(users, str):
+                users = [u.strip().lstrip("@") for u in users.split(",") if u.strip()]
+            conf.set("telegram_allowed_users", users)
+        conf.save()
+        return web.json_response({"ok": True, "message": "Telegram configuration updated"})
+
     # ── Agent Skills REST APIs ────────────────────────────────────────────────
 
     async def handle_get_skills(self, request: web.Request) -> web.Response:
@@ -635,6 +702,10 @@ def create_app(registry: Optional[ServerRegistry] = None) -> web.Application:
     app.router.add_post("/api/board/post", server.handle_post_board_message)
     app.router.add_get("/api/board/channels", server.handle_get_board_channels)
     app.router.add_post("/api/board/clear", server.handle_clear_board)
+    app.router.add_get("/api/telegram", server.handle_get_telegram)
+    app.router.add_post("/api/telegram/start", server.handle_start_telegram)
+    app.router.add_post("/api/telegram/stop", server.handle_stop_telegram)
+    app.router.add_post("/api/telegram/config", server.handle_config_telegram)
 
     # SSE Chat Stream
     app.router.add_post("/api/chat", server.handle_chat_stream)
