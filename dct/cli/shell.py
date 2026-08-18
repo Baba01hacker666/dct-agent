@@ -574,10 +574,13 @@ class Shell:
             def execute_task(tid: str) -> tuple[str, str]:
                 t = tasks[tid]
                 # Gather context from dependencies
-                dep_results = ""
+                dep_results_list = []
                 for dep_id in t["deps"]:
                     if tasks[dep_id]["result"]:
-                        dep_results += f"\n[Output from task {dep_id} ({tasks[dep_id]['desc']})]:\n{tasks[dep_id]['result'][:3000]}\n"
+                        dep_results_list.append(
+                            f"\n[Output from task {dep_id} ({tasks[dep_id]['desc']})]:\n{tasks[dep_id]['result'][:3000]}\n"
+                        )
+                dep_results = "".join(dep_results_list)
 
                 worker_session = Session()
                 worker_session.set_system(
