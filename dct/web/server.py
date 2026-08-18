@@ -280,6 +280,80 @@ class AgentWebServer:
         get_tracker()._next_id = 1
         return web.json_response({"ok": True, "message": "Conversation and tasks cleared"})
 
+    async def handle_get_sessions(self, request: web.Request) -> web.Response:
+        import os
+        import json
+
+        chats_dir = os.path.expanduser("~/.config/dct/chats")
+        os.makedirs(chats_dir, exist_ok=True)
+        files = sorted(
+            [f for f in os.listdir(chats_dir) if f.endswith(".json")],
+            reverse=True,
+        )
+        sessions = []
+        for f in files:
+            p = os.path.join(chats_dir, f)
+            try:
+                with open(p) as fh:
+                    d = json.load(fh)
+                    title = d.get("name", f[:-5])
+                    msgs = d.get("messages", [])
+                    preview = ""
+                    for m in msgs:
+                        if m.get("role") == "user":
+                            preview = m["content"][:80]
+                            break
+                    sessions.append({
+                        "id": f[:-5],
+                        "filename": f,
+                        "name": title,
+                        "created_at": d.get("created_at", 0),
+                        "saved_at": d.get("saved_at", 0),
+                        "turns": sum(1 for m in msgs if m.get("role") == "user"),
+                        "preview": preview,
+                        "is_active": self.session.name == title or f[:-5] == self.session.name,
+                    })
+            except Exception:
+                pass
+        return web.json_response({"sessions": sessions})
+
+    async def handle_switch_session(self, request: web.Request) -> web.Response:
+        import os
+
+        try:
+            data = await request.json()
+        except Exception:
+            return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+
+        session_id = data.get("session_id", "").strip()
+        if not session_id:
+            return web.json_response({"ok": False, "error": "session_id required"}, status=400)
+
+        chats_dir = os.path.expanduser("~/.config/dct/chats")
+        filename = f"{session_id}.json" if not session_id.endswith(".json") else session_id
+        path = os.path.join(chats_dir, filename)
+
+        if not os.path.exists(path):
+            return web.json_response({"ok": False, "error": "Session file not found"}, status=404)
+
+        try:
+            self.session = Session.load(path)
+            return web.json_response({
+                "ok": True,
+                "session": {
+                    "name": self.session.name,
+                    "turns": self.session.user_turns,
+                    "mode": self.session.mode,
+                },
+                "history": [
+                    {"role": m.get("role"), "content": m.get("content", "")}
+                    for m in self.session.messages
+                    if m.get("role") != "system"
+                ],
+            })
+        except Exception as e:
+            return web.json_response({"ok": False, "error": str(e)}, status=500)
+
     async def handle_ask_user_response(self, request: web.Request) -> web.Response:
         try:
             data = await request.json()
@@ -436,6 +510,8 @@ def create_app(registry: Optional[ServerRegistry] = None) -> web.Application:
     app.router.add_post("/api/tasks/create", server.handle_create_task)
     app.router.add_post("/api/tasks/update", server.handle_update_task)
     app.router.add_get("/api/history", server.handle_get_history)
+    app.router.add_get("/api/sessions", server.handle_get_sessions)
+    app.router.add_post("/api/sessions/switch", server.handle_switch_session)
     app.router.add_post("/api/clear", server.handle_clear)
     app.router.add_post("/api/ask_user_response", server.handle_ask_user_response)
 

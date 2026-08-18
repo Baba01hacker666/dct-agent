@@ -63,7 +63,13 @@ def test_web_server_endpoints():
             update_data = await res.json()
             assert update_data["task"]["status"] == "completed"
 
-            # 7. Test POST /api/clear
+            # 7. Test GET /api/sessions
+            res = await client.get("/api/sessions")
+            assert res.status == 200
+            sess_data = await res.json()
+            assert "sessions" in sess_data
+
+            # 8. Test POST /api/clear
             res = await client.post("/api/clear")
             assert res.status == 200
             clear_data = await res.json()
