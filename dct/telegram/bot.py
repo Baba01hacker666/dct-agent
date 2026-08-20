@@ -494,7 +494,6 @@ _bot_thread: Optional[threading.Thread] = None
 
 
 def get_telegram_bot() -> Optional[TelegramBot]:
-    global _global_bot
     return _global_bot
 
 
