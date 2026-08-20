@@ -853,6 +853,18 @@ class Shell:
             "/telegram stop": "Stop Telegram Bot bridge daemon",
             "/telegram token": "Set Telegram Bot token",
             "/telegram allow": "Add user ID or username to whitelist",
+            "/discord": "Show Discord Bot bridge status",
+            "/discord start": "Start Discord Bot bridge daemon",
+            "/discord stop": "Stop Discord Bot bridge daemon",
+            "/discord token": "Set Discord Bot token",
+            "/discord allow": "Add user ID or username to whitelist",
+            "/subagents": "List all running and recent subagents",
+            "/subagent": "Spawn a specialized subagent on a task",
+            "/git": "Git status, diff, commit, and worktree operations",
+            "/git status": "Show git repository status",
+            "/git diff": "Show unstaged git diff",
+            "/git commit": "Commit staged changes",
+            "/git worktree": "Manage git worktrees",
             "/orchestrate": "Orchestrate multiple agents",
             "/editai": "Edit the last AI response",
             "/retry": "Regenerate the last AI response",
@@ -1946,6 +1958,188 @@ class Shell:
                     )
                     hint(
                         "commands: /telegram start [token] · /telegram stop · /telegram token <token> · /telegram allow <user>"
+                    )
+
+            # ── discord bridge ──────────────────────────────────────────
+            elif lo == "/discord" or lo.startswith("/discord "):
+                from dct.discord.bot import (
+                    get_discord_bot,
+                    start_discord_bridge,
+                    stop_discord_bridge,
+                )
+                from dct.core.config import Config
+
+                cfg = Config()
+                toks = raw[8:].strip().split()
+                sub = toks[0].lower() if toks else ""
+
+                if sub == "start":
+                    custom_token = toks[1] if len(toks) > 1 else ""
+                    if custom_token:
+                        cfg.set("discord_token", custom_token)
+                        cfg.save()
+                    token_to_use = custom_token or cfg.get("discord_token", "")
+                    if not token_to_use:
+                        warn(
+                            "no discord bot token configured. Usage: /discord start <TOKEN> or /discord token <TOKEN>"
+                        )
+                        continue
+                    start_discord_bridge(
+                        token=token_to_use, registry=self.registry
+                    )
+                    ok("started Discord Bot bridge in background thread")
+                    hint(
+                        "mention your bot or message in allowed Discord channels to interact!"
+                    )
+
+                elif sub == "stop":
+                    stop_discord_bridge()
+                    ok("stopped Discord Bot bridge")
+
+                elif sub == "token":
+                    if len(toks) < 2:
+                        warn("usage: /discord token <BOT_TOKEN>")
+                        continue
+                    new_token = toks[1].strip()
+                    cfg.set("discord_token", new_token)
+                    cfg.save()
+                    ok("saved Discord bot token in config")
+                    hint("start bridge anytime with /discord start")
+
+                elif sub == "allow":
+                    if len(toks) < 2:
+                        warn("usage: /discord allow <user_id_or_username>")
+                        continue
+                    new_user = toks[1].strip().lstrip("@")
+                    allowed_list = list(cfg.get("discord_allowed_users", []))
+                    if new_user not in allowed_list:
+                        allowed_list.append(new_user)
+                        cfg.set("discord_allowed_users", allowed_list)
+                        cfg.save()
+                    ok(f"added '{new_user}' to Discord allowed users list")
+
+                else:
+                    bot = get_discord_bot()
+                    is_running = bot is not None and bot._running
+                    token_set = bool(cfg.get("discord_token", ""))
+                    allowed = cfg.get("discord_allowed_users", [])
+                    section("discord bot bridge status")
+                    st_str = (
+                        f"[{C['ok']}]RUNNING (Background)[/{C['ok']}]"
+                        if is_running
+                        else f"[{C['dim']}]STOPPED[/{C['dim']}]"
+                    )
+                    con.print(f"  [{C['accent']}]status:[/{C['accent']}] {st_str}")
+                    con.print(
+                        f"  [{C['accent']}]token:[/{C['accent']}]  {'●●●●●●●● (configured)' if token_set else 'none'}"
+                    )
+                    con.print(
+                        f"  [{C['accent']}]whitelist:[/{C['accent']}] {', '.join(allowed) if allowed else 'all users allowed (open)'}"
+                    )
+                    hint(
+                        "commands: /discord start [token] · /discord stop · /discord token <token> · /discord allow <user>"
+                    )
+
+            # ── subagents ───────────────────────────────────────────────
+            elif lo == "/subagents" or lo == "/subagent list":
+                from dct.tools.subagent import list_subagents
+
+                subs = list_subagents()
+                if not subs:
+                    info("no subagents have been spawned yet.")
+                    continue
+                section("active / recent subagents")
+                for s in subs:
+                    st_color = (
+                        C["ok"]
+                        if s["status"] == "completed"
+                        else C["yellow"]
+                        if s["status"] == "running"
+                        else C["err"]
+                    )
+                    con.print(
+                        f"  [{C['accent']}]{s['id']}[/{C['accent']}] — "
+                        f"[{st_color}]{s['status'].upper()}[/{st_color}] | "
+                        f"Role: {s['role']} | Model: {s['model']}"
+                    )
+                    con.print(
+                        f"    [{C['dim']}]Task:[/{C['dim']}] {s['task'][:120]}"
+                    )
+
+            elif lo.startswith("/subagent spawn ") or (
+                lo.startswith("/subagent ") and not lo.startswith("/subagent list")
+            ):
+                from dct.tools.subagent import spawn_subagent
+
+                raw_parts = raw.split(" ", 2)
+                task_text = raw_parts[2] if len(raw_parts) > 2 else raw_parts[1]
+                if not task_text or task_text == "spawn":
+                    warn("usage: /subagent spawn <task description>")
+                    continue
+                con.print(f"[{C['accent']}]Spawning subagent...[/{C['accent']}]")
+                res = spawn_subagent(task=task_text, background=False)
+                if res.ok:
+                    ok(res.message)
+                    if res.output:
+                        con.print(
+                            Panel(
+                                res.output,
+                                title=f"Subagent Result ({res.duration_sec}s)",
+                                border_style=C["accent"],
+                            )
+                        )
+                else:
+                    err(res.message)
+
+            # ── git tools ───────────────────────────────────────────────
+            elif lo == "/git" or lo.startswith("/git "):
+                from dct.tools.git_tools import (
+                    git_status,
+                    git_diff,
+                    git_commit,
+                    git_worktree,
+                )
+
+                toks = raw[4:].strip().split(maxsplit=1)
+                sub = toks[0].lower() if toks else "status"
+                arg = toks[1] if len(toks) > 1 else ""
+
+                if sub == "status":
+                    res = git_status()
+                    if res.ok:
+                        section("git status")
+                        con.print(res.output or "[dim]Working tree clean[/dim]")
+                    else:
+                        err(res.message)
+                elif sub == "diff":
+                    res = git_diff()
+                    if res.ok:
+                        section("git diff")
+                        con.print(res.output or "[dim]No changes found[/dim]")
+                    else:
+                        err(res.message)
+                elif sub == "commit":
+                    if not arg:
+                        warn("usage: /git commit <commit message>")
+                        continue
+                    res = git_commit(arg)
+                    if res.ok:
+                        ok(f"commit successful: {res.output}")
+                    else:
+                        err(res.message)
+                elif sub == "worktree":
+                    wt_parts = arg.split()
+                    wt_act = wt_parts[0] if wt_parts else "list"
+                    wt_path = wt_parts[1] if len(wt_parts) > 1 else None
+                    res = git_worktree(action=wt_act, worktree_path=wt_path)
+                    if res.ok:
+                        section(f"git worktree {wt_act}")
+                        con.print(res.output)
+                    else:
+                        err(res.message)
+                else:
+                    warn(
+                        "usage: /git status · /git diff · /git commit <msg> · /git worktree <list|add|remove>"
                     )
 
             elif lo.startswith("/save "):

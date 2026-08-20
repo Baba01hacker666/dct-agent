@@ -184,3 +184,6 @@ def generate_repo_map(dir_path: str, max_files: int = 100) -> LSPResult:
         )
 
     return LSPResult(ok=True, data="\n".join(out))
+
+
+repo_map = generate_repo_map

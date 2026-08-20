@@ -233,6 +233,51 @@ HELP_SECTIONS = {
   [{C["fg"]}]One-shot CLI execution:[/{C["fg"]}]
       [{C["dim"]}]python -m dct telegram [--token <TOKEN>] [--allowed-users <U1,U2>][/{C["dim"]}]
 """,
+    "discord": f"""
+[{C["accent"]}]── Discord Bot Integration ───────────────────────────────────────[/{C["accent"]}]
+
+  [{C["fg"]}]/discord[/{C["fg"]}]
+      [{C["dim"]}]Check status of the Discord Bot bridge (daemon state, token, allowed users).[/{C["dim"]}]
+
+  [{C["fg"]}]/discord start [token][/{C["fg"]}]
+      [{C["dim"]}]Start the Discord bot background daemon.[/{C["dim"]}]
+
+  [{C["fg"]}]/discord stop[/{C["fg"]}]
+      [{C["dim"]}]Stop the Discord bot daemon.[/{C["dim"]}]
+
+  [{C["fg"]}]/discord token <token>[/{C["fg"]}]
+      [{C["dim"]}]Configure and save your Discord Bot API token.[/{C["dim"]}]
+
+  [{C["fg"]}]/discord allow <user_id_or_username>[/{C["fg"]}]
+      [{C["dim"]}]Add a user ID or Discord username to the authorized whitelist.[/{C["dim"]}]
+
+  [{C["fg"]}]One-shot CLI execution:[/{C["fg"]}]
+      [{C["dim"]}]python -m dct discord [--token <TOKEN>] [--allowed-users <U1,U2>][/{C["dim"]}]
+""",
+    "subagents": f"""
+[{C["accent"]}]── Autonomous Subagents ──────────────────────────────────────────[/{C["accent"]}]
+
+  [{C["fg"]}]/subagents[/{C["fg"]}]
+      [{C["dim"]}]List all active and recent subagents with status and logs.[/{C["dim"]}]
+
+  [{C["fg"]}]/subagent spawn <task description>[/{C["fg"]}]
+      [{C["dim"]}]Spawn an isolated subagent with dedicated context to solve a sub-task.[/{C["dim"]}]
+""",
+    "git": f"""
+[{C["accent"]}]── Git & Worktree Operations ────────────────────────────────────[/{C["accent"]}]
+
+  [{C["fg"]}]/git status[/{C["fg"]}]
+      [{C["dim"]}]Show clean status of current branch, modified and untracked files.[/{C["dim"]}]
+
+  [{C["fg"]}]/git diff[/{C["fg"]}]
+      [{C["dim"]}]Display unstaged or staged git changes.[/{C["dim"]}]
+
+  [{C["fg"]}]/git commit <message>[/{C["fg"]}]
+      [{C["dim"]}]Stage all changes and commit with descriptive message.[/{C["dim"]}]
+
+  [{C["fg"]}]/git worktree <list|add|remove> [path] [branch][/{C["fg"]}]
+      [{C["dim"]}]Manage isolated git worktrees for non-destructive experimentation.[/{C["dim"]}]
+""",
     "misc": f"""
 [{C["accent"]}]── Navigation ───────────────────────────────────────────[/{C["accent"]}]
 

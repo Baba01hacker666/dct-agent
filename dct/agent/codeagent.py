@@ -274,6 +274,12 @@ Pass the `tool_name` parameter and provide arguments in `kwargs`:
 - bg_send_input(id: str, input: str) — send input to a running background task
 - enter_plan_mode() — Enter PLAN mode to explore and write a plan before coding
 - exit_plan_mode() — Exit PLAN mode once a plan is approved
+- git_status(path: str) — Check repository status and modified files
+- git_diff(path: str, cached: bool) — View current staged or unstaged git diff
+- git_commit(message: str) — Commit staged changes with message
+- git_worktree(action: str, worktree_path: str, branch: str) — Manage isolated git worktrees
+- spawn_subagent(task: str, role: str, model: str, skill: str, background: bool) — Delegate task to a dedicated subagent
+- list_subagents() — List running and completed subagents
 - skill_list() — List available built-in and custom skills
 - skill_load(name: str) — Load a specialized skill persona
 - skill_create(name: str, description: str, prompt: str) — Create a custom skill
@@ -339,6 +345,12 @@ You can use tools by emitting structured XML tags in your response.
   <tool>bg_send_input</tool><id>...</id><input>...</input> — Send input to background task
   <tool>enter_plan_mode</tool>                   — Enter PLAN mode
   <tool>exit_plan_mode</tool>                    — Exit PLAN mode
+  <tool>git_status</tool><path>...</path>        — Check git status
+  <tool>git_diff</tool><path>...</path><cached>false</cached> — View git diff
+  <tool>git_commit</tool><message>...</message>  — Commit changes
+  <tool>git_worktree</tool><action>list|add|remove</action><worktree_path>...</worktree_path> — Git worktrees
+  <tool>spawn_subagent</tool><task>...</task><role>...</role> — Delegate to subagent
+  <tool>list_subagents</tool>                    — List subagents
   <tool>skill_list</tool>                        — List skills
   <tool>skill_load</tool><name>...</name>        — Load a skill persona
   <tool>skill_create</tool><name>...</name><description>...</description><prompt>...</prompt> — Create custom skill
@@ -1977,6 +1989,76 @@ class CodeAgent:
                 )
             return "\n\n".join(lines)
 
+        elif tool == "git_status":
+            from dct.tools.git_tools import git_status
+
+            path = call.get("path")
+            res = git_status(path=path)
+            return res.output if res.ok else f"[GIT ERROR] {res.message}"
+
+        elif tool == "git_diff":
+            from dct.tools.git_tools import git_diff
+
+            path = call.get("path")
+            cached = str(call.get("cached", "")).lower() == "true"
+            res = git_diff(path=path, cached=cached)
+            return res.output if res.ok else f"[GIT ERROR] {res.message}"
+
+        elif tool == "git_commit":
+            from dct.tools.git_tools import git_commit
+
+            msg = call.get("message") or call.get("code") or ""
+            res = git_commit(msg)
+            return res.output if res.ok else f"[GIT ERROR] {res.message}"
+
+        elif tool == "git_worktree":
+            from dct.tools.git_tools import git_worktree
+
+            action = call.get("action") or "list"
+            wt_path = call.get("worktree_path") or call.get("path")
+            branch = call.get("branch")
+            res = git_worktree(
+                action=action, worktree_path=wt_path, branch=branch
+            )
+            return res.output if res.ok else f"[GIT ERROR] {res.message}"
+
+        elif tool == "spawn_subagent":
+            from dct.tools.subagent import spawn_subagent
+
+            task = (
+                call.get("task")
+                or call.get("instruction")
+                or call.get("prompt")
+                or ""
+            )
+            role = call.get("role")
+            sub_model = call.get("model")
+            sub_skill = call.get("skill")
+            sys_p = call.get("system_prompt")
+            bg = str(call.get("background", "")).lower() == "true"
+            res = spawn_subagent(
+                task=task,
+                role=role,
+                model=sub_model,
+                skill=sub_skill,
+                system_prompt=sys_p,
+                background=bg,
+            )
+            return (
+                (res.output or res.message)
+                if res.ok
+                else f"[SUBAGENT ERROR] {res.message}"
+            )
+
+        elif tool == "list_subagents":
+            from dct.tools.subagent import list_subagents
+            import json
+
+            subs = list_subagents()
+            if not subs:
+                return "No subagents have been spawned yet."
+            return json.dumps(subs, indent=2)
+
         elif tool == "DONE":
             return "__DONE__"
 
@@ -2049,6 +2131,7 @@ class CodeAgent:
         )
         msgs = list(messages)
         final_text = ""
+        call_history: list[tuple[str, str]] = []
 
         for turn in range(self.max_turns):
             # ── CONTEXT PRUNING (Sliding Window) ──
@@ -2233,7 +2316,30 @@ class CodeAgent:
                     )
                     exec_status.start()
                     try:
+                        call_sig = (
+                            tool_name,
+                            str(
+                                sorted(
+                                    (k, str(v))
+                                    for k, v in call.items()
+                                    if k != "raw_text"
+                                )
+                            ),
+                        )
+                        call_history.append(call_sig)
                         result = self._execute_tool(call)
+                        if (
+                            len(call_history) >= 3
+                            and call_history[-1]
+                            == call_history[-2]
+                            == call_history[-3]
+                        ):
+                            result = (
+                                "[AGENT INTERVENTION: REPETITIVE LOOP DETECTED] You have executed the exact same "
+                                f"call for tool '{tool_name}' 3 times in a row without progress. "
+                                "Please analyze previous errors, change your parameters/strategy, or ask the user for guidance.\n\n"
+                                + result
+                            )
                         if (
                             msgs
                             and msgs[0].get("role") == "system"
@@ -2294,7 +2400,30 @@ class CodeAgent:
             )
             exec_status.start()
             try:
+                call_sig = (
+                    tool_name,
+                    str(
+                        sorted(
+                            (k, str(v))
+                            for k, v in call.items()
+                            if k != "raw_text"
+                        )
+                    ),
+                )
+                call_history.append(call_sig)
                 result = self._execute_tool(call)
+                if (
+                    len(call_history) >= 3
+                    and call_history[-1]
+                    == call_history[-2]
+                    == call_history[-3]
+                ):
+                    result = (
+                        "[AGENT INTERVENTION: REPETITIVE LOOP DETECTED] You have executed the exact same "
+                        f"call for tool '{tool_name}' 3 times in a row without progress. "
+                        "Please analyze previous errors, change your parameters/strategy, or ask the user for guidance.\n\n"
+                        + result
+                    )
                 if call.get("is_fuzzy"):
                     result = (
                         "[WARNING] Your tool call syntax was malformed or missing XML tags (e.g., using [TOOL] or missing </tool>). The system salvaged it fuzzily, but you MUST use proper <tool>name</tool> tags next time.\n\n"

@@ -182,6 +182,11 @@ def parse_tool_call(text: str) -> Optional[dict]:
         "tags",
         "limit",
         "search",
+        "task",
+        "role",
+        "branch",
+        "worktree_path",
+        "cached",
     ]
     for k in keys:
         result[k] = None

@@ -23,8 +23,6 @@ from dct.cli.shell import Shell
 
 class RichArgumentParser(argparse.ArgumentParser):
     def error(self, message: str) -> None:
-        from dct.core.theme import err
-
         err(f"argument error: {message}")
         self.print_help(sys.stderr)
         sys.exit(2)
@@ -170,6 +168,21 @@ Inside the shell type /help for all commands.
         help="comma-separated whitelist of allowed user IDs or usernames",
     )
 
+    # discord
+    pd = sub.add_parser("discord", help="launch autonomous Discord bot bridge")
+    pd.add_argument("--token", default="", help="Discord bot token")
+    pd.add_argument(
+        "--allowed-users",
+        default="",
+        help="comma-separated whitelist of allowed user IDs or usernames",
+    )
+
+    # mcp-server
+    sub.add_parser(
+        "mcp-server",
+        help="launch Model Context Protocol (MCP) server over stdio",
+    )
+
     return p
 
 
@@ -198,7 +211,6 @@ def main():
         import os
         from dct.core.config import Config
         from dct.telegram.bot import TelegramBot
-        from dct.core.theme import con, C, BANNER, err, info
 
         con.print(BANNER)
         conf = Config()
@@ -222,6 +234,43 @@ def main():
         con.print(f"  [{C['ok']}]● Starting DCT Telegram Bot bridge…[/{C['ok']}]")
         bot = TelegramBot(token=token, allowed_users=allowed, registry=registry)
         bot.start()
+        return
+
+    if args.cmd == "discord":
+        import os
+        from dct.core.config import Config
+        from dct.discord.bot import DiscordBot
+
+        con.print(BANNER)
+        conf = Config()
+        token = (
+            args.token
+            or os.environ.get("DISCORD_BOT_TOKEN")
+            or conf.get("discord_token", "")
+        )
+        if not token:
+            err("No Discord bot token provided.")
+            info(
+                "Provide via --token, DISCORD_BOT_TOKEN env var, or '/config set discord_token <TOKEN>'"
+            )
+            sys.exit(1)
+
+        allowed = (
+            [u.strip() for u in args.allowed_users.split(",") if u.strip()]
+            if args.allowed_users
+            else conf.get("discord_allowed_users", [])
+        )
+        con.print(f"  [{C['ok']}]● Starting DCT Discord Bot bridge…[/{C['ok']}]")
+        dbot = DiscordBot(
+            token=token, allowed_users=allowed, registry=registry
+        )
+        dbot.start()
+        return
+
+    if args.cmd == "mcp-server":
+        from dct.core.mcp_server import run_mcp_server
+
+        run_mcp_server()
         return
 
     if args.cmd == "add":

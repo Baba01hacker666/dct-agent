@@ -195,10 +195,30 @@ When agent mode is ON, the model autonomously calls tools:
 - `ask_user` — ask the user a question (optional `<choices>` for radiolist dialog)
 - `enter_plan_mode` / `exit_plan_mode` — structured planning before execution
 
-**Task tracking & Memory:**
-- `task_create` / `task_update` / `task_list` — manage structured task lists
 - `core_memory_manage` — Deep CRUD persona/project management (append/replace/rewrite)
 - `memory_store` / `memory_search` — Infinite vector RAG memory
+
+**Subagents & Delegation:**
+- `spawn_subagent` — spawn an isolated subagent with dedicated persona, goal, and context
+- `list_subagents` — inspect active and completed background subagents
+- `/subagents` / `/subagent spawn <task>` — CLI subagent management
+
+**Git & Worktrees:**
+- `git_status` / `git_diff` / `git_commit` — native safe git operations
+- `git_worktree` — spin up isolated git worktrees for safe, branch-isolated coding experiments
+- `/git status` · `/git diff` · `/git commit` · `/git worktree` — CLI git toolkit
+
+**Model Context Protocol (MCP) Server:**
+- Launch standard MCP server over stdio for Claude Desktop, Cursor, and Zed:
+  ```bash
+  python -m dct mcp-server
+  # or configured in claude_desktop_config.json:
+  # {"mcpServers": {"dct": {"command": "dct", "args": ["mcp-server"]}}}
+  ```
+
+**Bot Bridges (Telegram & Discord):**
+- **Telegram Bot**: `/telegram start` or `python -m dct telegram --token <TOKEN>`
+- **Discord Bot**: `/discord start` or `python -m dct discord --token <TOKEN>`
 
 ### Vision
 | Command | Description |

@@ -469,9 +469,13 @@ class AgentWebServer:
             conf.set("telegram_token", data["token"])
             conf.save()
 
-        allowed = data.get("allowed_users") or conf.get("telegram_allowed_users", [])
-        bot = start_telegram_bridge(token=token, allowed_users=allowed)
-        return web.json_response({"ok": True, "message": "Telegram bridge daemon started"})
+        allowed = data.get("allowed_users") or conf.get(
+            "telegram_allowed_users", []
+        )
+        start_telegram_bridge(token=token, allowed_users=allowed)
+        return web.json_response(
+            {"ok": True, "message": "Telegram bridge daemon started"}
+        )
 
     async def handle_stop_telegram(self, request: web.Request) -> web.Response:
         from dct.telegram.bot import stop_telegram_bridge
@@ -497,6 +501,161 @@ class AgentWebServer:
             conf.set("telegram_allowed_users", users)
         conf.save()
         return web.json_response({"ok": True, "message": "Telegram configuration updated"})
+
+    # ── Discord Bot REST APIs ────────────────────────────────────────────────
+
+    async def handle_get_discord(self, request: web.Request) -> web.Response:
+        from dct.core.config import Config
+        from dct.discord.bot import get_discord_bot
+
+        conf = Config()
+        bot = get_discord_bot()
+        is_running = bot is not None and bot._running
+        token = conf.get("discord_token", "")
+        allowed_users = conf.get("discord_allowed_users", [])
+
+        return web.json_response({
+            "running": is_running,
+            "token_configured": bool(token),
+            "token_masked": (
+                f"{token[:4]}••••{token[-4:]}"
+                if len(token) > 8
+                else ("configured" if token else "")
+            ),
+            "allowed_users": allowed_users,
+            "bot_username": (
+                bot.bot_username if bot and bot._running else None
+            ),
+        })
+
+    async def handle_start_discord(self, request: web.Request) -> web.Response:
+        from dct.core.config import Config
+        from dct.discord.bot import start_discord_bridge
+
+        try:
+            data = await request.json()
+        except Exception:
+            data = {}
+
+        conf = Config()
+        token = data.get("token") or conf.get("discord_token", "")
+        if not token:
+            return web.json_response(
+                {"ok": False, "error": "Discord bot token is required"},
+                status=400,
+            )
+
+        if data.get("token"):
+            conf.set("discord_token", data["token"])
+            conf.save()
+
+        allowed = data.get("allowed_users") or conf.get(
+            "discord_allowed_users", []
+        )
+        start_discord_bridge(
+            token=token, allowed_users=allowed, registry=self.registry
+        )
+        return web.json_response(
+            {"ok": True, "message": "Discord bridge daemon started"}
+        )
+
+    async def handle_stop_discord(self, request: web.Request) -> web.Response:
+        from dct.discord.bot import stop_discord_bridge
+
+        stop_discord_bridge()
+        return web.json_response(
+            {"ok": True, "message": "Discord bridge daemon stopped"}
+        )
+
+    async def handle_config_discord(self, request: web.Request) -> web.Response:
+        from dct.core.config import Config
+
+        try:
+            data = await request.json()
+        except Exception:
+            return web.json_response(
+                {"ok": False, "error": "Invalid JSON"}, status=400
+            )
+
+        conf = Config()
+        if "token" in data:
+            conf.set("discord_token", data["token"].strip())
+        if "allowed_users" in data:
+            users = data["allowed_users"]
+            if isinstance(users, str):
+                users = [
+                    u.strip().lstrip("@")
+                    for u in users.split(",")
+                    if u.strip()
+                ]
+            conf.set("discord_allowed_users", users)
+        conf.save()
+        return web.json_response(
+            {"ok": True, "message": "Discord configuration updated"}
+        )
+
+    # ── Subagent, Git & MCP REST APIs ────────────────────────────────────────
+
+    async def handle_get_subagents(self, request: web.Request) -> web.Response:
+        from dct.tools.subagent import list_subagents
+
+        return web.json_response({"subagents": list_subagents()})
+
+    async def handle_spawn_subagent(self, request: web.Request) -> web.Response:
+        from dct.tools.subagent import spawn_subagent
+
+        try:
+            data = await request.json()
+        except Exception:
+            return web.json_response(
+                {"ok": False, "error": "Invalid JSON"}, status=400
+            )
+
+        task = data.get("task", "")
+        role = data.get("role")
+        model = data.get("model")
+        skill = data.get("skill")
+        bg = data.get("background", True)
+
+        res = spawn_subagent(
+            task=task,
+            role=role,
+            model=model,
+            skill=skill,
+            background=bg,
+        )
+        return web.json_response({
+            "ok": res.ok,
+            "message": res.message,
+            "output": res.output,
+            "subagent_id": res.subagent_id,
+        })
+
+    async def handle_git_status(self, request: web.Request) -> web.Response:
+        from dct.tools.git_tools import git_status
+
+        res = git_status()
+        return web.json_response({
+            "ok": res.ok,
+            "output": res.output,
+            "message": res.message,
+        })
+
+    async def handle_git_diff(self, request: web.Request) -> web.Response:
+        from dct.tools.git_tools import git_diff
+
+        cached = request.query.get("cached", "false").lower() == "true"
+        res = git_diff(cached=cached)
+        return web.json_response({
+            "ok": res.ok,
+            "output": res.output,
+            "message": res.message,
+        })
+
+    async def handle_get_mcp_tools(self, request: web.Request) -> web.Response:
+        from dct.core.mcp_server import get_tool_definitions
+
+        return web.json_response({"tools": get_tool_definitions()})
 
     # ── Agent Skills REST APIs ────────────────────────────────────────────────
 
@@ -706,6 +865,15 @@ def create_app(registry: Optional[ServerRegistry] = None) -> web.Application:
     app.router.add_post("/api/telegram/start", server.handle_start_telegram)
     app.router.add_post("/api/telegram/stop", server.handle_stop_telegram)
     app.router.add_post("/api/telegram/config", server.handle_config_telegram)
+    app.router.add_get("/api/discord", server.handle_get_discord)
+    app.router.add_post("/api/discord/start", server.handle_start_discord)
+    app.router.add_post("/api/discord/stop", server.handle_stop_discord)
+    app.router.add_post("/api/discord/config", server.handle_config_discord)
+    app.router.add_get("/api/subagents", server.handle_get_subagents)
+    app.router.add_post("/api/subagents/spawn", server.handle_spawn_subagent)
+    app.router.add_get("/api/git/status", server.handle_git_status)
+    app.router.add_get("/api/git/diff", server.handle_git_diff)
+    app.router.add_get("/api/mcp/tools", server.handle_get_mcp_tools)
 
     # SSE Chat Stream
     app.router.add_post("/api/chat", server.handle_chat_stream)
