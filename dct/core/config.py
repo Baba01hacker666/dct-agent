@@ -11,7 +11,9 @@ from dct.core.logging import get_logger
 
 logger = get_logger("dct.core.config")
 
-CONFIG_FILE = os.path.join(os.path.expanduser("~"), ".config", "dct", "config.json")
+CONFIG_FILE = os.path.join(
+    os.path.expanduser("~"), ".config", "dct", "config.json"
+)
 
 DEFAULTS = {
     "default_server": "",
@@ -35,6 +37,11 @@ DEFAULTS = {
     "telegram_token": "",
     "telegram_allowed_users": [],
     "telegram_enabled": False,
+    "discord_token": "",
+    "discord_allowed_users": [],
+    "use_native_tools": False,
+    "verbose": False,
+    "web_auth_token": "",
 }
 
 

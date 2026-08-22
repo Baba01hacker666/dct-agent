@@ -65,7 +65,9 @@ Interactive mode (default):
 Inside the shell type /help for all commands.
         """,
     )
-    p.add_argument("-H", "--host", default="", help="initial/primary server host")
+    p.add_argument(
+        "-H", "--host", default="", help="initial/primary server host"
+    )
     p.add_argument(
         "-p",
         "--port",
@@ -85,7 +87,9 @@ Inside the shell type /help for all commands.
         action="store_true",
         help="disable autonomous agent mode on startup",
     )
-    p.add_argument("--version", action="store_true", help="print version and exit")
+    p.add_argument(
+        "--version", action="store_true", help="print version and exit"
+    )
 
     sub = p.add_subparsers(dest="cmd")
 
@@ -113,13 +117,17 @@ Inside the shell type /help for all commands.
         "add-openai",
         help="register OpenAI-compatible provider (DeepSeek, Qwen, etc.)",
     )
-    pai.add_argument("base_url", help="API base URL (e.g. https://api.deepseek.com)")
+    pai.add_argument(
+        "base_url", help="API base URL (e.g. https://api.deepseek.com)"
+    )
     pai.add_argument("key", help="API key")
     pai.add_argument("alias", nargs="?", default="")
     pai.add_argument("note", nargs="?", default="")
 
     # add-provider (convenience)
-    pap = sub.add_parser("add-provider", help="register from built-in provider presets")
+    pap = sub.add_parser(
+        "add-provider", help="register from built-in provider presets"
+    )
     pap.add_argument("name", help="provider name (deepseek, qwen, groq, etc.)")
     pap.add_argument("key", help="API key")
     pap.add_argument("alias", nargs="?", default="")
@@ -151,7 +159,15 @@ Inside the shell type /help for all commands.
 
     # web
     pw = sub.add_parser("web", help="launch interactive web UI server")
-    pw.add_argument("--host", default="0.0.0.0", help="bind host (default: 0.0.0.0)")
+    pw.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help=(
+            "bind host (default: 127.0.0.1). Binding to 0.0.0.0 exposes this "
+            "agent to your network; set web_auth_token in the config when "
+            "you do."
+        ),
+    )
     pw.add_argument(
         "--port",
         default=8080,
@@ -160,8 +176,12 @@ Inside the shell type /help for all commands.
     )
 
     # telegram
-    pt = sub.add_parser("telegram", help="launch autonomous Telegram bot bridge")
-    pt.add_argument("--token", default="", help="Telegram bot token from @BotFather")
+    pt = sub.add_parser(
+        "telegram", help="launch autonomous Telegram bot bridge"
+    )
+    pt.add_argument(
+        "--token", default="", help="Telegram bot token from @BotFather"
+    )
     pt.add_argument(
         "--allowed-users",
         default="",
@@ -231,8 +251,12 @@ def main():
             if args.allowed_users
             else conf.get("telegram_allowed_users", [])
         )
-        con.print(f"  [{C['ok']}]● Starting DCT Telegram Bot bridge…[/{C['ok']}]")
-        bot = TelegramBot(token=token, allowed_users=allowed, registry=registry)
+        con.print(
+            f"  [{C['ok']}]● Starting DCT Telegram Bot bridge…[/{C['ok']}]"
+        )
+        bot = TelegramBot(
+            token=token, allowed_users=allowed, registry=registry
+        )
         bot.start()
         return
 
@@ -260,7 +284,9 @@ def main():
             if args.allowed_users
             else conf.get("discord_allowed_users", [])
         )
-        con.print(f"  [{C['ok']}]● Starting DCT Discord Bot bridge…[/{C['ok']}]")
+        con.print(
+            f"  [{C['ok']}]● Starting DCT Discord Bot bridge…[/{C['ok']}]"
+        )
         dbot = DiscordBot(
             token=token, allowed_users=allowed, registry=registry
         )
@@ -317,7 +343,10 @@ def main():
         return
 
     if args.cmd == "add-openai":
-        alias = args.alias or args.base_url.split("://")[-1].split("/")[0].split(".")[0]
+        alias = (
+            args.alias
+            or args.base_url.split("://")[-1].split("/")[0].split(".")[0]
+        )
         srv = registry.add(
             "api",
             443,
@@ -344,7 +373,10 @@ def main():
         name = args.name.lower()
         if name not in PROVIDER_PRESETS:
             err(f"unknown provider: {name}")
-            info("built-in presets: " + ", ".join(sorted(PROVIDER_PRESETS.keys())))
+            info(
+                "built-in presets: "
+                + ", ".join(sorted(PROVIDER_PRESETS.keys()))
+            )
             sys.exit(1)
         preset = PROVIDER_PRESETS[name]
         alias = args.alias or name
@@ -428,7 +460,9 @@ def main():
         if not s:
             err(f"server not found: {args.target}")
             sys.exit(1)
-        con.print(f"\n  [{C['accent']}]pull[/{C['accent']}] {args.model} → {s.alias}\n")
+        con.print(
+            f"\n  [{C['accent']}]pull[/{C['accent']}] {args.model} → {s.alias}\n"
+        )
         try:
             last = ""
             for chunk in pull_stream(s, args.model):
@@ -523,7 +557,9 @@ def main():
         )
         results = probe_all(registry)
         online = len(registry.online())
-        con.print(f"  [{C['ok']}]{online}[/{C['ok']}] [{C['dim']}]online[/{C['dim']}]")
+        con.print(
+            f"  [{C['ok']}]{online}[/{C['ok']}] [{C['dim']}]online[/{C['dim']}]"
+        )
 
     shell = Shell(registry)
     if args.no_agent:
