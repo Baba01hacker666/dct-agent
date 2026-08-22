@@ -2650,7 +2650,11 @@ class Shell:
 
     def _run_agent(self, messages: list[dict], user_text: str):
         """Run the agentic loop."""
-        from dct.agent.codeagent import CodeAgent, get_system_prompt
+        from dct.agent.codeagent import (
+            CodeAgent,
+            get_system_prompt,
+            MAX_AGENT_TURNS as MAX_AGENT_TURNS_DEFAULT,
+        )
 
         if not self.active:
             err("No active server.")
@@ -2753,6 +2757,8 @@ class Shell:
             con.print(f"  [{C['dim']}]continuing…[/{C['dim']}]")
             con.print("  ", end="")
 
+        from dct.core.config import Config
+
         agent = CodeAgent(
             server=self.active,
             model=self.model,
@@ -2761,6 +2767,9 @@ class Shell:
             on_text=_on_text,
             on_tool=_on_tool,
             on_result=_on_result,
+            max_turns=int(
+                Config().get("max_agent_turns", MAX_AGENT_TURNS_DEFAULT)
+            ),
         )
         con.print("  ", end="")
         try:

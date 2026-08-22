@@ -51,6 +51,15 @@ class ExecResult:
         return "\n".join(parts) if parts else "(no output)"
 
 
+def _decode_output(data) -> str:
+    """Best-effort decode of subprocess output (may be str or bytes)."""
+    if data is None:
+        return ""
+    if isinstance(data, bytes):
+        return data.decode("utf-8", errors="replace")
+    return str(data)
+
+
 def _run(
     cmd: list[str],
     timeout: int,
@@ -68,13 +77,30 @@ def _run(
             env=env or os.environ.copy(),
         )
         return proc.stdout, proc.stderr, proc.returncode, False
-    except subprocess.TimeoutExpired:
-        return "", "Execution timed out.", -1, True
+    except subprocess.TimeoutExpired as e:
+        # Preserve whatever partial output was produced before the timeout
+        # so the agent can see how far execution got.
+        return (
+            _decode_output(e.stdout),
+            (_decode_output(e.stderr) or "")
+            + "\n[TIMEOUT] Execution timed out.",
+            -1,
+            True,
+        )
     except Exception as e:
         return "", str(e), -1, False
 
 
-def run_python(code: str, timeout: int = 30, cwd: str | None = None) -> ExecResult:
+def _temp_script(suffix: str):
+    """Create a temp script outside the user's working directory."""
+    d = os.path.join(tempfile.gettempdir(), "dct-agent")
+    os.makedirs(d, exist_ok=True)
+    return tempfile.mkstemp(suffix=suffix, dir=d)
+
+
+def run_python(
+    code: str, timeout: int = 30, cwd: str | None = None
+) -> ExecResult:
     """Execute Python code in a dedicated virtual environment with auto-pip installation."""
     code = textwrap.dedent(code)
     t0 = time.time()
@@ -91,13 +117,17 @@ def run_python(code: str, timeout: int = 30, cwd: str | None = None) -> ExecResu
     try:
         if not os.path.exists(venv_python):
             os.makedirs(os.path.dirname(venv_dir), exist_ok=True)
-            subprocess.run([sys.executable, "-m", "venv", venv_dir], check=True)
+            subprocess.run(
+                [sys.executable, "-m", "venv", venv_dir], check=True
+            )
     except Exception:
         logger.debug("Failed to set up venv at %s", venv_dir, exc_info=True)
         use_venv = False
 
     python_bin = (
-        venv_python if (use_venv and os.path.exists(venv_python)) else sys.executable
+        venv_python
+        if (use_venv and os.path.exists(venv_python))
+        else sys.executable
     )
 
     # Allow up to 3 auto-install retries for cases where code requires multiple missing packages
@@ -117,11 +147,9 @@ def run_python(code: str, timeout: int = 30, cwd: str | None = None) -> ExecResu
     }
 
     while retries <= max_retries:
-        with tempfile.NamedTemporaryFile(
-            suffix=".py", mode="w", delete=False, dir=cwd
-        ) as f:
+        fd, tmp = _temp_script(suffix=".py")
+        with os.fdopen(fd, "w") as f:
             f.write(code)
-            tmp = f.name
 
         try:
             stdout, stderr, rc, timed_out = _run(
@@ -131,7 +159,9 @@ def run_python(code: str, timeout: int = 30, cwd: str | None = None) -> ExecResu
             try:
                 os.unlink(tmp)
             except Exception:
-                logger.debug("Failed to clean up temp file %s", tmp, exc_info=True)
+                logger.debug(
+                    "Failed to clean up temp file %s", tmp, exc_info=True
+                )
 
         if rc != 0 and not timed_out:
             import re
@@ -142,7 +172,9 @@ def run_python(code: str, timeout: int = 30, cwd: str | None = None) -> ExecResu
             )
             if m:
                 missing_module = m.group(1)
-                package_name = MODULE_MAPPING.get(missing_module, missing_module)
+                package_name = MODULE_MAPPING.get(
+                    missing_module, missing_module
+                )
 
                 # Prevent infinite loops installing the same package
                 if package_name in installed_packages:
@@ -180,14 +212,14 @@ def run_python(code: str, timeout: int = 30, cwd: str | None = None) -> ExecResu
     )
 
 
-def run_bash(code: str, timeout: int = 30, cwd: str | None = None) -> ExecResult:
+def run_bash(
+    code: str, timeout: int = 30, cwd: str | None = None
+) -> ExecResult:
     """Execute bash script."""
     code = textwrap.dedent(code)
-    with tempfile.NamedTemporaryFile(
-        suffix=".sh", mode="w", delete=False, dir=cwd
-    ) as f:
+    fd, tmp = _temp_script(suffix=".sh")
+    with os.fdopen(fd, "w") as f:
         f.write("#!/usr/bin/env bash\nset -euo pipefail\n" + code)
-        tmp = f.name
     os.chmod(tmp, 0o700)
     t0 = time.time()
     try:
@@ -261,7 +293,9 @@ def prepare_background_command(
         try:
             if not os.path.exists(venv_python):
                 os.makedirs(os.path.dirname(venv_dir), exist_ok=True)
-                subprocess.run([sys.executable, "-m", "venv", venv_dir], check=True)
+                subprocess.run(
+                    [sys.executable, "-m", "venv", venv_dir], check=True
+                )
         except Exception:
             use_venv = False
 
@@ -271,20 +305,16 @@ def prepare_background_command(
             else sys.executable
         )
 
-        with tempfile.NamedTemporaryFile(
-            suffix=".py", mode="w", delete=False, dir=cwd
-        ) as f:
+        fd, tmp = _temp_script(suffix=".py")
+        with os.fdopen(fd, "w") as f:
             f.write(code)
-            tmp = f.name
         return [python_bin, tmp], tmp
 
     elif lang in ("bash", "sh", "shell"):
         code = textwrap.dedent(code)
-        with tempfile.NamedTemporaryFile(
-            suffix=".sh", mode="w", delete=False, dir=cwd
-        ) as f:
+        fd, tmp = _temp_script(suffix=".sh")
+        with os.fdopen(fd, "w") as f:
             f.write("#!/usr/bin/env bash\nset -euo pipefail\n" + code)
-            tmp = f.name
         try:
             os.chmod(tmp, 0o700)
         except Exception:

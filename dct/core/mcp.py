@@ -5,30 +5,35 @@ Minimal Model Context Protocol (MCP) Client over stdio.
 
 import subprocess
 import json
+import shlex
 import threading
 import time
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Union
 from dct.core.logging import get_logger
 
 logger = get_logger("dct.core.mcp")
 
 
 class MCPClient:
-    def __init__(self, name: str, command: list[str]):
+    def __init__(self, name: str, command: Union[str, List[str]]):
         self.name = name
+        if isinstance(command, str):
+            command = shlex.split(command)
         self.command = command
         self.process = subprocess.Popen(
             command,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
             text=True,
         )
         self.lock = threading.Lock()
         self.req_id = 0
         self.responses: Dict[int, Any] = {}
 
-        self.reader_thread = threading.Thread(target=self._read_stdout, daemon=True)
+        self.reader_thread = threading.Thread(
+            target=self._read_stdout, daemon=True
+        )
         self.reader_thread.start()
 
     def _read_stdout(self):
@@ -38,7 +43,7 @@ class MCPClient:
                 continue
             try:
                 msg = json.loads(line)
-                if "id" in msg:
+                if msg.get("id") is not None:
                     with self.lock:
                         self.responses[msg["id"]] = msg
             except json.JSONDecodeError:
@@ -64,10 +69,30 @@ class MCPClient:
 
         for _ in range(100):  # 10s timeout
             with self.lock:
-                if curr_id in self.responses:
-                    return self.responses.pop(curr_id)
+                res = self.responses.pop(curr_id, None)
+                if res is not None:
+                    return res
             time.sleep(0.1)
+        # Drop any late response so it cannot leak memory or be misattributed
+        with self.lock:
+            self.responses.pop(curr_id, None)
         return {"error": {"message": "MCP timeout"}}
+
+    def notify(self, method: str, params: Optional[dict] = None) -> bool:
+        """Send a JSON-RPC notification (no id, no response expected)."""
+        req = {
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params or {},
+        }
+        try:
+            assert self.process.stdin is not None
+            self.process.stdin.write(json.dumps(req) + "\n")
+            self.process.stdin.flush()
+            return True
+        except Exception as e:
+            logger.warning("MCP notify error on '%s': %s", self.name, e)
+            return False
 
     def initialize(self) -> dict:
         res = self.call(
@@ -78,7 +103,8 @@ class MCPClient:
                 "clientInfo": {"name": "dct-agent", "version": "1.0.0"},
             },
         )
-        self.call("notifications/initialized")
+        # A notification expects no response; waiting for one would hang.
+        self.notify("notifications/initialized")
         return res
 
     def list_tools(self) -> List[dict]:
@@ -106,7 +132,7 @@ class MCPManager:
         self.clients: Dict[str, MCPClient] = {}
         self.lock = threading.Lock()
 
-    def add_server(self, name: str, command: list[str]) -> bool:
+    def add_server(self, name: str, command: Union[str, List[str]]) -> bool:
         with self.lock:
             if name in self.clients:
                 return True
@@ -158,7 +184,11 @@ class MCPManager:
         for c in content:
             if c.get("type") == "text":
                 text_outputs.append(c.get("text", ""))
-        return "\n".join(text_outputs) if text_outputs else "[MCP Success - No output]"
+        return (
+            "\n".join(text_outputs)
+            if text_outputs
+            else "[MCP Success - No output]"
+        )
 
 
 _global_mcp = None

@@ -499,6 +499,22 @@ class CodeAgent:
         self.max_turns = max_turns
 
     def _execute_tool(self, call: dict) -> str:
+        """Dispatch a tool call, converting unexpected exceptions into
+        model-visible errors instead of aborting the whole agent loop."""
+        try:
+            return self._dispatch_tool(call)
+        except Exception as e:
+            import traceback
+
+            tool_name = call.get("tool", "?") if isinstance(call, dict) else "?"
+            tb = traceback.format_exc(limit=3)
+            return (
+                f"[TOOL ERROR] Tool '{tool_name}' raised "
+                f"{type(e).__name__}: {e}\n{tb}\n"
+                "Recover by adjusting the arguments or trying a different approach."
+            )
+
+    def _dispatch_tool(self, call: dict) -> str:
         """Dispatch tool call, return result string for model."""
         tool = call["tool"]
         mode = self.session.mode
@@ -2135,17 +2151,39 @@ class CodeAgent:
 
         for turn in range(self.max_turns):
             # ── CONTEXT PRUNING (Sliding Window) ──
-            # Prevent context window exhaustion during long agentic loops
+            # Prevent context window exhaustion during long agentic loops.
+            # Messages are grouped into atomic units so an assistant message
+            # carrying tool_calls is never separated from its role="tool"
+            # responses (OpenAI-compatible providers reject orphaned halves).
             total_chars = sum(len(m.get("content") or "") for m in msgs)
             if total_chars > 120000:  # Roughly 30k tokens
-                # Collect non-system message indices oldest-first
-                non_sys = [i for i, m in enumerate(msgs) if m.get("role") != "system"]
+
+                def _group_bounds():
+                    """Group message indices into atomic exchange units."""
+                    groups = []
+                    i = 0
+                    while i < len(msgs):
+                        role = msgs[i].get("role")
+                        if role == "system":
+                            i += 1
+                            continue
+                        group = [i]
+                        j = i + 1
+                        if role == "assistant" and msgs[i].get("tool_calls"):
+                            while j < len(msgs) and msgs[j].get("role") == "tool":
+                                group.append(j)
+                                j += 1
+                        groups.append(group)
+                        i = j
+                    return groups
+
                 dropped: list[dict] = []
-                for i in sorted(non_sys):
+                for group in _group_bounds():
                     if total_chars <= 80000 or len(msgs) - len(dropped) <= 3:
                         break
-                    dropped.append(msgs[i])
-                    total_chars -= len(msgs[i].get("content", ""))
+                    for i in group:
+                        dropped.append(msgs[i])
+                        total_chars -= len(msgs[i].get("content") or "")
 
                 # Remove dropped messages (iterate in reverse to preserve indices)
                 drop_set = set(id(m) for m in dropped)

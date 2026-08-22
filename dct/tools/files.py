@@ -236,15 +236,27 @@ def write_file(path: str, content: str, backup: bool = True) -> FileResult:
 
 
 def patch_file(path: str, old: str, new: str) -> FileResult:
-    """Replace first occurrence of `old` with `new` in file."""
+    """Replace `old` with `new` in file. Refuses ambiguous patches."""
     try:
         p = _check_path(path)
         if not p.exists():
             return FileResult(ok=False, path=str(p), message="file not found")
         content = p.read_text(encoding="utf-8", errors="replace")
-        if old not in content:
+        count = content.count(old)
+        if count == 0:
             return FileResult(
                 ok=False, path=str(p), message="patch target not found in file"
+            )
+        if count > 1:
+            first_line = content[: content.index(old)].count("\n") + 1
+            return FileResult(
+                ok=False,
+                path=str(p),
+                message=(
+                    f"patch target is not unique ({count} occurrences; "
+                    f"first at line {first_line}). Include more surrounding "
+                    "context in `old` so the patch target is unique."
+                ),
             )
         new_content = content.replace(old, new, 1)
 

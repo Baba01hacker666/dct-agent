@@ -11,9 +11,12 @@ import urllib.parse
 from dataclasses import dataclass
 
 import httpx
-from httpx import RequestError as RequestException
+from httpx import HTTPError as RequestException
 
+from dct.core.logging import get_logger
 from dct.tools.url_validator import validate_url
+
+logger = get_logger("dct.tools.web")
 
 FETCH_TIMEOUT = 10
 MAX_REDIRECTS = 5
@@ -62,24 +65,24 @@ def fetch_url(url: str, max_chars: int = 40_000) -> WebResult:
 
 def _get_validated_response(url: str) -> httpx.Response:
     headers = {"User-Agent": UA}
-    client = httpx.Client(follow_redirects=False)
-    for _ in range(MAX_REDIRECTS + 1):
-        r = client.get(
-            url,
-            timeout=FETCH_TIMEOUT,
-            headers=headers,
-        )
-        if not r.is_redirect:
-            return r
+    with httpx.Client(follow_redirects=False) as client:
+        for _ in range(MAX_REDIRECTS + 1):
+            r = client.get(
+                url,
+                timeout=FETCH_TIMEOUT,
+                headers=headers,
+            )
+            if not r.is_redirect:
+                return r
 
-        location = r.headers.get("location")
-        if not location:
-            return r
+            location = r.headers.get("location")
+            if not location:
+                return r
 
-        url = urllib.parse.urljoin(r.url, location)
-        err = validate_url(url)
-        if err:
-            raise RequestException(err)
+            url = urllib.parse.urljoin(r.url, location)
+            err = validate_url(url)
+            if err:
+                raise RequestException(err)
 
     raise RequestException("Too many redirects")
 
@@ -114,8 +117,8 @@ def search_ddg(query: str, max_results: int = 8) -> list[dict]:
                     "snippet": _strip_html(snippet).strip(),
                 }
             )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("DuckDuckGo search failed for query %r: %s", query, e)
     return results
 
 
@@ -155,7 +158,9 @@ def _strip_html(html: str) -> str:
             text = re.sub(
                 r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.I
             )
-            text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.I)
+            text = re.sub(
+                r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.I
+            )
             text = re.sub(r"<[^>]+>", " ", text)
 
     # Decode HTML entities
